@@ -21,6 +21,10 @@ implicit-typing = false
 implicit-external = false
 source-form = "free"
 
+[dependencies]
+stdlib = "*"
+LightKrylov.git = "https://github.com/nekStab/LightKrylov"
+
 [dev-dependencies]
 test-drive.git = "https://github.com/fortran-lang/test-drive"
 test-drive.tag = "v0.4.0"
