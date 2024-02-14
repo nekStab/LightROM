@@ -7,7 +7,7 @@ module TestVector
 
   public ::  test_size
 
-  integer, parameter :: test_size = 5
+  integer, parameter :: test_size = 100
 
   type, extends(abstract_vector), public :: rvector
      real(kind=wp), dimension(test_size) :: data = 0.0_wp
