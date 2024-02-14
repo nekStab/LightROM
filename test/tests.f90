@@ -7,6 +7,9 @@ program Tester
   use testdrive, only : new_unittest, unittest_type, error_type, check
   !> Abstract implementation of ROM-LTI techniques.
   use LightROM
+  use TestVector
+  use TestMatrices
+  use TestLyapunov
 
   implicit none
 
@@ -28,7 +31,7 @@ program Tester
   status = 0
 
   !> List of test suites.
-  testsuites = [new_testsuite("Dummy test suite", collect_dummy_testsuite)]
+  testsuites = [new_testsuite("Lyapunov Utils", collect_lyapunov_utils_testsuite)]
 
   !> Run each test suite.
   do i = 1, size(testsuites)
