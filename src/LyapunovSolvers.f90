@@ -7,11 +7,11 @@ module lightROM_LyapunovSolvers
 
    contains
 
-   !------------------------
-   !-----              -----
-   !-----     DLRA     -----
-   !-----              -----
-   !------------------------
+   !------------------------------------------------
+   !-----                                      -----
+   !-----     Low-rank splitting integrator    -----
+   !-----                                      -----
+   !------------------------------------------------
    
    !=======================================================================================
    ! Numerical Low-Rank Splitting Integrator Subroutine
@@ -19,7 +19,7 @@ module lightROM_LyapunovSolvers
    !
    ! Purpose:
    ! --------
-   ! Implementation of the Numerical Low-Rank Splitting Integrator proposed by Mena et al. (2018).
+   ! Implementation of a Numerical Low-Rank Splitting Integrator as in Mena et al. (2018).
    !
    ! The algorithm constitutes a numerical integrator for the matrix-valued differential Lyapunov
    ! equation of the form
@@ -42,7 +42,7 @@ module lightROM_LyapunovSolvers
    !    equations proposed by Nonnenmacher & Lubich (2007) which seeks to integrate only the
    !    leading low-rank factors of the solution to a large system by updating the matrix 
    !    factorization. The dynamical low-rank approximation scheme for the low-rank factors 
-   !    of the solution is itself solved using an operator splitting technique to cheaply 
+   !    of the solution is itself solved using a projector-splitting technique to cheaply 
    !    maintain orthonormality or the low-rank basis without explicit SVDs. 
    ! c) This algorithm has been applied to a large scale system by Mena et al. (2018) and we
    !    follow the algorithm proposed there.
@@ -69,7 +69,7 @@ module lightROM_LyapunovSolvers
    ! Limitations:
    ! ------------
    ! - Rank of the approximate solution is user defined. The appropriateness of this 
-   !   approximation is not judged
+   !   approximation is not considered
    ! - The current implementation can only deal with constant linear inhomogeneities. The
    !   algorithm can be extended to deal with general (non-linear) inhomogeneities (see
    !   Lubich & Oseledets (2014) and Mena et al. (2018))
@@ -78,8 +78,8 @@ module lightROM_LyapunovSolvers
    ! - The current implementation does not require an adjoint integrator. This means that
    !   the temporal order of the basic operator splitting scheme is limited to 1 (Lie-Trotter
    !   splitting) or at most 2 (Strang splitting). Higher order integrators are possible, but 
-   !   require at least some backward integration (via the adjoint) in BOTH parts. (see Sheng-
-   !   Suzuki and Goldman-Kaper theorems)
+   !   require at least some backward integration (via the adjoint) in BOTH parts. 
+   !   (see Sheng-Suzuki and Goldman-Kaper theorems)
    !
    ! Input/Output Parameters:
    ! ------------------------
@@ -129,8 +129,8 @@ module lightROM_LyapunovSolvers
          !> dynamical low-rank approximation step
          call numerical_low_rank_splitting_step(U, S, A, B, tau, torder, options)
 
-          T = T + tau
-         !> here we should do some checks
+         T = T + tau
+         !> here we should do some checks such as whether we have reached steady state
          !if ( modulo(istep,iostep) .eq. 0 ) then
          !   if (verbose) then
          !      write(*, *) "INFO : ", IOSTEP, " steps of DLRA computed."
@@ -234,56 +234,46 @@ module lightROM_LyapunovSolvers
          class(rvector),        , allocatable   :: Uwrk(:)
          real(kind=wp)          , allocatable   :: S1(:,:)
          real(kind=wp),         , allocatable   :: Swrk(:,:)
-         integer                                :: i, r
+         integer :: i
 
-         r = size(U)
          !> Allocate temporary arrays
          allocate(U1(1:r))
-         allocate(Uwrk(1:r)) 
-         do i = 1, r
-            call U1(i)%zero()
-            call Uwrk(i)%zero()
-         enddo
+         allocate(Uwrk(1:r))
+         call mat_zero(U1)
+         call mat_zero(Uwrk)
          allocate(Swrk(1:r,1:r)); Swrk = 0.0_wp
          allocate(S1(1:r,1:r));     S1 = 0.0_wp
          !> Step K equation:      
          !>       K0   = U @ S
          !>       Kdot = B @ B.T @ U
          call mat_mult(U1, U, S)     ! K0
-         call apply_rhs(Uwrk, B, U)  ! Kdot
+         call apply_outerproduct(Uwrk, B, U)  ! Kdot
          !> Construct solution U1
-         do i = 1, r
-            call U1(i)%axbpy(1.0_wp, Uwrk(i), tau)
-         enddo
+         call mat_axpby(U,1.0_wp,Uwrk,tau)
          !> Orthonormalize in-place
          call qr_factorisation(U1, S1, info)
+         !
          !> Step S equation
          !>       S0   = S1
          !>       Sdot = -U1.T @ B @ B.T @ UA
-         call apply_rhs(Uwrk, B, U)
+         call apply_outerproduct(Uwrk, B, U)
          call mat_mult(Swrk, U1, Uwrk)          ! - Sdot
          !> Construct solution S1
-         do i = 1, r
-            do j = 1, r
-               S1(i,j) = S1(i,j) - tau*Swrk(i,j)
-            enddo
-         enddo
+         call mat_axpby(S1,1.0_wp,Swrk,-tau)
+         !
          !> Step L equation:
          !>       L0   = St @ UA.T           or      L0.T   = UA @ St.T  
          !>       Ldot = U1.T @ B @ B.T      or      Ldot.T = B @ B.T @ U1
          call mat_mult(Uwrk, U, transpose(S1))  ! L0.T
          !> note: we no longer need the old basis U so we overwrite it
-         call apply_rhs(U, B, U1)               ! Ldot.T
+         call apply_outerproduct(U, B, U1)               ! Ldot.T
          !> Construct solution Uwrk.T
-         do i = 1, r
-            call Uwrk(i)%axbpy(1.0_wp, U(i), tau)
-         enddo
+         call mat_axpby(Uwrk,1.0_wp,U,tau)
          !> Update S
          call mat_mult(S, Uwrk, U1)
          !> Copy U1 --> U for output
-         do i = 1, size(U)
-            call U(i)%axpby(0.0_wp, U1(i), 1.0_wp)
-         enddo
+         call mat_copy(U, U1)
+         !> Deallocate work arrays
          deallocate(U1)
          deallocate(Uwrk)
          deallocate(S1)

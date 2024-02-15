@@ -3,8 +3,9 @@ module LightROM_LyapunovUtils
    implicit none
 
    private
-   !> Matrix products for abstract vector types
-   public :: mat_mult, apply_rhs
+   !> Matrix operations for abstract vector types
+   public :: mat_mult, mat_axpby, mat_zero, mat_copy
+   public :: apply_outerproduct
 
    !------------------------------
    !-----     INTERFACES     -----
@@ -14,6 +15,11 @@ module LightROM_LyapunovUtils
       module procedure mat_mult_direct
       module procedure mat_mult_transpose
    end interface mat_mult
+
+   interface mat_axpby
+      module procedure mat_axpby_realmat
+      module procedure mat_axpby_avecmat
+   end interface mat_axpby
 
    contains
 
@@ -69,12 +75,78 @@ module LightROM_LyapunovUtils
             enddo
          enddo
          return
-
       end subroutine mat_mult_transpose
 
-      subroutine apply_rhs(C,A,B)
+      !--------------------------------
+      !-----                      -----
+      !-----     MATRIX AXPBY     -----
+      !-----                      -----
+      !--------------------------------
+   
+      subroutine mat_axpby_realmat(A,alpha,B,beta)
+         ! Compute the scaled sum of two matrices in-place
+         !     alpha*A + beta*B
+         ! with
+         !     A,B: real matrices :: size nxr
+         real(kind=wp) , intent(inout)  :: A(:,:)
+         real(kind=wp) , intent(in)     :: B(:,:)
+         real(kind=wp) , intent(in)     :: alpha
+         real(kind=wp) , intent(in)     :: beta
+         !> local variables
+         integer :: i,j
+         !> Check size 
+         if (any(shape(A) .ne. shape(B))) then
+            write(*, *) "INFO : Array sizes incompatible for summation. "
+            stop 1
+         endif
+         do i = 1, size(A,1)
+            do j = 1, size(A,2)
+               A(i,j) = alpha*A(i,j) + beta*B(i,j)
+            enddo
+         enddo
+      end subroutine mat_axpby_realmat
+      
+      subroutine mat_axpby_avecmat(A,alpha,B,beta)
+         ! Compute the scaled sum of two matrices in-place
+         !     alpha*A + beta*B
+         ! with
+         !     A,B: abstract_vector type Krylov bases :: size nxr
+         class(abstract_vector) , intent(inout)  :: A(:)
+         class(abstract_vector) , intent(in)     :: B(:)
+         real(kind=wp)          , intent(in)     :: alpha
+         real(kind=wp)          , intent(in)     :: beta
+         !> local variables
+         integer :: i
+         !> Check size 
+         if (size(A) .ne. size(B)) then
+            write(*, *) "INFO : Array sizes incompatible for summation. "
+            stop 1
+         endif
+         do i = 1, size(A)
+            call A(i)%axpby(alpha, B(i), beta)
+         enddo
+      end subroutine mat_axpby_avecmat
+
+      subroutine mat_zero(A)
+         ! Initialise Krylov basis with zeros
+         class(abstract_vector) , intent(inout)  :: A(:)
+         !> local variables
+         integer :: i
+         do i = 1, size(A)
+            call A(i)%zero()
+         enddo
+      end subroutine mat_zero
+
+      subroutine mat_copy(A,B)
+         ! Copy data from B to A
+         class(abstract_vector) , intent(out)  :: A(:)
+         class(abstract_vector) , intent(in)   :: B(:)
+         call mat_axpby(A,0.0_wp,B,1.0_wp)
+      end subroutine mat_copy
+
+      subroutine apply_outerproduct(C,A,B)
          ! Compute the matrix product C = Q @ B where
-         !     Q = A @ A.T 
+         !     Q = A @ A.T is the outer product of A with itself
          ! with
          !     C: abstract vector type Krylov basis :: size nxr
          !     A: abstract vector type Krylov basis :: size nxm
@@ -91,6 +163,6 @@ module LightROM_LyapunovUtils
          call mat_mult_direct(C, A, wrk)
          deallocate(wrk)
          return
-      end subroutine apply_rhs
+      end subroutine apply_outerproduct
 
 end module LightROM_LyapunovUtils
