@@ -187,7 +187,7 @@ module TestLyapunov
       class(rvector), allocatable :: Q(:)
       class(rvector), allocatable :: X(:)
       !> Krylov subspace dimension.
-      integer, parameter :: kdim = 3
+      integer, parameter :: kdim = 10
       !> Test matrix.
       real(kind=wp) :: A(kdim, kdim)
       !> GS factors.
@@ -200,6 +200,11 @@ module TestLyapunov
       real(kind=wp) :: Xmat(test_size, kdim), Qmat(test_size, kdim)
       real(kind=wp) :: Dmat(test_size, kdim)
       real(kind=wp) :: alpha
+      real(kind=wp) :: Xreshape(test_size*kdim,1)
+      real(kind=wp) :: Xmatr(kdim,test_size)
+      real(wp) :: pad(1)
+
+      pad = 0.0_wp
 
       ! --> Initialize matrix.
       !A = rmatrix() ; call random_number(A%data)
@@ -242,6 +247,18 @@ module TestLyapunov
       !do i = 1, kdim
       !   write(*,'(3F8.3)') A(i,1:kdim)
       !enddo
+      !do i = 1, test_size
+      !   write(*,'(10F8.3)') Xmat(i,1:kdim)
+      !enddo
+      !write(*,*) ''
+      !Xreshape = reshape(Xmat,shape(Xreshape))
+      !!write(*,'(20F8.3)') Xreshape(1:test_size*kdim,1)
+      !Xmatr = reshape(Xmat,(/kdim, test_size/), pad, (/ 2,1 /))
+      !do i = 1, kdim
+      !   write(*,'(10F8.3)') Xmatr(i,1:test_size)
+      !enddo
+      !Xreshape = reshape(Xmat,(/test_size*kdim, 1/), pad, (/ 2,1 /))
+      !write(*,'(20F8.3)') Xreshape(1:test_size*kdim,1)
       !write(*,*) 'Q'
       !do i = 1, test_size
       !   write(*,'(3F8.3)') Qmat(i,1:kdim)

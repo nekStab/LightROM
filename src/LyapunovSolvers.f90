@@ -202,18 +202,24 @@ module lightROM_LyapunovSolvers
          integer                , intent(out)   :: info
 
          !> Local variables
+         class(abstract_vector) , allocatable   :: Uwrk(:)  ! basis
          real(kind=wp)          , allocatable   :: R(:,:)   ! QR coefficient matrix
          real(kind=wp)          , allocatable   :: wrk(:,:)
          integer                                :: i
 
          !> Apply propagator to initial basis
-         call dummy_exponential_propagator(U, A, info) ! replace with actual call later ....
+         allocate(Uwrk(1)) ; Uwrk%zero()
+         do i = 1, size(U)
+            call A%matvec(U(i), Uwrk)
+            call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
+         enddo
          !> Reorthonormalize in-place
          call qr_factorisation(U, R, info)
          !> Update low-rank coefficient matrix
          allocate(wrk(1:r,1:r)); wrk = 0.0_wp
          wrk = matmul(S, transpose(R))
          S   = matmul(R, wrk)
+         deallocate(Uwrk)
          deallocate(wrk)
          return
       end subroutine M_forward_map
@@ -230,8 +236,8 @@ module lightROM_LyapunovSolvers
          integer                , intent(out)   :: info
 
          !> Local variables
-         class(rvector)         , allocatable   :: U1(:) 
-         class(rvector),        , allocatable   :: Uwrk(:)
+         class(abstract_vector) , allocatable   :: U1(:) 
+         class(abstract_vector) , allocatable   :: Uwrk(:)
          real(kind=wp)          , allocatable   :: S1(:,:)
          real(kind=wp),         , allocatable   :: Swrk(:,:)
          integer :: i
@@ -280,6 +286,15 @@ module lightROM_LyapunovSolvers
          deallocate(Swrk)
          return
       end subroutine G_forward_map
+
+      !subroutine K_step(K1,U,S,tau)
+      !end subroutine K_step
+!
+      !subroutine S_step 
+      !end subroutine S_step
+!
+      !subroutine L_step 
+      !end subroutine L_step 
 
    end subroutine numerical_low_rank_splitting_integrator
 end module lightROM_LyapunovSolvers
