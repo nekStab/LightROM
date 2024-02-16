@@ -28,3 +28,15 @@ LightKrylov.git = "https://github.com/nekStab/LightKrylov"
 [dev-dependencies]
 test-drive.git = "https://github.com/fortran-lang/test-drive"
 test-drive.tag = "v0.4.0"
+
+[[example]]
+
+#---------------------------------------------------
+#-----     SETUP FOR THE LAPLACIAN EXAMPLE     -----
+#---------------------------------------------------
+
+name = "Laplacian"
+source-dir = "example/laplacian1D"
+
+[example.dependencies]
+rklib = { git="https://github.com/jacobwilliams/rklib.git" }
