@@ -102,7 +102,7 @@ contains
     dv(1) = (- 2*v(1) + v(2)) / dx**2   !> Diffusion term (zero Dirichlet)
     !> Interior nodes.
     do i = 2, nx-1
-       dv(i) = (v(i+1) - 2*v(i) + v(i-1)) / dx**2
+       dv(i) = (v(i-1) - 2*v(i) + v(i+1)) / dx**2
     enddo
     !> Right most boundary points
     dv(nx) = (v(nx-1) - 2*v(nx)) / dx**2
