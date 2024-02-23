@@ -3,6 +3,7 @@ module TestLyapunov
    use TestVector
    use TestMatrices
    Use LightROM_LyapunovUtils
+   Use LightROM_wplib
    use testdrive  , only : new_unittest, unittest_type, error_type, check
    use stdlib_math, only : all_close
    implicit none
@@ -24,172 +25,61 @@ module TestLyapunov
      type(unittest_type), allocatable, intent(out) :: testsuite(:)
  
      testsuite = [&
-          new_unittest("Matrix product direct", test_direct_krylov_matrix_product), &
-          new_unittest("Matrix product transpose", test_transpose_krylov_matrix_product), &
-          new_unittest("Matrix axpby (real matrices)", test_real_matrix_axpby), &
-          new_unittest("Matrix axpby (krylov matrices)", test_krylov_matrix_axpby), &
+          new_unittest("Dense Matrix Exponential", test_dense_matrix_exponential), &
           new_unittest("Development tests", playground) &
           ]
  
      return
    end subroutine collect_lyapunov_utils_testsuite
 
-   subroutine test_direct_krylov_matrix_product(error)
+   subroutine test_dense_matrix_exponential(error)
+
       !> Error type to be returned.
       type(error_type), allocatable, intent(out) :: error
-      !> Test bases.
-      class(rvector), dimension(:), allocatable :: A(:)
-      class(rvector), dimension(:), allocatable :: C(:)
-      !> Krylov subspace dimension.
-      integer, parameter :: kdim1 = 3
-      !> Number of columns in coefficien matrix
-      integer, parameter :: kdim2 = 4
-      !> Test matrices.
-      real(kind=wp)               :: B(kdim1, kdim2)
-      real(kind=wp)               :: Amat(test_size, kdim1)
-      real(kind=wp)               :: Cmat(test_size, kdim2)
-      !> Misc.
-      integer :: i,j
+      !> Problem dimension.
+      integer, parameter :: n = 5
+      integer, parameter :: m = 6
+      !> Test matrix.
+      real(kind=wp) :: A(n, n)
+      real(kind=wp) :: E(n, n)
+      real(kind=wp) :: Eref(n, n)
+      integer :: i, j
 
-      !> Initialize basis and copy data to matrix
-      allocate(A(1:kdim1))
-      do i = 1, size(A)
-         call random_number(A(i)%data)
-         Amat(:, i) = A(i)%data
-      enddo
-      allocate(C(1:kdim2))
-      B = 0.0_wp
-      do i = 1, size(A)
-         do j = 1, size(C)
-            call random_number(B(i,j))
-         enddo
-      enddo
-      call mat_zero(C)
-      !> Compute product
-      call mat_mult(C,A,B)
-      !> Copy data
-      do i = 1, kdim2
-         Cmat(:, i) = C(i)%data
-      enddo
-      call check(error, all_close(matmul(Amat, B), Cmat, rtol, atol) )
+      ! --> Initialize matrix.
+      A = 0.0_wp
+      do i = 1, n-1
+         A(i,i+1) = m*1.0_wp
+      end do
+      Eref = 0.0_wp
+      forall (i=1:n) Eref(i, i) = 1.0_wp
+      do i = 1, n-1
+         do j = 1, n-i
+            Eref(i,i+j) = m**j/factorial(j)
+         end do
+      end do
+      
+      E = 0.0_wp
+      call expm(E, A)
+
+      call check(error, maxval(E-Eref) < rtol)
+      
       return
-   end subroutine test_direct_krylov_matrix_product
-
-   subroutine test_transpose_krylov_matrix_product(error)
-      !> Error type to be returned.
-      type(error_type), allocatable, intent(out) :: error
-      !> Test bases.
-      class(rvector), dimension(:), allocatable :: A(:)
-      class(rvector), dimension(:), allocatable :: B(:)
-      !> Krylov subspace dimension.
-      integer, parameter :: kdim1 = 3
-      integer, parameter :: kdim2 = 4
-      !> Test matrices.
-      real(kind=wp)               :: C(kdim1, kdim2)
-      real(kind=wp)               :: Amat(test_size, kdim1)
-      real(kind=wp)               :: Bmat(test_size, kdim2)
-      !> Misc.
-      integer :: k
-
-      !> Initialize bases and copy data to matrices
-      allocate(A(1:kdim1))
-      Amat = 0.0_wp
-      do k = 1, size(A)
-         call random_number(A(k)%data)
-         Amat(:, k) = A(k)%data
-      enddo
-      allocate(B(1:kdim2))
-      Bmat = 0.0_wp
-      do k = 1, size(B)
-         call random_number(B(k)%data)
-         Bmat(:, k) = B(k)%data
-      enddo
-      C = 0.0_wp
-      !> Compute product
-      call mat_mult(C,A,B)
-      call check(error, all_close(matmul(transpose(Amat), Bmat), C, rtol, atol) )
-      return
-   end subroutine test_transpose_krylov_matrix_product
-
-   subroutine test_real_matrix_axpby(error)
-      !> Error type to be returned.
-      type(error_type), allocatable, intent(out) :: error
-      !> Test matrices.
-      real(kind=wp) , allocatable :: A(:,:)
-      real(kind=wp) , allocatable :: B(:,:)
-      ! factors
-      real(kind=wp) :: alpha
-      real(kind=wp) :: beta   
-      !> Size
-      integer, parameter :: kdim = 3
-      !> Comparison.
-      real(kind=wp) :: Z(test_size, kdim)
-      !> Misc.
-      integer :: i,j
-
-      !> Initialize matrices
-      allocate(A(1:test_size, 1:kdim))
-      allocate(B(1:test_size, 1:kdim))
-      do i = 1, test_size
-         do j = 1, kdim
-            call random_number(A(i,j))
-            B(i,j) = -2.0*A(i,j)
-         enddo
-      enddo
-      Z = 0.0_wp
-      !> Compute sum
-      call mat_axpby(A,2.0_wp,B,1.0_wp)
-      call check(error, all_close(A, Z, rtol, atol) )
-      return
-   end subroutine test_real_matrix_axpby
-
-   subroutine test_krylov_matrix_axpby(error)
-      !> Error type to be returned.
-      type(error_type), allocatable, intent(out) :: error
-      !> Test matrices.
-      class(rvector) , allocatable :: A(:)
-      class(rvector) , allocatable :: B(:)
-      ! factors
-      real(kind=wp) :: alpha
-      real(kind=wp) :: beta   
-      !> Size
-      integer, parameter :: kdim = 3
-      !> Comparison.
-      real(kind=wp) :: Amat(test_size, kdim)
-      real(kind=wp) :: Zmat(test_size, kdim)
-      !> Misc.
-      integer :: i
-
-      !> Initialize bases and copy data to matrices
-      allocate(A(1:kdim))
-      allocate(B(1:kdim))
-      do i = 1, kdim
-         call random_number(A(i)%data)
-         call B(i)%axpby(0.0_wp,A(i),-2.0_wp)
-      enddo
-      Zmat = 0.0_wp
-      !> Compute sum
-      call mat_axpby(A,4.0_wp,B,2.0_wp)
-      Amat = 0.0_wp
-      !> Copy data to matrix
-      do i = 1, kdim
-         Amat(:, i) = A(i)%data
-      enddo
-      call check(error, all_close(Amat, Zmat, rtol, atol) )
-      return
-   end subroutine test_krylov_matrix_axpby
+   end subroutine test_dense_matrix_exponential
    
    subroutine playground(error)
 
       !> Error type to be returned.
       type(error_type), allocatable, intent(out) :: error
+      class(rmatrix), allocatable :: A
       !> Basis vectors.
       class(rvector), allocatable :: Q(:)
-      class(rvector), allocatable :: X(:)
+      class(rvector), allocatable :: Xref(:)
+      class(rvector), allocatable :: Xkryl(:)
       !> Krylov subspace dimension.
-      integer, parameter :: kdim = 10
+      integer, parameter :: kdim = test_size
       !> Test matrix.
-      real(kind=wp) :: A(kdim, kdim)
+      real(kind=wp) :: Amat(kdim, kdim)
+      real(kind=wp) :: Emat(kdim, kdim)
       !> GS factors.
       real(kind=wp) :: R(kdim, kdim)
       real(kind=wp) :: Id(kdim, kdim)
@@ -197,26 +87,77 @@ module TestLyapunov
       integer :: info
       !> Misc.
       integer :: i,j,k
-      real(kind=wp) :: Xmat(test_size, kdim), Qmat(test_size, kdim)
-      real(kind=wp) :: Dmat(test_size, kdim)
+      integer, parameter :: nk = 20
+      real(kind=wp) :: Xmat(test_size, nk), Qmat(test_size)
+      real(kind=wp) :: Xrefmat(test_size)
       real(kind=wp) :: alpha
       real(kind=wp) :: Xreshape(test_size*kdim,1)
       real(kind=wp) :: Xmatr(kdim,test_size)
       real(wp) :: pad(1)
+      real(wp) :: tau
+      real(wp) :: difference(nk)
 
       pad = 0.0_wp
 
       ! --> Initialize matrix.
-      !A = rmatrix() ; call random_number(A%data)
-      do i = 1,kdim
-         do j = 1,kdim
-            call random_number(A(i,j))
-         enddo
-      enddo
-      !write(*,*) 'A'
+      A = rmatrix() ; call random_number(A%data)
+      !A%data = reshape((/  1.0, 0.0, 0.0, &
+      !                    &0.0, 1.0, 0.0, &
+      !                    &0.0, 0.0, 1.0 /), (/ kdim, kdim /) )
+
+      allocate(Q(1)) ; call random_number(Q(1)%data)
+      Qmat = Q(1)%data
+      allocate(Xref(1)) ; call mat_zero(Xref)
+      allocate(Xkryl(1:nk)) ; call mat_zero(Xkryl)
+
+      Amat = 0.0_wp;
+      !forall (i=1:kdim) Amat(i, i) = 1.0_wp
+      Amat = A%data
       !do i = 1, kdim
-      !   write(*,'(3F8.3)') A(i,1:kdim)
+      !   do j = 1, kdim
+      !      call random_number(A(i,j))
+      !   end do 
+      !end do
+
+      tau = 0.1_wp
+
+      !write(*,*) 'Amat test'
+      !do i = 1, kdim
+      !   write(*,'(10E15.8)') Amat(i,1:kdim)
       !enddo
+      write(*,*) 'Qmat test'
+      do i = 1, kdim
+         write(*,'(1E15.8)') Qmat(i)
+      enddo
+
+      Emat = 0.0_wp
+      Xrefmat = 0.0_wp
+      call expm(Emat, tau*Amat)
+      do i = 1, test_size
+         do j = 1,kdim
+            Xrefmat(i) = Xrefmat(i) + Emat(i,j) * Qmat(j)
+         end do
+      end do
+      Xref(1)%data = Xrefmat
+
+      !write(*,*) 'Emat test'
+      !do i = 1, kdim
+      !   write(*,'(10E15.8)') Emat(i,1:kdim)
+      !enddo
+
+      Emat = 0.0_wp
+      do i = 1, nk
+         call kexpm(Xkryl(i:i), A, Q(1:1), tau, 1.0e-6_wp, info, nkryl = i)
+         call Xkryl(i)%axpby(1.0_wp, Xref(1), -1.0_wp)
+         difference(i) = Xkryl(i)%norm()
+      end do
+
+
+      do i = 1,nk
+         write(*,'(a13,2E15.8)') '|| dx ||_2 = ', difference(i)
+      enddo
+
+      STOP 1
 
       !write(*,*) A%data
 
@@ -229,16 +170,16 @@ module TestLyapunov
       enddo
 
       ! Copy data
-      do k = 1, kdim
-         Qmat(:, k) = Q(k)%data
-      enddo
+      !do k = 1, kdim
+      !   Qmat(:, k) = Q(k)%data
+      !enddo
 
       !Amat = matmul(A, Qmat)
-      allocate(X(1:kdim));
-      call mat_mult(X,Q,A)
+      allocate(Xref(1:kdim));
+      call mat_mult(Xref,Q,Amat)
       ! Copy data
       do k = 1, kdim
-         Xmat(:, k) = X(k)%data
+         Xmat(:, k) = Xref(k)%data
       enddo
 
       !write(*,*) 'A'

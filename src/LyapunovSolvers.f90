@@ -1,6 +1,7 @@
-module lightROM_LyapunovSolvers
-   use lightROM_LyapunovUtils
-   include "dtypes.h"
+module LightROM_LyapunovSolvers
+   use LightKrylov
+   use LightROM_LyapunovUtils
+   !include "dtypes.h"
 
    private
    public :: numerical_low_rank_splitting_integrator
@@ -101,7 +102,7 @@ module lightROM_LyapunovSolvers
    !     340, 602-614
    !
    !=======================================================================================
-   subroutine numerical_low_rank_splitting_integrator(U,S,A,B,Tend,tau,torder,options)
+   subroutine numerical_low_rank_splitting_integrator(U,S,A,B,Tend,tau,torder,info)
       !> Low-rank factors
       class(abstract_vector) , intent(inout) :: U(:) ! basis
       real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
@@ -127,7 +128,7 @@ module lightROM_LyapunovSolvers
 
       dlra : do istep = 1, nsteps
          !> dynamical low-rank approximation step
-         call numerical_low_rank_splitting_step(U, S, A, B, tau, torder, options)
+         call numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info)
 
          T = T + tau
          !> here we should do some checks such as whether we have reached steady state
@@ -144,7 +145,7 @@ module lightROM_LyapunovSolvers
       !-----------------------------
       !-----     UTILITIES     -----
       !-----------------------------
-      subroutine numerical_low_rank_splitting_step(U, S, A, B, tau, torder, options)
+      subroutine numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info)
          !> Low-rank factors
          class(abstract_vector) , intent(inout) :: U(:) ! basis
          real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
@@ -166,7 +167,8 @@ module lightROM_LyapunovSolvers
          else if ( torder .eq. 2 ) then
             integrator = 2
          else if ( torder .gt. 2 ) then
-            write(*,*) "INFO : Time-integration order for the operator splitting of d > 2 requires adjoint solves and is not implemented."
+            write(*,*) "INFO : Time-integration order for the operator splitting of d > 2 &
+                        &requires adjoint solves and is not implemented."
             write(*,*) "       Resetting torder = 2." 
             info = 1
             integrator = 2
@@ -178,19 +180,19 @@ module lightROM_LyapunovSolvers
 
          select case (integrator)
          case (1) ! Lie-Trotter splitting
-            call M_forward_map(U, S, A, tau)
-            call G_forward_map(U, S, B, tau)
+            call M_forward_map(U, S, A, tau, info)
+            call G_forward_map(U, S, B, tau, info)
          case (2) ! Strang splitting
-            call M_forward_map(U, S, A, 0.5*tau)
-            call G_forward_map(U, S, B, tau)
-            call M_forward_map(U, S, A, 0.5*tau)
+            call M_forward_map(U, S, A, 0.5*tau, info)
+            call G_forward_map(U, S, B, tau, info)
+            call M_forward_map(U, S, A, 0.5*tau, info)
          end select
 
          return
 
       end subroutine numerical_low_rank_splitting_step
 
-      subroutine M_forward_map(U, S, A, tau)
+      subroutine M_forward_map(U, S, A, tau, info)
          !> Low-rank factors
          class(abstract_vector) , intent(inout) :: U(:)   ! basis
          real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
@@ -205,18 +207,20 @@ module lightROM_LyapunovSolvers
          class(abstract_vector) , allocatable   :: Uwrk(:)  ! basis
          real(kind=wp)          , allocatable   :: R(:,:)   ! QR coefficient matrix
          real(kind=wp)          , allocatable   :: wrk(:,:)
-         integer                                :: i
+         integer                                :: i, rk
 
+         rk = size(U)
          !> Apply propagator to initial basis
-         allocate(Uwrk(1)) ; Uwrk%zero()
-         do i = 1, size(U)
-            call A%matvec(U(i), Uwrk)
-            call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
+         allocate(Uwrk(1), source=U(1)) ; call Uwrk(1)%zero()
+         do i = 1, rk
+            call A%matvec(U(i), Uwrk(1))
+            call U(i)%axpby(0.0_wp, Uwrk(1), 1.0_wp) ! overwrite old solution
          enddo
+         allocate(R(1:rk,1:rk)); R = 0.0_wp
          !> Reorthonormalize in-place
-         call qr_factorisation(U, R, info)
+         call qr_factorization(U, R, info)
          !> Update low-rank coefficient matrix
-         allocate(wrk(1:r,1:r)); wrk = 0.0_wp
+         allocate(wrk(1:rk,1:rk)); wrk = 0.0_wp
          wrk = matmul(S, transpose(R))
          S   = matmul(R, wrk)
          deallocate(Uwrk)
@@ -224,7 +228,7 @@ module lightROM_LyapunovSolvers
          return
       end subroutine M_forward_map
 
-      subroutine G_forward_map(U, S, B, tau, info, options)
+      subroutine G_forward_map(U, S, B, tau, info)
          !> Low-rank factors
          class(abstract_vector) , intent(inout) :: U(:)   ! basis
          real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
@@ -239,25 +243,24 @@ module lightROM_LyapunovSolvers
          class(abstract_vector) , allocatable   :: U1(:) 
          class(abstract_vector) , allocatable   :: Uwrk(:)
          real(kind=wp)          , allocatable   :: S1(:,:)
-         real(kind=wp),         , allocatable   :: Swrk(:,:)
-         integer :: i
+         real(kind=wp)          , allocatable   :: Swrk(:,:)
+         integer :: i, rk
 
+         rk = size(U)
          !> Allocate temporary arrays
-         allocate(U1(1:r))
-         allocate(Uwrk(1:r))
-         call mat_zero(U1)
-         call mat_zero(Uwrk)
-         allocate(Swrk(1:r,1:r)); Swrk = 0.0_wp
-         allocate(S1(1:r,1:r));     S1 = 0.0_wp
+         allocate(U1(1:rk), source=U(1)); allocate(Uwrk(1:rk), source=U(1))
+         call mat_zero(U1); call mat_zero(Uwrk)
+         allocate(Swrk(1:rk,1:rk)); allocate(S1(1:rk,1:rk)); 
+         Swrk = 0.0_wp; S1 = 0.0_wp
          !> Step K equation:      
          !>       K0   = U @ S
          !>       Kdot = B @ B.T @ U
          call mat_mult(U1, U, S)     ! K0
          call apply_outerproduct(Uwrk, B, U)  ! Kdot
          !> Construct solution U1
-         call mat_axpby(U,1.0_wp,Uwrk,tau)
+         call mat_axpby(U, 1.0_wp, Uwrk, tau)
          !> Orthonormalize in-place
-         call qr_factorisation(U1, S1, info)
+         call qr_factorization(U1, S1, info)
          !
          !> Step S equation
          !>       S0   = S1
@@ -265,7 +268,7 @@ module lightROM_LyapunovSolvers
          call apply_outerproduct(Uwrk, B, U)
          call mat_mult(Swrk, U1, Uwrk)          ! - Sdot
          !> Construct solution S1
-         call mat_axpby(S1,1.0_wp,Swrk,-tau)
+         call mat_axpby(S1, 1.0_wp, Swrk, -tau)
          !
          !> Step L equation:
          !>       L0   = St @ UA.T           or      L0.T   = UA @ St.T  
@@ -274,7 +277,7 @@ module lightROM_LyapunovSolvers
          !> note: we no longer need the old basis U so we overwrite it
          call apply_outerproduct(U, B, U1)               ! Ldot.T
          !> Construct solution Uwrk.T
-         call mat_axpby(Uwrk,1.0_wp,U,tau)
+         call mat_axpby(Uwrk, 1.0_wp, U, tau)
          !> Update S
          call mat_mult(S, Uwrk, U1)
          !> Copy U1 --> U for output

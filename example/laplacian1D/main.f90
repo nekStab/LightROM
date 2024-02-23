@@ -2,7 +2,8 @@ program demo
   use LightKrylov
   use Laplacian
   use Laplacian_Lyapunov
-  use stdlib_io_npy, only : save_npy
+  use LightROM_LyapunovSolvers
+  !use stdlib_io_npy, only : save_npy
   implicit none
 
   !------------------------------------------------
@@ -123,8 +124,8 @@ program demo
   !> Orthonormalize (in-place)
   S = 0.0_wp
   call qr_factorization(U,S,info)
-  tau = 0.1
-  call numerical_low_rank_splitting_integrator(U,S,A,B,Tend,dt,torder)
+  dt = 0.1
+  call numerical_low_rank_splitting_integrator(U, S, A, B, Tend, dt, torder, info)
 
   !> Reconstruct the leading eigenvectors from the Krylov basis.
   !do i = 1, nev
