@@ -9,6 +9,7 @@ program Tester
   use LightROM
   use TestVector
   use TestMatrices
+  use TestExpm
   use TestLyapunov
 
   implicit none
@@ -31,6 +32,7 @@ program Tester
   status = 0
 
   !> List of test suites.
+  testsuites = [new_testsuite("Matrix Exponential", collect_expm_testsuite)]
   testsuites = [new_testsuite("Lyapunov Utils", collect_lyapunov_utils_testsuite)]
 
   !> Run each test suite.

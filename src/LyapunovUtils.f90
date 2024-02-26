@@ -1,6 +1,6 @@
 module LightROM_LyapunovUtils
    Use LightKrylov
-   Use Lightrom_wplib
+   Use Lightrom_expmlib
    implicit none
 
    private
