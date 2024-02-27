@@ -9,11 +9,11 @@ module LightROM_expmlib
 
    private
    !> Matrix operations for abstract vector types
-   public :: kexpm, expm, factorial
+   public :: kexpm, expm, norm_linf, norm_fro, factorial
 
 contains
 
-   subroutine kexpm(C, A, B, tau, tol, info, nkryl)
+   subroutine kexpm(C, A, B, tau, tol, info, verbosity, nkryl)
 
    !=======================================================================================
    ! Krylov-based approximation of the action the exponential propagator on a matrix B
@@ -49,11 +49,15 @@ contains
    !   "small" matrices A (or tau << 1)
    ! - The small dense problem of the exponential of the Hessenberg matrix is solved using
    !   the scaling and squaring approach combined with a rational Pade approximation.
+   ! - The correction to the naive Krylov approach proposed by Gallpoulos & Saad making
+   !   use of the additional information in the last row of the Hessenberg matrix implemented
    !
    ! Advantages:
    ! -----------
    ! - Very accurate for "small" matrices (in terms of their norm), i.e. for small tau.
-   ! - A (rough) error estimate can be computed based on the Hessenberg matrix
+   ! - A fairly accuracte error estimate is computed based on the Hessenberg matrix to
+   !   terminate iteration when needed (see Er3, p 223, Y. Saad, 1992)
+   ! - Block arnoldi method allows for the right hand side to contain more than 1 vector
    !
    ! Limitations:
    ! ------------
@@ -97,11 +101,13 @@ contains
       !> Information flag
       integer,                intent(out) :: info
       !> Optional
+      logical, optional,      intent(in)  :: verbosity
+      logical                             :: verbose
       integer, optional,      intent(in)  :: nkryl
       integer                             :: nstep
       
       !> internals
-      integer, parameter :: kmax = 10
+      integer, parameter :: kmax = 20
       integer :: i, k, p, kpm, kp, kpp, nk
       !> Arnoldi factorisation
       class(abstract_vector), allocatable :: X(:)
@@ -116,8 +122,11 @@ contains
       p = size(B)
 
       !> Optional arguemnts
-      nstep = optval(nkryl, kmax)
-      nk    = nstep*p
+      verbose = optval(verbosity, .false.)
+      nstep   = optval(nkryl, kmax)
+      nk      = nstep*p
+
+      info = 0
 
       ! allocate memory
       allocate(R(1:p,1:p))                                              ! QR factorization
@@ -125,7 +134,7 @@ contains
       allocate(E(1:p*(nk+1),1:nk))                                      ! Dense matrix exponential
       allocate(invH(1:nk,1:nk)); allocate(phi(1:nk,1:nk));              ! Correction
       allocate(Id(1:nk,1:nk)); Id = 0.0_wp; forall (i=1:nk) Id(i, i) = 1.0_wp
-      allocate(em(1:nk,1:p)); allocate(ym(1:p,1:p))                     ! error estimate
+      allocate(em(1:p,1:p)); allocate(ym(1:p,1:p))                     ! error estimate
       ! scratch arrays
       allocate(wrk(1:nk,1:nk))
       allocate(Xwrk(1:p), source=B(1)); allocate(Cwrk(1:p), source=B(1))
@@ -149,11 +158,11 @@ contains
          !> compute the (dense) matrix exponential of the Hessenberg matrix
          call expm(E(1:kp,1:kp),tau*H(1:kp,1:kp))
          !> compute correction based on last row of Hessenberg matrix
+         wrk = 0.0_wp; invH = 0.0_wp
          invH(1:kp,1:kp) = tau*H(1:kp,1:kp)
          call inv(invH(1:kp,1:kp))
-         wrk = 0.0_wp
          wrk = E(1:kp,1:kp) - Id(1:kp,1:kp)
-         phi(1:kp,1:kp) = matmul(invH(1:kp,1:kp),wrk(1:kp,1:kp))
+         phi(1:kp,1:kp) = matmul(invH(1:kp,1:kp),wrk(1:kp,1:kp))    ! phi(tH)
          !> add correction row(s) to exptH
          E(kp+1:kpp,1:kp) = phi(kpm+1:kp,1:kp)
          !> project back into original space
@@ -161,20 +170,43 @@ contains
          call mat_mult(Xwrk(1:p),X(1:kp),E(1:kp,1:p))
          call mat_mult(C(1:p),Xwrk(1:p),R(1:p,1:p))
          !> cheap error estimate
-         err_est = 1.0_wp ! for now
-         !em = 0.0_wp; ym = 0.0_wp
-         !forall (i=1:nk) em(kpm+i, i) = 1.0_wp
-         !> for the error estimate we need to extract the last p rows of Xwrk ...
-         !err_est = norm_l2(H(kp+1:kpp,kpm+1:kp)) * norm_l2(Xwrk[kpm+1,kp,1:p])
+         err_est = 0.0_wp; wrk = 0.0_wp
+         wrk(1:p,1:p) = matmul(phi(kpm+1:kp,1:p),R(1:p,1:p))        ! e_mT @ phi(tH) @ e_1 @ R
+         em = matmul(H(kp+1:kpp,kpm+1:kp),wrk(1:p,1:p))             ! h_{m+1,m} @ wrk
+         err_est = norm_fro(em)
          !> correction
          call mat_zero(Cwrk)
          call mat_mult(Cwrk(1:p),X(kp+1:kpp),E(kp+1:kpp,1:p))
          call mat_axpby(C,1.0_wp,Cwrk,1.0_wp)
          if (err_est .lt. tol) then
+            if (verbose) then
+               if (p.eq.1) then
+                  write(*, *) 'Arnoldi approxmation of the action of the exp. propagator converged'
+               else
+                  write(*, *) 'Block Arnoldi approxmation of the action of the exp. propagator converged'
+               endif 
+               write(*, *) '    n° of vectors:', k+1, 'per input vector, total:', kpp
+               write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
+               write(*, *) '    desired tolerance:           tol = ', tol
+               write(*, *)
+            endif
             ! --> Exit the Arnoldi iteration.
             exit expm_arnoldi
          endif
       end do expm_arnoldi
+
+      if (err_est .gt. tol) then
+         info = -1
+         if (verbose) then
+            write(*, *) 'Arnoldi-based approxmation of the exp. propagator did not converge'
+            write(*, *) '    maximum n° of vectors reached: ', nstep+1,&
+                        & 'per input vector, total:', kpp
+            write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
+            write(*, *) '    desired tolerance:           tol = ', tol
+            write(*, *)
+         endif
+      endif
+
       
    end subroutine kexpm
    
@@ -321,8 +353,8 @@ contains
       end do
    end function norm_linf
 
-   function norm_l2(A) result(norm)
-      ! compute the 2-norm of the real-valued input matrix A
+   function norm_fro(A) result(norm)
+      ! compute the frobenuius norm of the real-valued input matrix A
       implicit none   
       real(kind=wp), intent(in) :: A(:,:)
       !> internals
@@ -337,7 +369,7 @@ contains
          end do
       end do
       norm = sqrt(norm)
-   end function norm_l2
+   end function norm_fro
 
    function factorial(n) result(y)
       ! compute n!

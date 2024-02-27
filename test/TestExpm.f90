@@ -25,7 +25,8 @@ module TestExpm
  
      testsuite = [&
           new_unittest("Dense Matrix Exponential", test_dense_matrix_exponential), &
-          new_unittest("Krylov Matrix Exponential", test_krylov_matrix_exponential) &
+          new_unittest("Krylov Matrix Exponential", test_krylov_matrix_exponential), &
+          new_unittest("Block Krylov Matrix Exponential", test_block_krylov_matrix_exponential) &
           ]
  
      return
@@ -91,46 +92,122 @@ module TestExpm
       real(kind=wp) :: Id(kdim, kdim)
       !> Information flag.
       integer :: info
+      !> Test parameters
+      integer, parameter         :: nkmax = 15
+      integer, parameter         :: p     = 1
+      real(kind=wp), parameter   :: tau   = 0.1_wp
+      real(kind=wp), parameter   :: tol   = 1e-10_wp
       !> Misc.
       integer :: i,j,k
-      integer, parameter :: nk = 10
-      real(kind=wp) :: Xmat(test_size), Qmat(test_size)
+      real(kind=wp) :: Xmat(test_size,p), Qmat(test_size,p)
       real(kind=wp) :: alpha
-      real(wp) :: tau
+      real(kind=wp) :: err(p,p)
 
-      ! --> Initialize matrix.
+      Amat = 0.0_wp; Emat = 0.0_wp; Xmat = 0.0_wp
+      allocate(Xref(1:p)) ; call mat_zero(Xref)
+      allocate(Xkryl(1:p)) ; call mat_zero(Xkryl)
+
+      ! --> Initialize operator.
       A = rmatrix() ; call random_number(A%data)
+      Amat = A%data     
+      ! --> Initialize rhs.
+      allocate(Q(1:p)) ; 
+      do i = 1,p
+         call random_number(Q(i)%data)
+         Qmat(:,i) = Q(i)%data
+      end do
       
-      allocate(Q(1)) ; call random_number(Q(1)%data)
-      Qmat = Q(1)%data
-      allocate(Xref(1)) ; call mat_zero(Xref)
-      allocate(Xkryl(1)) ; call mat_zero(Xkryl)
-
-      Amat = 0.0_wp;
-      Amat = A%data
-
-      tau = 0.1_wp
-
-      Emat = 0.0_wp
-      Xmat = 0.0_wp
       !> Comparison is dense computation (10th order Pade approximation)
       call expm(Emat, tau*Amat)
       Xmat = matmul(Emat,Qmat)
       !> Copy reference data into Krylov vector
-      Xref(1)%data = Xmat
+      do i = 1,p
+         Xref(i)%data = Xmat(:,i)
+      end do
 
       !> Compute Krylov matrix exponential for different krylov subspace sizes
-      do i = 1, nk
-         call kexpm(Xkryl(1:1), A, Q(1:1), tau, 1.0e-6_wp, info, nkryl = i)
-         !> Compute 2-norm of the error
-         call Xkryl(1)%axpby(1.0_wp, Xref(1), -1.0_wp)
-         alpha = Xkryl(1)%norm()
-         write(*,'(a12,i2,a12,E15.7)') 'Krylov step ', i, ': error_2 = ', alpha
+      call kexpm(Xkryl(1:p), A, Q(1:p), tau, tol, info, verbosity = .true., nkryl = nkmax)
+      do i = 1,p
+         call Xkryl(i)%axpby(1.0_wp, Xref(i), -1.0_wp)
       end do
+      !> Compute 2-norm of the error
+      call mat_mult(err,Xkryl(1:p),Xkryl(1:p))
+      alpha = sqrt(norm_fro(err))
+      write(*, *) '    true error:          ||error||_2 = ', alpha
      
       call check(error, alpha < rtol)
       
       return
    end subroutine test_krylov_matrix_exponential
+
+   subroutine test_block_krylov_matrix_exponential(error)
+      !> This function tests the Krylov based approximation of the action of the exponential
+      ! propagator against the dense computation for a random operator, a random RHS and a 
+      ! typical value of tau.
+
+      !> Error type to be returned.
+      type(error_type), allocatable, intent(out) :: error
+      class(rmatrix), allocatable :: A
+      !> Basis vectors.
+      class(rvector), allocatable :: Q(:)
+      class(rvector), allocatable :: Xref(:)
+      class(rvector), allocatable :: Xkryl(:)
+      !> Krylov subspace dimension.
+      integer, parameter :: kdim = test_size
+      !> Test matrix.
+      real(kind=wp) :: Amat(kdim, kdim)
+      real(kind=wp) :: Emat(kdim, kdim)
+      !> GS factors.
+      real(kind=wp) :: R(kdim, kdim)
+      real(kind=wp) :: Id(kdim, kdim)
+      !> Information flag.
+      integer :: info
+      !> Test parameters
+      integer, parameter         :: nkmax = 15
+      integer, parameter         :: p     = 2
+      real(kind=wp), parameter   :: tau   = 0.1_wp
+      real(kind=wp), parameter   :: tol   = 1e-10_wp
+      !> Misc.
+      integer :: i,j,k
+      real(kind=wp) :: Xmat(test_size,p), Qmat(test_size,p)
+      real(kind=wp) :: alpha
+      real(kind=wp) :: err(p,p)
+
+      Amat = 0.0_wp; Emat = 0.0_wp; Xmat = 0.0_wp
+      allocate(Xref(1:p)) ; call mat_zero(Xref)
+      allocate(Xkryl(1:p)) ; call mat_zero(Xkryl)
+
+      ! --> Initialize operator.
+      A = rmatrix() ; call random_number(A%data)
+      Amat = A%data     
+      ! --> Initialize rhs.
+      allocate(Q(1:p)) ; 
+      do i = 1,p
+         call random_number(Q(i)%data)
+         Qmat(:,i) = Q(i)%data
+      end do
+      
+      !> Comparison is dense computation (10th order Pade approximation)
+      call expm(Emat, tau*Amat)
+      Xmat = matmul(Emat,Qmat)
+      !> Copy reference data into Krylov vector
+      do i = 1,p
+         Xref(i)%data = Xmat(:,i)
+      end do
+
+      !> Compute Krylov matrix exponential for different krylov subspace sizes
+      call kexpm(Xkryl(1:p), A, Q(1:p), tau, tol, info, verbosity = .true., nkryl = nkmax)
+      do i = 1,p
+         call Xkryl(i)%axpby(1.0_wp, Xref(i), -1.0_wp)
+      end do
+      !> Compute 2-norm of the error
+      call mat_mult(err,Xkryl(1:p),Xkryl(1:p))
+      alpha = sqrt(norm_fro(err))
+      write(*, *) '    true error:          ||error||_2 = ', alpha
+     
+      call check(error, alpha < rtol)
+      
+      return
+   end subroutine test_block_krylov_matrix_exponential
 
 end module TestExpm
