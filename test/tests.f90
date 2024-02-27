@@ -32,8 +32,8 @@ program Tester
   status = 0
 
   !> List of test suites.
-  testsuites = [new_testsuite("Matrix Exponential", collect_expm_testsuite)]
-  !testsuites = [new_testsuite("Lyapunov Utils", collect_lyapunov_utils_testsuite)]
+  !testsuites = [new_testsuite("Matrix Exponential", collect_expm_testsuite)]
+  testsuites = [new_testsuite("Lyapunov Utils", collect_lyapunov_utils_testsuite)]
 
   !> Run each test suite.
   do i = 1, size(testsuites)
