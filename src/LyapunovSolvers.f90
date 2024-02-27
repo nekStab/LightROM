@@ -202,6 +202,8 @@ module LightROM_LyapunovSolvers
          real(kind=wp)          , intent(in)    :: tau
          !> Information flag
          integer                , intent(out)   :: info
+         !> tolerance for the exponential propagator
+         real(kind=wp), parameter :: tol = 1e-9
 
          !> Local variables
          class(abstract_vector) , allocatable   :: Uwrk(:)  ! basis

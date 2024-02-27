@@ -2,6 +2,7 @@ program demo
   use LightKrylov
   use Laplacian
   use Laplacian_Lyapunov
+  use Laplacian_Lyapunov_kexpm
   use LightROM_LyapunovSolvers
   !use stdlib_io_npy, only : save_npy
   implicit none
