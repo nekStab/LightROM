@@ -79,9 +79,9 @@ module TestExpm
       type(error_type), allocatable, intent(out) :: error
       class(rmatrix), allocatable :: A
       !> Basis vectors.
-      class(rvector), allocatable :: Q(:)
-      class(rvector), allocatable :: Xref(:)
-      class(rvector), allocatable :: Xkryl(:)
+      class(rvector), allocatable :: Q
+      class(rvector), allocatable :: Xref
+      class(rvector), allocatable :: Xkryl
       !> Krylov subspace dimension.
       integer, parameter :: kdim = test_size
       !> Test matrix.
@@ -94,48 +94,41 @@ module TestExpm
       integer :: info
       !> Test parameters
       integer, parameter         :: nkmax = 15
-      integer, parameter         :: p     = 1
       real(kind=wp), parameter   :: tau   = 0.1_wp
       real(kind=wp), parameter   :: tol   = 1e-10_wp
       !> Misc.
       integer :: i,j,k
-      real(kind=wp) :: Xmat(test_size,p), Qmat(test_size,p)
-      real(kind=wp) :: alpha
-      real(kind=wp) :: err(p,p)
+      real(kind=wp) :: Xmat(test_size), Qmat(test_size)
+      real(kind=wp) :: err
 
       Amat = 0.0_wp; Emat = 0.0_wp; Xmat = 0.0_wp
-      allocate(Xref(1:p)) ; call mat_zero(Xref)
-      allocate(Xkryl(1:p)) ; call mat_zero(Xkryl)
+      allocate(Q); allocate(Xref); allocate(Xkryl)
+      call Xref%zero()
+      call Xkryl%zero()
 
       ! --> Initialize operator.
       A = rmatrix() ; call random_number(A%data)
       Amat = A%data     
       ! --> Initialize rhs.
-      allocate(Q(1:p)) ; 
-      do i = 1,p
-         call random_number(Q(i)%data)
-         Qmat(:,i) = Q(i)%data
-      end do
+      call random_number(Q%data)
+      Qmat(:) = Q%data
       
       !> Comparison is dense computation (10th order Pade approximation)
       call expm(Emat, tau*Amat)
       Xmat = matmul(Emat,Qmat)
-      !> Copy reference data into Krylov vector
-      do i = 1,p
-         Xref(i)%data = Xmat(:,i)
-      end do
-
-      !> Compute Krylov matrix exponential for different krylov subspace sizes
-      call kexpm(Xkryl(1:p), A, Q(1:p), tau, tol, info, verbosity = .true., nkryl = nkmax)
-      do i = 1,p
-         call Xkryl(i)%axpby(1.0_wp, Xref(i), -1.0_wp)
-      end do
-      !> Compute 2-norm of the error
-      call mat_mult(err,Xkryl(1:p),Xkryl(1:p))
-      alpha = sqrt(norm_fro(err))
-      write(*, *) '    true error:          ||error||_2 = ', alpha
      
-      call check(error, alpha < rtol)
+      !> Copy reference data into Krylov vector
+      Xref%data = Xmat(:)
+      
+      !> Compute Krylov matrix exponential for different krylov subspace sizes
+      call kexpm(Xkryl, A, Q, tau, tol, info, verbosity = .true., nkryl = nkmax)
+      call Xkryl%axpby(1.0_wp, Xref, -1.0_wp)
+      
+      !> Compute 2-norm of the error
+      err = Xkryl%norm()
+      write(*, *) '    true error:          ||error||_2 = ', err
+     
+      call check(error, err < rtol)
       
       return
    end subroutine test_krylov_matrix_exponential
