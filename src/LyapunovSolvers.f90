@@ -127,6 +127,7 @@ module LightROM_LyapunovSolvers
       tau    = Tend/nsteps
 
       dlra : do istep = 1, nsteps
+         write(*,*) 'DLRA',istep
          !> dynamical low-rank approximation step
          call numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info)
 
@@ -177,9 +178,11 @@ module LightROM_LyapunovSolvers
             info = -1
             integrator = 2
          endif
+         write(*,*) '    step: integrator', integrator
 
          select case (integrator)
          case (1) ! Lie-Trotter splitting
+            write(*,*) '    step: splitting: Lie-Trotter'
             call M_forward_map(U, S, A, tau, info)
             call G_forward_map(U, S, B, tau, info)
          case (2) ! Strang splitting
@@ -212,16 +215,30 @@ module LightROM_LyapunovSolvers
          integer                                :: i, rk
 
          rk = size(U)
-         !> Apply propagator to initial basis
-         allocate(Uwrk(1), source=U(1)) ; call Uwrk(1)%zero()
-         do i = 1, rk
-            call A%matvec(U(i), Uwrk(1))
-            call U(i)%axpby(0.0_wp, Uwrk(1), 1.0_wp) ! overwrite old solution
-         enddo
          allocate(R(1:rk,1:rk)); R = 0.0_wp
+         call mat_mult(R,U(1:rk),U(1:rk))
+         write(*,*) '         U orthonormality (before M step):'
+         do i = 1, rk
+            write(*,'(4F8.3)') R(i,1:rk)
+         enddo
+         !> Apply propagator to initial basis
+         allocate(Uwrk(1:rk), source=U(1)) ; call mat_zero(Uwrk)
+         do i = 1, rk
+            call A%matvec(U(i), Uwrk(i))
+            !call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
+         enddo
+         call mat_mult(R,Uwrk(1:rk),Uwrk(1:rk))
+         write(*,*) '         U orthonormality (after M step):'
+         do i = 1, rk
+            write(*,'(4E15.8)') R(i,1:rk)
+         enddo
          !> Reorthonormalize in-place
          call qr_factorization(U, R, info)
          !> Update low-rank coefficient matrix
+         write(*,*) '         R (after M step):'
+         do i = 1, rk
+            write(*,'(4F8.3)') R(i,1:rk)
+         enddo
          allocate(wrk(1:rk,1:rk)); wrk = 0.0_wp
          wrk = matmul(S, transpose(R))
          S   = matmul(R, wrk)

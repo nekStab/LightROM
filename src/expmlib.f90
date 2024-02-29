@@ -1,6 +1,7 @@
 module LightROM_expmlib
    Use LightKrylov
    Use lightkrylov_utils
+   Use lightrom_utils
 
    !> Fortran standard library.
    use stdlib_optval, only: optval
@@ -9,7 +10,8 @@ module LightROM_expmlib
 
    private
    !> Matrix operations for abstract vector types
-   public :: kexpm, expm, norm_linf, norm_fro, factorial
+   public :: kexpm, expm
+   public :: log2, log10, norm_linf, norm_fro, factorial
 
    interface kexpm
       module procedure kexpm_vec
@@ -46,7 +48,7 @@ contains
       integer                             :: nstep
       
       !> internals
-      integer, parameter :: kmax = 20
+      integer, parameter :: kmax = 100
       integer :: i, k, p, km, kp, nk
       !> Arnoldi factorisation
       class(abstract_vector), allocatable :: X(:)
@@ -226,7 +228,7 @@ contains
          integer                             :: nstep
          
          !> internals
-         integer, parameter :: kmax = 20
+         integer, parameter :: kmax = 100
          integer :: i, k, p, kpm, kp, kpp, nk
          !> Arnoldi factorisation
          class(abstract_vector), allocatable :: X(:)
@@ -453,6 +455,14 @@ contains
      real(kind=wp) :: y
      y = log(x) / log(2.0_wp)
    end function log2
+
+   function log10(x) result(y)
+      ! compute the base-2 logarithm of the input
+      implicit none
+      real(kind=wp), intent(in) :: x
+      real(kind=wp) :: y
+      y = log(x) / log(10.0_wp)
+    end function log10
 
    function norm_linf(A) result(norm)
       ! compute the infinity norm of the real-valued input matrix A
