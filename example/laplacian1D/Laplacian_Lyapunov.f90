@@ -44,27 +44,13 @@ module Laplacian_Lyapunov
   !-----     EXPONENTIAL PROPAGATOR     -----
   !------------------------------------------
 
-  type, extends(abstract_linop), public :: rklib_exptA_lyapunov_mat
+  type, extends(abstract_linop), public :: rklib_lyapunov_mat
      real(kind=wp) :: tau ! Integration time.
    contains
      private
      procedure, pass(self), public :: matvec  => direct_solver_mat
      procedure, pass(self), public :: rmatvec => direct_solver_mat                ! dummy
-  end type rklib_exptA_lyapunov_mat
-
-  !------------------------------------------------------
-  !-----     EXPONENTIAL PROPAGATOR KRYLOV MATRIX   -----
-  !------------------------------------------------------
-
-  type, extends(abstract_linop), public :: krylov_exptA_lyapunov_mat
-     !> operator to be exponentiated
-     class(lyapunov_operator), allocatable :: A
-     real(kind=wp) :: tau ! Integration time.
-   contains
-     private
-     procedure, pass(self), public :: matvec  => direct_solver_expm_lyapunov_mat
-     procedure, pass(self), public :: rmatvec => direct_solver_expm_lyapunov_mat      ! dummy
-  end type krylov_exptA_lyapunov_mat
+  end type rklib_lyapunov_mat
 
 contains
 
@@ -165,12 +151,11 @@ contains
 
     !> Internal variables.
     integer :: i, j, k
-    real(kind=wp), dimension(nx**2) :: dv, dvT, q
+    real(kind=wp), dimension(nx**2) :: dv, dvT
 
     !> Sets the internal variables.
     dv  = 0.0_wp
     dvT = 0.0_wp
-    q   = 1.0_wp
 
     !> We compute the action of the Lyapunov operator without using the transpose of A
     !           L(X) = A @ X +   X @ A.T     + Q
@@ -179,7 +164,9 @@ contains
     call laplacian_mat(dvT, x, .true.)        ! ( A @ X.T ).T
 
     !> Combine the parts and copy result to the output array.
-    f(1:nx**2) = dv + dvT + q
+    f(1:nx**2) = dv + dvT
+
+    call add_Q(f(1:nx**2))
     
     return
   end subroutine rhs_lyap
@@ -266,7 +253,7 @@ contains
 
  subroutine direct_solver_mat(self, vec_in, vec_out)
    !> Linear Operator.
-   class(rklib_exptA_lyapunov_mat), intent(in)  :: self
+   class(rklib_lyapunov_mat), intent(in)  :: self
    !> Input vector.
    class(abstract_vector) , intent(in)  :: vec_in
    !> Output vector.
@@ -288,78 +275,5 @@ contains
    
    return
  end subroutine direct_solver_mat
-
- !--------------------------------------------------------------------------------
- !-----     TYPE-BOUND PROCEDURES FOR THE KRYLOV EXPONENTIAL PROPAGATOR     -----
- !-------------------------------------------------------------------------------
-
- subroutine direct_solver_expm_lyapunov_mat(self, vec_in, vec_out)
-   !> Linear Operator.
-   class(krylov_exptA_lyapunov_mat), intent(in)  :: self
-   !> Input vector.
-   class(abstract_vector) , intent(in)  :: vec_in
-   !> Output vector.
-   class(abstract_vector) , intent(out) :: vec_out
-
-   !> Internals
-   class(state_matrix), allocatable  :: tmp1, tmp2
-   real(kind=wp), parameter     :: dt0 = 0.01_wp      ! time-step
-   real(kind=wp), parameter     :: tol = 1e-11_wp     ! tolerance for the krylov approximation
-   logical, parameter           :: verb = .false.
-   real(kind=wp)                :: Tend, dt_last
-   integer                      :: i, nsteps, info
-
-   nsteps = floor(self%tau/dt0)
-   dt_last = self%tau - nsteps*dt0
-   if ( dt_last .lt. atol ) then
-      dt_last = dt0
-      nsteps = nsteps - 1
-   endif
-   Tend = 0.0_wp
-
-   select type(vec_in)
-   type is(state_matrix)
-     select type(vec_out)
-     type is(state_matrix)
-       if ( nsteps .eq. 0 ) then          ! nsteps = 0 --> one step (dt_last)
-         call kexpm(vec_out, self%A, vec_in, dt_last, tol, info, verbosity = verb)
-         Tend = Tend + dt_last
-         write(*,*) Tend, dt_last, tol, info
-       elseif ( nsteps .eq. 1 ) then      ! nsteps = 1 --> 2 steps
-         allocate(tmp1, source=vec_in)
-         call kexpm(tmp1,    self%A, vec_in, dt0,     tol, info, verbosity = verb)
-         Tend = Tend + dt0
-         call kexpm(vec_out, self%A, tmp1,   dt_last, tol, info, verbosity = verb)
-         Tend = Tend + dt_last
-       else                               ! nsteps > 1
-         allocate(tmp1, source=vec_in)
-         allocate(tmp2, source=vec_in)
-         if ( mod(nsteps,2) .eq.0 ) then  ! nsteps even
-           tmp2%state = vec_in%state
-           do i = 1, nsteps/2
-              call kexpm(tmp1, self%A, tmp2, dt0, tol, info, verbosity = verb) !> instead of copying data around we 
-              call kexpm(tmp2, self%A, tmp1, dt0, tol, info, verbosity = verb) !  swap input and output
-              Tend = Tend + dt0*2.0_wp
-           end do
-         else                             ! nsteps odd
-          tmp1%state = vec_in%state ! inverse tmp1 and tmp2 to end up with output in tmp2
-           do i = 1, (nsteps-1)/2
-              call kexpm(tmp2, self%A, tmp1, dt0, tol, info, verbosity = verb) !> instead of copying data around we 
-              call kexpm(tmp1, self%A, tmp2, dt0, tol, info, verbosity = verb) !  swap input and output
-              Tend = Tend + dt0*2.0_wp
-           end do
-           call kexpm(tmp2, self%A, tmp1, dt0, tol, info, verbosity = verb)
-           Tend = Tend + dt0
-         endif                            ! odd/even
-         !> last step to match Tend and to put output in vec_out
-         call kexpm(tmp1, self%A, tmp2, dt_last, tol, info, verbosity = verb) 
-         Tend = Tend + dt_last
-         vec_out%state = tmp1%state
-       endif                              ! nsteps    
-     end select
-   end select
-     
-   return
- end subroutine direct_solver_expm_lyapunov_mat
 
 end module Laplacian_Lyapunov

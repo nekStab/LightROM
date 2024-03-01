@@ -14,9 +14,8 @@ program demo
 
   ! Laplacian in Lyapunov equation
   !> Exponential propagator.
-  type(lyapunov_operator),         allocatable :: A_lyap
-  type(rklib_exptA_lyapunov_mat),  allocatable :: A_prop_mat
-  type(krylov_exptA_lyapunov_mat), allocatable :: Ak_prop_mat
+  type(lyapunov_operator),  allocatable :: A_lyap
+  type(rklib_lyapunov_mat), allocatable :: A_prop_mat
   !> Krylov subspace.
   type(state_matrix), allocatable :: X_mat(:)
   type(state_matrix), allocatable :: wrk_mat(:)
@@ -54,10 +53,8 @@ program demo
   real(wp)      :: tmp(nx,nx)
   !> DLRA
   integer, parameter :: rk = 4
-  integer, parameter :: torder = 1
+  integer, parameter :: torder = 2
   real(wp) :: Tend
-  type(state_vector), allocatable :: B(:)
-  type(state_vector), allocatable :: U(:)
   real(wp) :: S(rk,rk)
   real(wp) :: dt          !> timestep
 
@@ -73,11 +70,19 @@ program demo
   real(wp)  :: Amat(nx**2,nx**2)
   real(wp)  :: Emat(nx**2,nx**2)
   real(wp)  :: q_flat(nx**2)
-  real(wp)  :: Xtmp(nx**2)
-  
-  !real(wp)  :: Xmat_lyap(nx**2,3)
-  !real(wp)  :: Xmat_DLRA_in(nx,2*rk)
-  !real(wp)  :: Xmat_DLRA_out(nx,rk)
+  real(wp)  :: Xtmp(nx**2,1)
+  !> testing DLRA
+  real(wp)  :: Xmat_lyap(nx**2,3)
+  real(wp)  :: Xmat_DLRA_0(nx,rk)
+  real(wp)  :: Xmat_DLRA_in(nx,rk)
+  real(wp)  :: Xmat_DLRA_out(nx,rk)
+  type(state_vector), allocatable :: B(:)
+  type(state_vector), allocatable :: U(:)
+  type(state_vector), allocatable :: Uwrk(:)
+  real(wp)  :: US(nx,rk)
+  real(wp)  :: USUT(nx,nx)
+  type(state_matrix), allocatable :: X_DLRA_mat(:)
+  real(wp)  :: Xmat_rklib_out(nx, rk)
 
   ! Laplace operator
   call initialize_mesh
@@ -87,8 +92,8 @@ program demo
   forall (i=1:nx-1) Avec(i+1,i) = 1.0/dx**2
   forall (i=1:nx-1) Avec(i,i+1) = 1.0/dx**2
   
-  write(*,*) 'Avec - Laplace Operator'
-  call print_mat(nx, nx, Avec)
+  !write(*,*) 'Avec - Laplace Operator'
+  !call print_mat(nx, nx, Avec)
 
   Xvec = 0.0_wp
   allocate(X_vec(1:4))
@@ -101,8 +106,8 @@ program demo
   call A%matvec(X_vec(1), X_vec(2))
   Xvec(:,3) = X_vec(2)%state
 
-  write(*,*) 'Xvec - Laplace'
-  call print_mat(nx, 3, Xvec)
+  !write(*,*) 'Xvec - Laplace'
+  !call print_mat(nx, 3, Xvec)
   
   !> Initialize exponential propagators for the laplace equation.
   A_prop_vec  = rklib_exptA_laplacian_vec(tau)
@@ -110,8 +115,8 @@ program demo
 
   Evec = 0.0_wp
   call expm(Evec,tau*Avec)
-  write(*,*) 'Evec - expm(tau*Avec) Laplace Operator'
-  call print_mat(nx, nx, Evec)
+  !write(*,*) 'Evec - expm(tau*Avec) Laplace Operator'
+  !call print_mat(nx, nx, Evec)
 
   call X_vec(2)%zero()
   call X_vec(3)%zero()
@@ -122,16 +127,16 @@ program demo
    Xvec(:,i) = X_vec(i)%state
   end do
 
-  write(*,*) '-----------------------------------------------------'
-  write(*,*) '       expm(tau*Avec) @ X(0), Laplace Operator'
-  write(*,*) '               tau = ', tau
-  write(*,*) '-----------------------------------------------------'
-  write(*,*) '    X(0)         RKlib         Krylov        Pade'
-  write(*,*) '-----------------------------------------------------'
+  !write(*,*) '-----------------------------------------------------'
+  !write(*,*) '       expm(tau*Avec) @ X(0), Laplace Operator'
+  !write(*,*) '               tau = ', tau
+  !write(*,*) '-----------------------------------------------------'
+  !write(*,*) '    X(0)         RKlib         Krylov        Pade'
+  !write(*,*) '-----------------------------------------------------'
   !call print_mat(nx, 4, Xvec)
   call X_vec(2)%axpby(1.0_wp, X_vec(4), -1.0_wp)
   call X_vec(3)%axpby(1.0_wp, X_vec(4), -1.0_wp)
-  write(*,"(A18,3(E12.6,'  '))") '|error|_2     ',X_vec(2)%norm(),X_vec(3)%norm(),0.0
+  !write(*,"(A18,3(E12.6,'  '))") '|error|_2     ',X_vec(2)%norm(),X_vec(3)%norm(),0.0
 
   call expm(Evec,tau_long*Avec)
   A_prop_vec  = rklib_exptA_laplacian_vec(tau_long)
@@ -144,17 +149,17 @@ program demo
   do i = 2,4
    Xvec(:,i) = X_vec(i)%state
   end do
-  write(*,*) '-----------------------------------------------------'
-  write(*,*) '               tau = ', tau_long
-  write(*,*) '-----------------------------------------------------'
-  write(*,*) '    X(0)         RKlib         Krylov        Pade'
-  write(*,*) '-----------------------------------------------------'
+  !write(*,*) '-----------------------------------------------------'
+  !write(*,*) '               tau = ', tau_long
+  !write(*,*) '-----------------------------------------------------'
+  !write(*,*) '    X(0)         RKlib         Krylov        Pade'
+  !write(*,*) '-----------------------------------------------------'
   !call print_mat(nx, 4, Xvec)
   call X_vec(2)%axpby(1.0_wp, X_vec(4), -1.0_wp)
   call X_vec(3)%axpby(1.0_wp, X_vec(4), -1.0_wp)
-  write(*,"(A18,3(E12.6,'  '))") '|error|_2     ',X_vec(2)%norm(),X_vec(3)%norm(),0.0
-  write(*,*) '-----------------------------------------------------'
-  write(*,*)
+  !write(*,"(A18,3(E12.6,'  '))") '|error|_2     ',X_vec(2)%norm(),X_vec(3)%norm(),0.0
+  !write(*,*) '-----------------------------------------------------'
+  !write(*,*)
 
   call initialize_mesh_matrix_eq
 
@@ -179,10 +184,6 @@ program demo
   
   allocate(X_mat(1:4))
   call random_number(X_mat(1)%state)
-  !X_mat(1)%state = (/ 1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, &
-  !                 &  0.0_wp, 1.0_wp, 0.0_wp, 0.0_wp, &
-  !                 &  0.0_wp, 0.0_wp, 1.0_wp, 0.0_wp, &
-  !                 &  0.0_wp, 0.0_wp, 0.0_wp, 1.0_wp /)
   Xmat(:,1) = X_mat(1)%state
   rXmat = reshape(Xmat(:,1), (/ nx,nx /))
   !Xmat(:,2) = matmul(A1mat,Xmat(:,1)); Xmat(:,3) = reshape(matmul(Amat,rXmat), shape(Xmat(:,1)))
@@ -194,69 +195,29 @@ program demo
   call X_vec(3)%zero()
   call A_lyap%matvec(X_mat(1), X_mat(2))
   Xmat(:,4) = X_mat(2)%state
-  Xtmp = 0.0_wp
-  call laplacian_mat(Xtmp, Xmat(:,1), .false.)
-  Xmat(:,5) = Xtmp
-  call laplacian_mat(Xtmp, Xmat(:,1), .true.)
-  Xmat(:,5) = Xmat(:,5) + Xtmp
-  call add_q(Xmat(:,5))
 
   !write(*,*) 'Xmat - Lyapunov equation for Laplace operator'
-  !call print_mat(nx**2, 5, Xmat)
+  !call print_mat(nx**2, 4, Xmat)
 
   !> Initialize exponential propagators for the Lyapunov equation of the Laplace operator
-  A_prop_mat  = rklib_exptA_lyapunov_mat(tau)
-  Ak_prop_mat = krylov_exptA_lyapunov_mat(A_lyap,tau)
-
-  Emat = 0.0_wp
-  !call expm(Emat,tau*Amat)
-  !write(*,*) 'Emat - expm(tau*Amat) Lyapunov equation for Laplace operator'
-  !call print_mat(nx**2, nx**2, Emat)
+  A_prop_mat  = rklib_lyapunov_mat(tau)
 
   call X_mat(2)%zero()
   call X_mat(3)%zero()
   call A_prop_mat%matvec(X_mat(1), X_mat(2))
-  call Ak_prop_mat%matvec(X_mat(1), X_mat(3))
-  !X_mat(4)%state = matmul(Emat,Xmat(:,1)) + tau*q_flat
   do i = 2,4
    Xmat(:,i) = X_mat(i)%state
   end do
   
-  write(*,*) '------------------------------------------------------------'
-  write(*,*) 'expm(tau*Amat) @ X(0), Lypanov equation for Laplace Operator'
-  write(*,*) '               tau = ', tau
-  write(*,*) '------------------------------------------------------------'
-  write(*,*) '    X(0)         RKlib         Krylov        '
-  write(*,*) '------------------------------------------------------------'
-  !do i = 1,3
-  !    call print_mat(nx, nx, reshape(Xmat(:,i), (/ nx, nx /)))
-  !enddo
-  !call X_mat(2)%axpby(1.0_wp, X_mat(4), -1.0_wp)
-  call X_mat(3)%axpby(1.0_wp, X_mat(2), -1.0_wp)
-  write(*,"(A18,2(E12.6,'  '))") '|error|_2     ',0.0,X_mat(3)%norm()
+  A_prop_mat  = rklib_lyapunov_mat(tau_long)
 
-  call expm(Emat,tau_long*Amat)
-  A_prop_mat  = rklib_exptA_lyapunov_mat(tau_long)
-  Ak_prop_mat = krylov_exptA_lyapunov_mat(A_lyap,tau_long)
   call X_mat(2)%zero()
   call X_mat(3)%zero()
   call A_prop_mat%matvec(X_mat(1), X_mat(2))
-  call Ak_prop_mat%matvec(X_mat(1), X_mat(3))
-  !X_mat(4)%state = matmul(Emat,Xmat(:,1))
   do i = 2,4
    Xmat(:,i) = X_mat(i)%state
   end do
-  write(*,*) '-----------------------------------------------------'
-  write(*,*) '               tau = ', tau_long
-  write(*,*) '-----------------------------------------------------'
-  write(*,*) '    X(0)         RKlib         Krylov        Pade'
-  write(*,*) '-----------------------------------------------------'
-  !call print_mat(nx**2, 4, Xmat)
-  !call X_mat(2)%axpby(1.0_wp, X_mat(4), -1.0_wp)
-  call X_mat(3)%axpby(1.0_wp, X_mat(2), -1.0_wp)
-  write(*,"(A18,2(E12.6,'  '))") '|error|_2     ',0.0,X_mat(3)%norm()
-  write(*,*) '-----------------------------------------------------'
-  write(*,*)
+  
 !
   !!> symmetrize
   !tmp = reshape(X_lyap(1)%state,shape(tmp)) + reshape(X_lyap(1)%state,shape(tmp),order=(/2,1/))
@@ -314,49 +275,67 @@ program demo
   !    write(*,'(F8.3,A3,F8.3,A2)') lambda(i)%re, ' + ', lambda(i)%im,' i'
   !enddo
 !
-  !allocate(B(1))
-  !B(1)%state = 1.0
-  !Tend = 0.1
-  !!> Random initial condition of rank 4
-  !Xmat_DLRA_in = 0.0_wp
-  !allocate(U(1:rk)); 
-  !U(1)%state = (/ 1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp /)
-  !U(2)%state = (/ 0.0_wp, 1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp /)
-  !U(3)%state = (/ 0.0_wp, 0.0_wp, 1.0_wp, 0.0_wp, 0.0_wp /)
-  !U(4)%state = (/ 0.0_wp, 0.0_wp, 0.0_wp, 1.0_wp, 0.0_wp /)
-  !do i = 1,rk
-  !    !call random_number(U(i)%state)
-  !    Xmat_DLRA_in(:,i) = U(i)%state
-  !enddo
-  !!> Orthonormalize (in-place)
-  !S = 0.0_wp
-  !call qr_factorization(U,S,info)
-  !do i = 1,rk
-  !    Xmat_DLRA_in(:,i+rk) = U(i)%state
-  !end do
-  !dt = 0.1_wp
-  !write(*,*) '    Input'
-  !write(*,*) '    U'
-  !do i = 1, nx
-  !    write(*,'(4F8.3,"  ",4F8.3)') Xmat_DLRA_in(i,1:rk), Xmat_DLRA_in(i,rk+1:2*rk)
-  !enddo
-  !write(*,*) '    S'
-  !do i = 1, rk
-  ! write(*,'(4F8.3)') S(i,1:rk)
-  !enddo
-  !call numerical_low_rank_splitting_integrator(U, S, A_lyap, B, Tend, dt, torder, info)
-  !do i = 1,rk
-  !    Xmat_DLRA_out(:,i) = U(i)%state
-  !end do
-  !write(*,*) '    Output at T =',tau
-  !do i = 1, nx
-  !    write(*,'(4F8.3)') Xmat_DLRA_out(i,:)
-  !enddo
+  allocate(B(1))
+  B(1)%state = 0.0_wp
 
+  Tend = 0.01_wp; dt = 0.01_wp
+  Ak_prop_vec = krylov_exptA_laplacian_vec(A,dt/2)
+  
+  !> Random initial condition of rank 4
+  Xmat_DLRA_in = 0.0_wp
+  allocate(U(1:rk)); allocate(Uwrk(1:rk)); call mat_zero(Uwrk)
+  U(1)%state = (/ 1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp /)
+  U(2)%state = (/ 0.0_wp, 1.0_wp, 0.0_wp, 0.0_wp /)
+  U(3)%state = (/ 0.0_wp, 0.0_wp, 1.0_wp, 0.0_wp /)
+  U(4)%state = (/ 0.0_wp, 0.0_wp, 0.0_wp, 1.0_wp /)
+  do i = 1,rk
+      !call random_number(U(i)%state)
+      Xmat_DLRA_0(:,i) = U(i)%state
+  enddo
+  !> Orthonormalize (in-place)
+  S = 0.0_wp
+  call qr_factorization(U,S,info)
+  do i = 1,rk
+      Xmat_DLRA_in(:,i) = U(i)%state
+  end do
+  write(*,*) '    Input'
+  call print_mat(nx, rk, Xmat_DLRA_0)
+  write(*,*) '    U'
+  call print_mat(nx, rk, Xmat_DLRA_in)
+  write(*,*) '    S'
+  call print_mat(rk, rk, S)
+  call numerical_low_rank_splitting_integrator(U, S, Ak_prop_vec, B, Tend, dt, 2, info)
+  write(*,*) '    S after DLRA'
+  call print_mat(rk, rk, S)
+  do i = 1,rk
+     Xmat_DLRA_out(:,i) = U(i)%state
+  end do
+  write(*,*) '    U at T =',Tend
+  call print_mat(nx, rk, Xmat_DLRA_out)
+  US = matmul(Xmat_DLRA_out, S)
+  USUT = 0.0_wp
+  USUT = matmul(US, transpose(Xmat_DLRA_out))
+  
+  write(*,*) '    DLRA output at T =',Tend
+  !call print_mat(nx, rk, Xmat_DLRA_out)
+  call print_mat(nx, nx, USUT)
 
+  ! RKlib
+  allocate(X_DLRA_mat(1:2))
+  Xtmp = reshape(Xmat_DLRA_0, (/ nx**2, 1 /))
+  X_DLRA_mat(1)%state = Xtmp(:,1)
+  !write(*,*) reshape(X_DLRA_mat(1)%state, (/ nx, rk /))
 
+  ! Initialize exponential propagator
+  A_prop_mat  = rklib_lyapunov_mat(dt)
+  call A_prop_mat%matvec(X_DLRA_mat(1), X_DLRA_mat(2))
+  Xmat_rklib_out = reshape(X_DLRA_mat(2)%state, (/ nx, rk /))
+  write(*,*) '    RKlib output at T =',Tend
+  call print_mat(nx, rk, Xmat_rklib_out)
 
+  Xmat_rklib_out = Xmat_rklib_out - USUT
 
+  write(*,*) norm_fro(Xmat_rklib_out)
 
   !> Reconstruct the leading eigenvectors from the Krylov basis.
   !do i = 1, nev

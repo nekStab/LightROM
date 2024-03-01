@@ -1,6 +1,7 @@
 module LightROM_LyapunovSolvers
    use LightKrylov
    use LightROM_LyapunovUtils
+   use LightROM_utils
    !include "dtypes.h"
 
    private
@@ -127,7 +128,6 @@ module LightROM_LyapunovSolvers
       tau    = Tend/nsteps
 
       dlra : do istep = 1, nsteps
-         write(*,*) 'DLRA',istep
          !> dynamical low-rank approximation step
          call numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info)
 
@@ -178,16 +178,14 @@ module LightROM_LyapunovSolvers
             info = -1
             integrator = 2
          endif
-         write(*,*) '    step: integrator', integrator
 
          select case (integrator)
          case (1) ! Lie-Trotter splitting
-            write(*,*) '    step: splitting: Lie-Trotter'
             call M_forward_map(U, S, A, tau, info)
             call G_forward_map(U, S, B, tau, info)
          case (2) ! Strang splitting
             call M_forward_map(U, S, A, 0.5*tau, info)
-            call G_forward_map(U, S, B, tau, info)
+            call G_forward_map(U, S, B,     tau, info)
             call M_forward_map(U, S, A, 0.5*tau, info)
          end select
 
@@ -205,45 +203,30 @@ module LightROM_LyapunovSolvers
          real(kind=wp)          , intent(in)    :: tau
          !> Information flag
          integer                , intent(out)   :: info
-         !> tolerance for the exponential propagator
-         real(kind=wp), parameter :: tol = 1e-9
 
          !> Local variables
-         class(abstract_vector) , allocatable   :: Uwrk(:)  ! basis
+         class(abstract_vector) , allocatable   :: Uwrk  ! basis
          real(kind=wp)          , allocatable   :: R(:,:)   ! QR coefficient matrix
          real(kind=wp)          , allocatable   :: wrk(:,:)
          integer                                :: i, rk
 
          rk = size(U)
-         allocate(R(1:rk,1:rk)); R = 0.0_wp
-         call mat_mult(R,U(1:rk),U(1:rk))
-         write(*,*) '         U orthonormality (before M step):'
-         do i = 1, rk
-            write(*,'(4F8.3)') R(i,1:rk)
-         enddo
+         !> Allocate memory
+         allocate(R(1:rk,1:rk)); allocate(wrk(1:rk,1:rk)); 
+         R = 0.0_wp; wrk = 0.0_wp
+
          !> Apply propagator to initial basis
-         allocate(Uwrk(1:rk), source=U(1)) ; call mat_zero(Uwrk)
+         allocate(Uwrk, source=U(1)) ; call Uwrk%zero()
          do i = 1, rk
-            call A%matvec(U(i), Uwrk(i))
-            !call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
-         enddo
-         call mat_mult(R,Uwrk(1:rk),Uwrk(1:rk))
-         write(*,*) '         U orthonormality (after M step):'
-         do i = 1, rk
-            write(*,'(4E15.8)') R(i,1:rk)
+            call A%matvec(U(i), Uwrk)
+            call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
          enddo
          !> Reorthonormalize in-place
          call qr_factorization(U, R, info)
          !> Update low-rank coefficient matrix
-         write(*,*) '         R (after M step):'
-         do i = 1, rk
-            write(*,'(4F8.3)') R(i,1:rk)
-         enddo
-         allocate(wrk(1:rk,1:rk)); wrk = 0.0_wp
          wrk = matmul(S, transpose(R))
          S   = matmul(R, wrk)
-         deallocate(Uwrk)
-         deallocate(wrk)
+
          return
       end subroutine M_forward_map
 
@@ -260,63 +243,121 @@ module LightROM_LyapunovSolvers
 
          !> Local variables
          class(abstract_vector) , allocatable   :: U1(:) 
-         class(abstract_vector) , allocatable   :: Uwrk(:)
-         real(kind=wp)          , allocatable   :: S1(:,:)
-         real(kind=wp)          , allocatable   :: Swrk(:,:)
-         integer :: i, rk
+         integer :: rk
 
          rk = size(U)
-         !> Allocate temporary arrays
-         allocate(U1(1:rk), source=U(1)); allocate(Uwrk(1:rk), source=U(1))
-         call mat_zero(U1); call mat_zero(Uwrk)
-         allocate(Swrk(1:rk,1:rk)); allocate(S1(1:rk,1:rk)); 
-         Swrk = 0.0_wp; S1 = 0.0_wp
-         !> Step K equation:      
-         !>       K0   = U @ S
-         !>       Kdot = B @ B.T @ U
-         call mat_mult(U1, U, S)     ! K0
-         call apply_outerproduct(Uwrk, B, U)  ! Kdot
+         allocate(U1(1:rk), source=U(1)); call mat_zero(U1)
+
+         call K_step(U1, S, U,     B, tau, info)
+         
+         call S_step(    S, U, U1,    tau, info)
+         
+         call L_step(    S, U, U1, B, tau, info)
+         
+         !> Copy data to output
+         call mat_copy(U, U1)
+                  
+         return
+      end subroutine G_forward_map
+
+      subroutine K_step(U1, S, U, B, tau, info)
+         !> Low-rank factors
+         class(abstract_vector) , intent(out)   :: U1(:)  ! basis
+         real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
+         !> Low-rank factors
+         class(abstract_vector) , intent(in)    :: U(:)   ! basis
+         
+         !> low-rank rhs
+         class(abstract_vector) , intent(in)    :: B(:)
+         !> Integration step size
+         real(kind=wp)          , intent(in)    :: tau
+         !> Information flag
+         integer                , intent(out)   :: info
+
+         !> Local variables
+         class(abstract_vector) , allocatable   :: Uwrk(:)   
+         real(kind=wp)          , allocatable   :: Swrk(:,:)  
+         integer                                :: rk
+
+         info = 0
+
+         rk = size(U)
+         allocate(Uwrk(1:rk), source=U(1)); call mat_zero(Uwrk)
+         allocate(Swrk(1:rk,1:rk)); Swrk = 0.0_wp
+
+         call mat_mult(U1, U, S)               ! K0
+         call apply_outerproduct(Uwrk, B, U)   ! Kdot
          !> Construct solution U1
-         call mat_axpby(U, 1.0_wp, Uwrk, tau)
+         call mat_axpby(U1, 1.0_wp, Uwrk, tau) ! K0 + tau*Kdot
          !> Orthonormalize in-place
-         call qr_factorization(U1, S1, info)
-         !
-         !> Step S equation
-         !>       S0   = S1
-         !>       Sdot = -U1.T @ B @ B.T @ UA
+         call qr_factorization(U1, Swrk, info)
+         S = Swrk
+
+         return
+      end subroutine K_step
+
+      subroutine S_step(S, U, U1, tau, info)
+         !> Low-rank factors
+         real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
+         !> Low-rank factors
+         class(abstract_vector) , intent(in)    :: U(:)   ! old basis
+         class(abstract_vector) , intent(in)    :: U1(:)  ! updated basis
+         !> Integration step size
+         real(kind=wp)          , intent(in)    :: tau
+         !> Information flag
+         integer                , intent(out)   :: info
+
+         !> Local variables
+         class(abstract_vector) , allocatable   :: Uwrk(:)
+         real(kind=wp)          , allocatable   :: Swrk(:,:)
+         integer                                :: rk
+
+         info = 0
+
+         rk = size(U)
+         allocate(Uwrk(1:rk), source=U(1)); call mat_zero(Uwrk)
+         allocate(Swrk(1:rk,1:rk)); Swrk = 0.0_wp
+
          call apply_outerproduct(Uwrk, B, U)
          call mat_mult(Swrk, U1, Uwrk)          ! - Sdot
          !> Construct solution S1
-         call mat_axpby(S1, 1.0_wp, Swrk, -tau)
-         !
-         !> Step L equation:
-         !>       L0   = St @ UA.T           or      L0.T   = UA @ St.T  
-         !>       Ldot = U1.T @ B @ B.T      or      Ldot.T = B @ B.T @ U1
-         call mat_mult(Uwrk, U, transpose(S1))  ! L0.T
-         !> note: we no longer need the old basis U so we overwrite it
-         call apply_outerproduct(U, B, U1)               ! Ldot.T
+         call mat_axpby(S, 1.0_wp, Swrk, -tau)
+
+         return
+      end subroutine S_step
+
+      subroutine L_step(S, U, U1, B, tau, info)
+         !> Low-rank factors
+         real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
+         !> Low-rank factors
+         class(abstract_vector) , intent(inout) :: U(:)   ! basis before Kstep
+         class(abstract_vector) , intent(in)    :: U1(:)   ! basis after Kstep
+         !> low-rank rhs
+         class(abstract_vector) , intent(in)    :: B(:)
+         !> Integration step size
+         real(kind=wp)          , intent(in)    :: tau
+         !> Information flag
+         integer                , intent(out)   :: info
+
+         !> Local variables
+         class(abstract_vector) , allocatable   :: Uwrk(:)
+         integer                                :: rk
+
+         info = 0
+
+         rk = size(U)
+         allocate(Uwrk(1:rk), source=U(1)); call mat_zero(Uwrk)
+
+         call mat_mult(Uwrk, U, transpose(S))  ! L0.T
+         call apply_outerproduct(U, B, U1)     ! Ldot.T
          !> Construct solution Uwrk.T
          call mat_axpby(Uwrk, 1.0_wp, U, tau)
          !> Update S
          call mat_mult(S, Uwrk, U1)
-         !> Copy U1 --> U for output
-         call mat_copy(U, U1)
-         !> Deallocate work arrays
-         deallocate(U1)
-         deallocate(Uwrk)
-         deallocate(S1)
-         deallocate(Swrk)
-         return
-      end subroutine G_forward_map
 
-      !subroutine K_step(K1,U,S,tau)
-      !end subroutine K_step
-!
-      !subroutine S_step 
-      !end subroutine S_step
-!
-      !subroutine L_step 
-      !end subroutine L_step 
+         return
+      end subroutine L_step 
 
    end subroutine numerical_low_rank_splitting_integrator
+
 end module lightROM_LyapunovSolvers
