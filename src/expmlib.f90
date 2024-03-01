@@ -20,120 +20,6 @@ module LightROM_expmlib
 
 contains
 
-   subroutine kexpm_vec(c, A, b, tau, tol, info, verbosity, nkryl)
-
-   !=======================================================================================
-   ! Krylov-based approximation of the action the exponential propagator on a matrix B
-   !=======================================================================================
-   !
-   !  Approximate v = expm(tau * A) @ b using Krylov subspace techniques
-   !
-   !=======================================================================================
-      !> Krylov basis of the approximate value of expm(tA) @ B
-      class(abstract_vector), intent(out) :: c
-      !> Linear operator to be exponentiated
-      class(abstract_linop),  intent(in) :: A
-      !> Krylov basis on which to apply expm(tA)
-      class(abstract_vector), intent(in) :: b
-      !> time horizon for exponentiation
-      real(kind=wp),          intent(in) :: tau
-      !> solution tolerance based on error estimates
-      real(kind=wp),          intent(in) :: tol
-      !> Information flag
-      integer,                intent(out) :: info
-      !> Optional
-      logical, optional,      intent(in)  :: verbosity
-      logical                             :: verbose
-      integer, optional,      intent(in)  :: nkryl
-      integer                             :: nstep
-      
-      !> internals
-      integer, parameter :: kmax = 100
-      integer :: i, k, p, km, kp, nk
-      !> Arnoldi factorisation
-      class(abstract_vector), allocatable :: X(:)
-      real(kind=wp), allocatable          :: H(:,:)
-      !> Normalisation & temp arrays
-      real(kind=wp), allocatable          :: E(:,:), invH(:,:), phi(:,:), wrk(:,:)
-      real(kind=wp), allocatable          :: Id(:,:)
-      class(abstract_vector), allocatable :: xwrk
-      real(kind=wp)                       :: err_est, beta
-
-      !> Optional arguemnts
-      verbose = optval(verbosity, .false.)
-      nstep   = optval(nkryl, kmax)
-      nk      = nstep
-
-      info = 0
-
-      ! allocate memory
-      allocate(X(1:nk+1), source=b); allocate(H(1:nk+1,1:nk))      ! Arnoldi factorization
-      allocate(E(1:nk+1,1:nk))                                     ! Dense matrix exponential
-      allocate(invH(1:nk,1:nk)); allocate(phi(1:nk,1:nk));         ! Correction
-      allocate(Id(1:nk,1:nk)); Id = 0.0_wp; forall (i=1:nk) Id(i, i) = 1.0_wp
-      ! scratch arrays
-      allocate(wrk(1:nk,1:nk))
-      allocate(xwrk, source=b)
-
-      !> normalize input vector and set initialise Krylov subspace
-      beta = b%norm()
-      !call initialize_krylov_subspace(X,b)
-      call mat_zero(X)
-      call X(1)%axpby(0.0_wp, b, 1.0_wp)
-      call X(1)%scal(1.0/beta)
-      H = 0.0_wp
-
-      expm_arnoldi: do k = 1, nk 
-         km = k - 1
-         kp = k + 1
-         !> reset wrk arrays
-         E = 0.0_wp
-         !> compute kth stop of the Arnoldi factorization
-         call arnoldi_factorization(A, X(1:kp), H(1:kp,1:k), info, kstart=k, kend=k)
-         !> compute the (dense) matrix exponential of the Hessenberg matrix
-         call expm(E(1:k,1:k), tau*H(1:k,1:k))
-         !> compute correction based on last row of Hessenberg matrix
-         wrk = 0.0_wp; invH = 0.0_wp
-         invH(1:k,1:k) = tau*H(1:k,1:k)
-         call inv(invH(1:k,1:k))
-         wrk = E(1:k,1:k) - Id(1:k,1:k)
-         phi(1:k,1:k) = matmul(invH(1:k,1:k), wrk(1:k,1:k))    ! phi(tH)
-         !> add correction row(s) to exptH
-         E(kp,1:k) = phi(k,1:k)
-         !> project back into original space
-         call get_vec(xwrk, X(1:k), E(1:k,1))
-         call c%axpby(0.0_wp, xwrk, beta)
-         !> cheap error estimate
-         err_est = H(kp,k) * abs(phi(k,1) * beta)   ! h_{m+1,m} @ | e_mT @ phi(tH) @ e_1 @ beta |
-         !> correction
-         !call c%axpby(1.0_wp, X(kp), E(kp,1))
-         if (err_est .lt. tol) then
-            if (verbose) then
-               write(*, *) 'Block Arnoldi approxmation of the action of the exp. propagator converged'
-               write(*, *) '    n° of vectors:', kp
-               write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
-               write(*, *) '    desired tolerance:           tol = ', tol
-               write(*, *)
-            endif
-            ! --> Exit the Arnoldi iteration.
-            exit expm_arnoldi
-         endif
-      end do expm_arnoldi
-
-      if (err_est .gt. tol) then
-         info = -1
-         if (verbose) then
-            write(*, *) 'Arnoldi-based approxmation of the exp. propagator did not converge'
-            write(*, *) '    maximum n° of vectors reached: ', nk + 1
-            write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
-            write(*, *) '    desired tolerance:           tol = ', tol
-            write(*, *)
-         endif
-      endif
-
-      return
-   end subroutine kexpm_vec
-
    subroutine kexpm_mat(C, A, B, tau, tol, info, verbosity, nkryl)
 
       !=======================================================================================
@@ -209,127 +95,242 @@ contains
       !    pages 3-49.
       !
       !=======================================================================================
-         !> Krylov basis of the approximate value of expm(tA) @ B
-         class(abstract_vector), intent(out) :: C(:)
-         !> Linear operator to be exponentiated
-         class(abstract_linop),  intent(in) :: A
-         !> Krylov basis on which to apply expm(tA)
-         class(abstract_vector), intent(in) :: B(:)
-         !> time horizon for exponentiation
-         real(kind=wp),          intent(in) :: tau
-         !> solution tolerance based on error estimates
-         real(kind=wp),          intent(in) :: tol
-         !> Information flag
-         integer,                intent(out) :: info
-         !> Optional
-         logical, optional,      intent(in)  :: verbosity
-         logical                             :: verbose
-         integer, optional,      intent(in)  :: nkryl
-         integer                             :: nstep
-         
-         !> internals
-         integer, parameter :: kmax = 100
-         integer :: i, k, p, kpm, kp, kpp, nk
-         !> Arnoldi factorisation
-         class(abstract_vector), allocatable :: X(:)
-         real(kind=wp), allocatable          :: H(:,:)
-         !> Normalisation & temp arrays
-         real(kind=wp), allocatable          :: R(:,:), E(:,:), invH(:,:), phi(:,:), wrk(:,:)
-         real(kind=wp), allocatable          :: Id(:,:), em(:,:), ym(:,:)
-         class(abstract_vector), allocatable :: Xwrk(:), Cwrk(:)
-         real(kind=wp) :: err_est
+
+      !> Krylov basis of the approximate value of expm(tA) @ B
+      class(abstract_vector), intent(out) :: C(:)
+      !> Linear operator to be exponentiated
+      class(abstract_linop),  intent(in) :: A
+      !> Krylov basis on which to apply expm(tA)
+      class(abstract_vector), intent(in) :: B(:)
+      !> time horizon for exponentiation
+      real(kind=wp),          intent(in) :: tau
+      !> solution tolerance based on error estimates
+      real(kind=wp),          intent(in) :: tol
+      !> Information flag
+      integer,                intent(out) :: info
+      !> Optional
+      logical, optional,      intent(in)  :: verbosity
+      logical                             :: verbose
+      integer, optional,      intent(in)  :: nkryl
+      integer                             :: nstep
+      
+      !> internals
+      integer, parameter :: kmax = 100
+      integer :: i, k, p, kpm, kp, kpp, nk
+      !> Arnoldi factorisation
+      class(abstract_vector), allocatable :: X(:)
+      real(kind=wp), allocatable          :: H(:,:)
+      !> Normalisation & temp arrays
+      real(kind=wp), allocatable          :: R(:,:), E(:,:), invH(:,:), phi(:,:), wrk(:,:)
+      real(kind=wp), allocatable          :: Id(:,:), em(:,:), ym(:,:)
+      class(abstract_vector), allocatable :: Xwrk(:), Cwrk(:)
+      real(kind=wp) :: err_est
+
+       !> determine block size
+      p = size(B)
+
+       !> Optional arguemnts
+      verbose = optval(verbosity, .false.)
+      nstep   = optval(nkryl, kmax)
+      nk      = nstep*p
+      info = 0
+
+      ! allocate memory
+      allocate(R(1:p,1:p))                                              ! QR factorization
+      allocate(X(1:nk+p), source=B(1)); allocate(H(1:p*(nk+1),1:p*nk))  ! Arnoldi factorization
+      allocate(E(1:p*(nk+1),1:nk))                                      ! Dense matrix exponential
+      allocate(invH(1:nk,1:nk)); allocate(phi(1:nk,1:nk));              ! Correction
+      allocate(Id(1:nk,1:nk)); Id = 0.0_wp; forall (i=1:nk) Id(i, i) = 1.0_wp
+      allocate(em(1:p,1:p)); allocate(ym(1:p,1:p))                     ! error estimate
+
+      ! scratch arrays
+      allocate(wrk(1:nk,1:nk))
+      allocate(Xwrk(1:p), source=B(1)); allocate(Cwrk(1:p), source=B(1))
+
+      !> normalize input vector and set initialise Krylov subspace
+      R = 0.0_wp
+      call mat_zero(Xwrk)
+      call mat_copy(Xwrk(1:p),B(1:p))
+      call qr_factorization(Xwrk(1:p),R(1:p,1:p),info)
+      call initialize_krylov_subspace(X,Xwrk(1:p))
+      H = 0.0_wp
    
-         !> determine block size
-         p = size(B)
-   
-         !> Optional arguemnts
-         verbose = optval(verbosity, .false.)
-         nstep   = optval(nkryl, kmax)
-         nk      = nstep*p
-   
-         info = 0
-   
-         ! allocate memory
-         allocate(R(1:p,1:p))                                              ! QR factorization
-         allocate(X(1:nk+p), source=B(1)); allocate(H(1:p*(nk+1),1:p*nk))  ! Arnoldi factorization
-         allocate(E(1:p*(nk+1),1:nk))                                      ! Dense matrix exponential
-         allocate(invH(1:nk,1:nk)); allocate(phi(1:nk,1:nk));              ! Correction
-         allocate(Id(1:nk,1:nk)); Id = 0.0_wp; forall (i=1:nk) Id(i, i) = 1.0_wp
-         allocate(em(1:p,1:p)); allocate(ym(1:p,1:p))                     ! error estimate
-         ! scratch arrays
-         allocate(wrk(1:nk,1:nk))
-         allocate(Xwrk(1:p), source=B(1)); allocate(Cwrk(1:p), source=B(1))
-   
-         !> normalize input vector and set initialise Krylov subspace
-         R = 0.0_wp
-         call mat_zero(Xwrk)
-         call mat_copy(Xwrk(1:p),B(1:p))
-         call qr_factorization(Xwrk(1:p),R(1:p,1:p),info)
-         call initialize_krylov_subspace(X,Xwrk(1:p))
-         H = 0.0_wp
-   
-         expm_arnoldi: do k = 1, nk 
-            kpm = (k-1)*p
-            kp  = kpm + p
-            kpp = kp  + p
-            !> reset wrk arrays
-            E = 0.0_wp; call mat_zero(Xwrk)
-            !> compute kth stop of the Arnoldi factorization
-            call arnoldi_factorization(A, X(1:kpp), H(1:kpp,1:kp), info, kstart=k, kend=k, block_size=p)
-            !> compute the (dense) matrix exponential of the Hessenberg matrix
-            call expm(E(1:kp,1:kp),tau*H(1:kp,1:kp))
-            !> compute correction based on last row of Hessenberg matrix
-            wrk = 0.0_wp; invH = 0.0_wp
-            invH(1:kp,1:kp) = tau*H(1:kp,1:kp)
-            call inv(invH(1:kp,1:kp))
-            wrk = E(1:kp,1:kp) - Id(1:kp,1:kp)
-            phi(1:kp,1:kp) = matmul(invH(1:kp,1:kp),wrk(1:kp,1:kp))    ! phi(tH)
-            !> add correction row(s) to exptH
-            E(kp+1:kpp,1:kp) = phi(kpm+1:kp,1:kp)
-            !> project back into original space
-            call mat_zero(C)
-            call mat_mult(Xwrk(1:p),X(1:kp),E(1:kp,1:p))
-            call mat_mult(C(1:p),Xwrk(1:p),R(1:p,1:p))
-            !> cheap error estimate
-            err_est = 0.0_wp; wrk = 0.0_wp
-            wrk(1:p,1:p) = matmul(phi(kpm+1:kp,1:p),R(1:p,1:p))        ! e_mT @ phi(tH) @ e_1 @ R
-            em = matmul(H(kp+1:kpp,kpm+1:kp),wrk(1:p,1:p))             ! h_{m+1,m} @ wrk
-            err_est = norm_fro(em)
-            !> correction
-            call mat_zero(Cwrk)
-            call mat_mult(Cwrk(1:p),X(kp+1:kpp),E(kp+1:kpp,1:p))
-            call mat_axpby(C,1.0_wp,Cwrk,1.0_wp)
-            if (err_est .lt. tol) then
-               if (verbose) then
-                  if (p.eq.1) then
-                     write(*, *) 'Arnoldi approxmation of the action of the exp. propagator converged'
-                  else
-                     write(*, *) 'Block Arnoldi approxmation of the action of the exp. propagator converged'
-                  endif 
-                  write(*, *) '    n° of vectors:', k+1, 'per input vector, total:', kpp
-                  write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
-                  write(*, *) '    desired tolerance:           tol = ', tol
-                  write(*, *)
-               endif
-               ! --> Exit the Arnoldi iteration.
-               exit expm_arnoldi
-            endif
-         end do expm_arnoldi
-   
-         if (err_est .gt. tol) then
-            info = -1
+      expm_arnoldi: do k = 1, nk 
+         kpm = (k-1)*p
+         kp  = kpm + p
+         kpp = kp  + p
+         !> reset wrk arrays
+         E = 0.0_wp; call mat_zero(Xwrk)
+         !> compute kth stop of the Arnoldi factorization
+         call arnoldi_factorization(A, X(1:kpp), H(1:kpp,1:kp), info, kstart=k, kend=k, block_size=p)
+         !> compute the (dense) matrix exponential of the Hessenberg matrix
+         call expm(E(1:kp,1:kp),tau*H(1:kp,1:kp))
+         !> compute correction based on last row of Hessenberg matrix
+         wrk = 0.0_wp; invH = 0.0_wp
+         invH(1:kp,1:kp) = tau*H(1:kp,1:kp)
+         call inv(invH(1:kp,1:kp))
+         wrk = E(1:kp,1:kp) - Id(1:kp,1:kp)
+         phi(1:kp,1:kp) = matmul(invH(1:kp,1:kp),wrk(1:kp,1:kp))    ! phi(tH)
+         !> add correction row(s) to exptH
+         E(kp+1:kpp,1:kp) = phi(kpm+1:kp,1:kp)
+         !> project back into original space
+         call mat_zero(C)
+         call mat_mult(Xwrk(1:p),X(1:kp),E(1:kp,1:p))
+         call mat_mult(C(1:p),Xwrk(1:p),R(1:p,1:p))
+         !> cheap error estimate
+         err_est = 0.0_wp; wrk = 0.0_wp
+         wrk(1:p,1:p) = matmul(phi(kpm+1:kp,1:p),R(1:p,1:p))        ! e_mT @ phi(tH) @ e_1 @ R
+         em = matmul(H(kp+1:kpp,kpm+1:kp),wrk(1:p,1:p))             ! h_{m+1,m} @ wrk
+         err_est = norm_fro(em)
+         !> correction
+         call mat_zero(Cwrk)
+         call mat_mult(Cwrk(1:p),X(kp+1:kpp),E(kp+1:kpp,1:p))
+         call mat_axpby(C,1.0_wp,Cwrk,1.0_wp)
+         if (err_est .lt. tol) then
             if (verbose) then
-               write(*, *) 'Arnoldi-based approxmation of the exp. propagator did not converge'
-               write(*, *) '    maximum n° of vectors reached: ', nstep+1,&
-                           & 'per input vector, total:', kpp
+               if (p.eq.1) then
+                  write(*, *) 'Arnoldi approxmation of the action of the exp. propagator converged'
+               else
+                  write(*, *) 'Block Arnoldi approxmation of the action of the exp. propagator converged'
+               endif 
+               write(*, *) '    n° of vectors:', k+1, 'per input vector, total:', kpp
                write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
                write(*, *) '    desired tolerance:           tol = ', tol
                write(*, *)
             endif
+            ! --> Exit the Arnoldi iteration.
+            exit expm_arnoldi
          endif
+      end do expm_arnoldi
    
-         return
-      end subroutine kexpm_mat
+      if (err_est .gt. tol) then
+         info = -1
+         if (verbose) then
+            write(*, *) 'Arnoldi-based approxmation of the exp. propagator did not converge'
+            write(*, *) '    maximum n° of vectors reached: ', nstep+1,&
+                        & 'per input vector, total:', kpp
+            write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
+            write(*, *) '    desired tolerance:           tol = ', tol
+            write(*, *)
+         endif
+      endif
+      
+      return
+   end subroutine kexpm_mat
+
+   subroutine kexpm_vec(c, A, b, tau, tol, info, verbosity, nkryl)
+
+      !=======================================================================================
+      ! Krylov-based approximation of the action the exponential propagator on a matrix B
+      !=======================================================================================
+      !
+      !  Approximate v = expm(tau * A) @ b using Krylov subspace techniques
+      !
+      !=======================================================================================
+      !> Krylov basis of the approximate value of expm(tA) @ B
+      class(abstract_vector), intent(out) :: c
+      !> Linear operator to be exponentiated
+      class(abstract_linop),  intent(in) :: A
+      !> Krylov basis on which to apply expm(tA)
+      class(abstract_vector), intent(in) :: b
+      !> time horizon for exponentiation
+      real(kind=wp),          intent(in) :: tau
+      !> solution tolerance based on error estimates
+      real(kind=wp),          intent(in) :: tol
+      !> Information flag
+      integer,                intent(out) :: info
+      !> Optional
+      logical, optional,      intent(in)  :: verbosity
+      logical                             :: verbose
+      integer, optional,      intent(in)  :: nkryl
+      integer                             :: nstep
+         
+      !> internals
+      integer, parameter :: kmax = 100
+      integer :: i, k, p, km, kp, nk
+      !> Arnoldi factorisation
+      class(abstract_vector), allocatable :: X(:)
+      real(kind=wp), allocatable          :: H(:,:)
+      !> Normalisation & temp arrays
+      real(kind=wp), allocatable          :: E(:,:), invH(:,:), phi(:,:), wrk(:,:)
+      real(kind=wp), allocatable          :: Id(:,:)
+      class(abstract_vector), allocatable :: xwrk
+      real(kind=wp)                       :: err_est, beta
+      
+      !> Optional arguemnts
+      verbose = optval(verbosity, .false.)
+      nstep   = optval(nkryl, kmax)
+      nk      = nstep
+      
+      info = 0
+      
+      ! allocate memory
+      allocate(X(1:nk+1), source=b); allocate(H(1:nk+1,1:nk))      ! Arnoldi factorization
+      allocate(E(1:nk+1,1:nk))                                     ! Dense matrix exponential
+      allocate(invH(1:nk,1:nk)); allocate(phi(1:nk,1:nk));         ! Correction
+      allocate(Id(1:nk,1:nk)); Id = 0.0_wp; forall (i=1:nk) Id(i, i) = 1.0_wp
+      ! scratch arrays
+      allocate(wrk(1:nk,1:nk))
+      allocate(xwrk, source=b)
+      
+      !> normalize input vector and set initialise Krylov subspace
+      beta = b%norm()
+      !call initialize_krylov_subspace(X,b)
+      call mat_zero(X)
+      call X(1)%axpby(0.0_wp, b, 1.0_wp)
+      call X(1)%scal(1.0/beta)
+      H = 0.0_wp
+
+      expm_arnoldi: do k = 1, nk 
+         km = k - 1
+         kp = k + 1
+         !> reset wrk arrays
+         E = 0.0_wp
+         !> compute kth stop of the Arnoldi factorization
+         call arnoldi_factorization(A, X(1:kp), H(1:kp,1:k), info, kstart=k, kend=k)
+         !> compute the (dense) matrix exponential of the Hessenberg matrix
+         call expm(E(1:k,1:k), tau*H(1:k,1:k))
+         !> compute correction based on last row of Hessenberg matrix
+         wrk = 0.0_wp; invH = 0.0_wp
+         invH(1:k,1:k) = tau*H(1:k,1:k)
+         call inv(invH(1:k,1:k))
+         wrk = E(1:k,1:k) - Id(1:k,1:k)
+         phi(1:k,1:k) = matmul(invH(1:k,1:k), wrk(1:k,1:k))    ! phi(tH)
+         !> add correction row(s) to exptH
+         E(kp,1:k) = phi(k,1:k)
+         !> project back into original space
+         call get_vec(xwrk, X(1:k), E(1:k,1))
+         call c%axpby(0.0_wp, xwrk, beta)
+         !> cheap error estimate
+         err_est = H(kp,k) * abs(phi(k,1) * beta)   ! h_{m+1,m} @ | e_mT @ phi(tH) @ e_1 @ beta |
+         !> correction
+         !call c%axpby(1.0_wp, X(kp), E(kp,1))
+         if (err_est .lt. tol) then
+            if (verbose) then
+               write(*, *) 'Block Arnoldi approxmation of the action of the exp. propagator converged'
+               write(*, *) '    n° of vectors:', kp
+               write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
+               write(*, *) '    desired tolerance:           tol = ', tol
+               write(*, *)
+            endif
+            ! --> Exit the Arnoldi iteration.
+            exit expm_arnoldi
+         endif
+      end do expm_arnoldi
+
+      if (err_est .gt. tol) then
+         info = -1
+         if (verbose) then
+            write(*, *) 'Arnoldi-based approxmation of the exp. propagator did not converge'
+            write(*, *) '    maximum n° of vectors reached: ', nk + 1
+            write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
+            write(*, *) '    desired tolerance:           tol = ', tol
+            write(*, *)
+         endif
+      endif
+      
+      return
+   end subroutine kexpm_vec
    
    subroutine expm(E,A, order)
    
