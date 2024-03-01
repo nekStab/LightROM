@@ -2,6 +2,7 @@ module LightROM_LyapunovSolvers
    use LightKrylov
    use LightROM_LyapunovUtils
    use LightROM_utils
+   use LightROM_expmlib
    !include "dtypes.h"
 
    private
@@ -119,25 +120,43 @@ module LightROM_LyapunovSolvers
       integer                , intent(out)   :: info
 
       !> Local variables
-      integer :: istep, nsteps
-      real(kind=wp) :: T
-      T = 0.0_wp    
+      class(abstract_vector) , allocatable   :: Ucmp(:) 
+      real(kind=wp)          , allocatable   :: Scmp(:,:)     
+      integer                                :: rk, istep, nsteps, iostep
+      real(kind=wp)                          :: T
+      logical, parameter                     :: verbose = .true.
+      T = 0.0_wp
+      rk = size(U)
+      allocate(Ucmp(1:rk), source=U(1)); 
+      allocate(Scmp(1:rk,1:rk));
 
       ! --> Reset desired tau to match Tend
       nsteps = ceiling(Tend/tau)
       tau    = Tend/nsteps
 
+      iostep = nsteps/10
+      if ( iostep .eq. 0 ) then
+         iostep = 10
+      endif
+
       dlra : do istep = 1, nsteps
+         if ( mod(istep,iostep) .eq. 0 ) then
+            call mat_zero(Ucmp); Scmp = 0.0_wp
+            call mat_copy(Ucmp(1:rk),U(1:rk))
+            Scmp(1:rk,1:rk) = S(1:rk,1:rk)
+         endif
          !> dynamical low-rank approximation step
          call numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info)
 
          T = T + tau
          !> here we should do some checks such as whether we have reached steady state
-         !if ( modulo(istep,iostep) .eq. 0 ) then
-         !   if (verbose) then
-         !      write(*, *) "INFO : ", IOSTEP, " steps of DLRA computed."
-         !   endif
-         !endif
+         if ( mod(istep,iostep) .eq. 0 ) then
+            Scmp(1:rk,1:rk) = S(1:rk,1:rk) - Scmp(1:rk,1:rk)
+            write(*,*) '||dS/dt||_fro = ', norm_fro(Scmp)/tau
+            if (verbose) then
+               write(*, *) "INFO : ", ISTEP, " steps of DLRA computed."
+            endif
+         endif
       enddo dlra
       return
 

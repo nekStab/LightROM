@@ -20,7 +20,7 @@ module Laplacian
 
   ! --> Mesh related parameters.
   real(kind=wp), parameter :: L  = 1.0_wp  !> Domain length
-  integer      , parameter :: nx = 10      !> Number of grid points
+  integer      , parameter :: nx = 4      !> Number of grid points
   real(kind=wp), parameter :: dx = L/nx    !> Grid size.
 
   !-------------------------------------------
@@ -262,6 +262,7 @@ contains
    class(state_vector), allocatable  :: tmp1, tmp2
    real(kind=wp), parameter     :: dt0 = 0.1_wp      ! time-step
    real(kind=wp), parameter     :: tol = 1e-9_wp     ! tolerance for the krylov approximation
+   logical, parameter           :: verb = .false.
    real(kind=wp)                :: Tend, dt_last
    integer                      :: i, nsteps, info
 
@@ -278,13 +279,13 @@ contains
      select type(vec_out)
      type is(state_vector)
        if ( nsteps .eq. 0 ) then          ! nsteps = 0 --> one step (dt_last)
-         call kexpm(vec_out, self%A, vec_in, dt_last, tol, info)
+         call kexpm(vec_out, self%A, vec_in, dt_last, tol, info, verbosity = verb)
          Tend = Tend + dt_last
        elseif ( nsteps .eq. 1 ) then      ! nsteps = 1 --> 2 steps
          allocate(tmp1, source=vec_in)
-         call kexpm(tmp1,    self%A, vec_in, dt0,     tol, info)
+         call kexpm(tmp1,    self%A, vec_in, dt0,     tol, info, verbosity = verb)
          Tend = Tend + dt0
-         call kexpm(vec_out, self%A, tmp1,   dt_last, tol, info)
+         call kexpm(vec_out, self%A, tmp1,   dt_last, tol, info, verbosity = verb)
          Tend = Tend + dt_last
        else                               ! nsteps > 1
          allocate(tmp1, source=vec_in)
@@ -292,22 +293,22 @@ contains
          if ( mod(nsteps,2) .eq.0 ) then  ! nsteps even
            tmp2%state = vec_in%state
            do i = 1, nsteps/2
-              call kexpm(tmp1, self%A, tmp2, dt0, tol, info) !> instead of copying data around we 
-              call kexpm(tmp2, self%A, tmp1, dt0, tol, info) !  swap input and output
+              call kexpm(tmp1, self%A, tmp2, dt0, tol, info, verbosity = verb) !> instead of copying data around we 
+              call kexpm(tmp2, self%A, tmp1, dt0, tol, info, verbosity = verb) !  swap input and output
               Tend = Tend + dt0*2.0_wp
            end do
          else                             ! nsteps odd
           tmp1%state = vec_in%state ! inverse tmp1 and tmp2 to end up with output in tmp2
            do i = 1, (nsteps-1)/2
-              call kexpm(tmp2, self%A, tmp1, dt0, tol, info) !> instead of copying data around we 
-              call kexpm(tmp1, self%A, tmp2, dt0, tol, info) !  swap input and output
+              call kexpm(tmp2, self%A, tmp1, dt0, tol, info, verbosity = verb) !> instead of copying data around we 
+              call kexpm(tmp1, self%A, tmp2, dt0, tol, info, verbosity = verb) !  swap input and output
               Tend = Tend + dt0*2.0_wp
            end do
-           call kexpm(tmp2, self%A, tmp1, dt0, tol, info)
+           call kexpm(tmp2, self%A, tmp1, dt0, tol, info, verbosity = verb)
            Tend = Tend + dt0
          endif                            ! odd/even
          !> last step to match Tend and to put output in vec_out
-         call kexpm(tmp1, self%A, tmp2, dt_last, tol, info) 
+         call kexpm(tmp1, self%A, tmp2, dt_last, tol, info, verbosity = verb) 
          Tend = Tend + dt_last
          vec_out%state = tmp1%state
        endif                              ! nsteps    
