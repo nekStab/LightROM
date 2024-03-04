@@ -3,7 +3,11 @@ module LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
    use LightROM_utils
    use LightROM_expmlib
-   !include "dtypes.h"
+   implicit none
+
+   !> work arrays
+   class(abstract_vector),  allocatable   :: Uwrk(:)
+   real(kind=wp),           allocatable   :: Swrk(:,:)
 
    private
    public :: numerical_low_rank_splitting_integrator
@@ -235,7 +239,7 @@ module LightROM_LyapunovSolvers
          R = 0.0_wp; wrk = 0.0_wp
 
          !> Apply propagator to initial basis
-         allocate(Uwrk, source=U(1)) ; call Uwrk%zero()
+         if (.not. allocated(Uwrk)) allocate(Uwrk, source=U(1)); call Uwrk%zero()
          do i = 1, rk
             call A%matvec(U(i), Uwrk)
             call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
@@ -301,8 +305,8 @@ module LightROM_LyapunovSolvers
          info = 0
 
          rk = size(U)
-         allocate(Uwrk(1:rk), source=U(1)); call mat_zero(Uwrk)
-         allocate(Swrk(1:rk,1:rk)); Swrk = 0.0_wp
+         if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1)); call mat_zero(Uwrk)
+         if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); Swrk = 0.0_wp
 
          call mat_mult(U1, U, S)               ! K0
          call apply_outerproduct(Uwrk, B, U)   ! Kdot
@@ -334,8 +338,8 @@ module LightROM_LyapunovSolvers
          info = 0
 
          rk = size(U)
-         allocate(Uwrk(1:rk), source=U(1)); call mat_zero(Uwrk)
-         allocate(Swrk(1:rk,1:rk)); Swrk = 0.0_wp
+         if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1)); call mat_zero(Uwrk)
+         if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); Swrk = 0.0_wp
 
          call apply_outerproduct(Uwrk, B, U)
          call mat_mult(Swrk, U1, Uwrk)          ! - Sdot
@@ -365,7 +369,7 @@ module LightROM_LyapunovSolvers
          info = 0
 
          rk = size(U)
-         allocate(Uwrk(1:rk), source=U(1)); call mat_zero(Uwrk)
+         if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1)); call mat_zero(Uwrk)
 
          call mat_mult(Uwrk, U, transpose(S))  ! L0.T
          call apply_outerproduct(U, B, U1)     ! Ldot.T
