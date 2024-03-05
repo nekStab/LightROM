@@ -121,8 +121,7 @@ contains
       class(abstract_vector), allocatable :: X(:)
       real(kind=wp), allocatable          :: H(:,:)
       !> Normalisation & temp arrays
-      real(kind=wp), allocatable          :: R(:,:), E(:,:)
-      real(kind=wp), allocatable          :: Id(:,:), em(:,:)
+      real(kind=wp), allocatable          :: R(:,:), E(:,:), em(:,:)
       class(abstract_vector), allocatable :: Xwrk(:), Cwrk(:)
       real(kind=wp) :: err_est
 
@@ -136,12 +135,11 @@ contains
       info = 0
 
       ! allocate memory
-      allocate(R(1:p,1:p))                           ! QR factorization
-      allocate(X(1:nk+p), source=B(1)); 
-      allocate(H(1:p*(nk+1),1:p*p*(nk+1)))           ! Arnoldi factorization with extended Hessenberg matrix
-      allocate(E(1:p*(nk+1),1:nk))                   ! Dense matrix exponential
-      allocate(Id(1:nk,1:nk)); Id = 0.0_wp; forall (i=1:nk) Id(i, i) = 1.0_wp
-      allocate(em(1:p,1:p))                          ! error estimate
+      allocate(R(1:p,1:p))                         ! QR factorization
+      allocate(X(1:p*(nk+1)), source=B(1)); 
+      allocate(H(1:p*(nk+1),1:p*(nk+1)))           ! Arnoldi factorization with extended Hessenberg matrix
+      allocate(E(1:p*(nk+1),1:nk))                 ! Dense matrix exponential
+      allocate(em(1:p,1:p))                        ! error estimate
 
       ! scratch arrays
       allocate(Xwrk(1:p), source=B(1)); allocate(Cwrk(1:p), source=B(1))
@@ -168,7 +166,7 @@ contains
          call mat_zero(C)
          call mat_mult(Xwrk(1:p),X(1:kpp),E(1:kpp,1:p))
          call mat_mult(C(1:p),Xwrk(1:p),R(1:p,1:p))
-         !> cheap error estimate (this is actually the size of the included correction thus too conservative)
+         !> cheap error estimate (this is actually the magnitude of the included correction thus too conservative)
          err_est = 0.0_wp
          em = matmul(E(kp+1:kpp,1:p),R(1:p,1:p))
          err_est = norm_fro(em)
@@ -243,7 +241,6 @@ contains
       real(kind=wp), allocatable          :: H(:,:)
       !> Normalisation & temp arrays
       real(kind=wp), allocatable          :: E(:,:)
-      real(kind=wp), allocatable          :: Id(:,:)
       class(abstract_vector), allocatable :: xwrk
       real(kind=wp)                       :: err_est, beta
       
@@ -255,9 +252,8 @@ contains
       info = 0
       
       ! allocate memory
-      allocate(X(1:nk+1), source=b); allocate(H(1:nk+1,1:nk+1))    ! Arnoldi factorization with extended Hesseberg matrix
-      allocate(E(1:nk+1,1:nk+1))                                   ! Dense matrix exponential
-      allocate(Id(1:nk,1:nk)); Id = 0.0_wp; forall (i=1:nk) Id(i, i) = 1.0_wp
+      allocate(X(1:nk+1), source=b); allocate(H(1:nk+1,1:nk+1))  ! Arnoldi factorization with extended Hessenberg matrix
+      allocate(E(1:nk+1,1:nk+1))                                 ! Dense matrix exponential
       ! scratch arrays
       allocate(xwrk, source=b)
       
@@ -281,7 +277,7 @@ contains
          !> project back into original space
          call get_vec(xwrk, X(1:kp), E(1:kp,1))
          call c%axpby(0.0_wp, xwrk, beta)
-         !> cheap error estimate (this is actually the size of the included correction thus too conservative)
+         !> cheap error estimate (this is actually the magnitude of the included correction thus too conservative)
          err_est = abs(E(kp,1) * beta)
          if (err_est .lt. tol) then
             if (verbose) then
