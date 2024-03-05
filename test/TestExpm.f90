@@ -120,7 +120,7 @@ module TestExpm
       !> Copy reference data into Krylov vector
       Xref%data = Xmat(:)
       
-      !> Compute Krylov matrix exponential for different krylov subspace sizes
+      !> Compute Krylov matrix exponential using the arnoldi method
       call kexpm(Xkryl, A, Q, tau, tol, info, verbosity = .true., nkryl = nkmax)
       call Xkryl%axpby(1.0_wp, Xref, -1.0_wp)
       
@@ -145,6 +145,7 @@ module TestExpm
       class(rvector), allocatable :: Q(:)
       class(rvector), allocatable :: Xref(:)
       class(rvector), allocatable :: Xkryl(:)
+      class(rvector), allocatable :: Xkryl_block(:)
       !> Krylov subspace dimension.
       integer, parameter :: kdim = test_size
       !> Test matrix.
@@ -169,6 +170,7 @@ module TestExpm
       Amat = 0.0_wp; Emat = 0.0_wp; Xmat = 0.0_wp
       allocate(Xref(1:p)) ; call mat_zero(Xref)
       allocate(Xkryl(1:p)) ; call mat_zero(Xkryl)
+      allocate(Xkryl_block(1:p)) ; call mat_zero(Xkryl_block)
 
       ! --> Initialize operator.
       A = rmatrix() ; call random_number(A%data)
@@ -188,15 +190,28 @@ module TestExpm
          Xref(i)%data = Xmat(:,i)
       end do
 
-      !> Compute Krylov matrix exponential for different krylov subspace sizes
-      call kexpm(Xkryl(1:p), A, Q(1:p), tau, tol, info, verbosity = .true., nkryl = nkmax)
+      !> Compute Krylov matrix exponential using sequential arnoldi method for each input column
+      write(*,*) 'SEQUENTIAL ARNOLDI'
       do i = 1,p
+         write(*,*) '    column',i
+         call kexpm(Xkryl(i:i), A, Q(i:i), tau, tol, info, verbosity = .true., nkryl = nkmax)
          call Xkryl(i)%axpby(1.0_wp, Xref(i), -1.0_wp)
       end do
+      write(*,*) 'BLOCK-ARNOLDI'
+      !> Compute Krylov matrix exponential using block-arnoldi method
+      call kexpm(Xkryl_block(1:p), A, Q(1:p), tau, tol, info, verbosity = .true., nkryl = nkmax)
+      do i = 1,p
+         call Xkryl_block(i)%axpby(1.0_wp, Xref(i), -1.0_wp)
+      end do
+
       !> Compute 2-norm of the error
       call mat_mult(err,Xkryl(1:p),Xkryl(1:p))
       alpha = sqrt(norm_fro(err))
-      write(*, *) '    true error:          ||error||_2 = ', alpha
+      write(*,*) '--------------------------------------------------------------------'
+      write(*, *) '    true error (seq.):   ||error||_2 = ', alpha
+      call mat_mult(err,Xkryl_block(1:p),Xkryl_block(1:p))
+      alpha = sqrt(norm_fro(err))
+      write(*, *) '    true error (block):  ||error||_2 = ', alpha
      
       call check(error, alpha < rtol)
       

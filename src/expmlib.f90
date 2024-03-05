@@ -121,8 +121,8 @@ contains
       class(abstract_vector), allocatable :: X(:)
       real(kind=wp), allocatable          :: H(:,:)
       !> Normalisation & temp arrays
-      real(kind=wp), allocatable          :: R(:,:), E(:,:), invH(:,:), phi(:,:), wrk(:,:)
-      real(kind=wp), allocatable          :: Id(:,:), em(:,:), ym(:,:)
+      real(kind=wp), allocatable          :: R(:,:), E(:,:)
+      real(kind=wp), allocatable          :: Id(:,:), em(:,:)
       class(abstract_vector), allocatable :: Xwrk(:), Cwrk(:)
       real(kind=wp) :: err_est
 
@@ -136,15 +136,14 @@ contains
       info = 0
 
       ! allocate memory
-      allocate(R(1:p,1:p))                                              ! QR factorization
-      allocate(X(1:nk+p), source=B(1)); allocate(H(1:p*(nk+1),1:p*nk))  ! Arnoldi factorization
-      allocate(E(1:p*(nk+1),1:nk))                                      ! Dense matrix exponential
-      allocate(invH(1:nk,1:nk)); allocate(phi(1:nk,1:nk));              ! Correction
+      allocate(R(1:p,1:p))                           ! QR factorization
+      allocate(X(1:nk+p), source=B(1)); 
+      allocate(H(1:p*(nk+1),1:p*p*(nk+1)))           ! Arnoldi factorization with extended Hessenberg matrix
+      allocate(E(1:p*(nk+1),1:nk))                   ! Dense matrix exponential
       allocate(Id(1:nk,1:nk)); Id = 0.0_wp; forall (i=1:nk) Id(i, i) = 1.0_wp
-      allocate(em(1:p,1:p)); allocate(ym(1:p,1:p))                     ! error estimate
+      allocate(em(1:p,1:p))                          ! error estimate
 
       ! scratch arrays
-      allocate(wrk(1:nk,1:nk))
       allocate(Xwrk(1:p), source=B(1)); allocate(Cwrk(1:p), source=B(1))
 
       !> normalize input vector and set initialise Krylov subspace
@@ -163,29 +162,16 @@ contains
          E = 0.0_wp; call mat_zero(Xwrk)
          !> compute kth stop of the Arnoldi factorization
          call arnoldi_factorization(A, X(1:kpp), H(1:kpp,1:kp), info, kstart=k, kend=k, block_size=p)
-         !> compute the (dense) matrix exponential of the Hessenberg matrix
-         call expm(E(1:kp,1:kp),tau*H(1:kp,1:kp))
-         !> compute correction based on last row of Hessenberg matrix
-         wrk = 0.0_wp; invH = 0.0_wp
-         invH(1:kp,1:kp) = tau*H(1:kp,1:kp)
-         call inv(invH(1:kp,1:kp))
-         wrk = E(1:kp,1:kp) - Id(1:kp,1:kp)
-         phi(1:kp,1:kp) = matmul(invH(1:kp,1:kp),wrk(1:kp,1:kp))    ! phi(tH)
-         !> add correction row(s) to exptH
-         E(kp+1:kpp,1:kp) = phi(kpm+1:kp,1:kp)
+         !> compute the (dense) matrix exponential of the extended Hessenberg matrix
+         call expm(E(1:kpp,1:kpp),tau*H(1:kpp,1:kpp))
          !> project back into original space
          call mat_zero(C)
-         call mat_mult(Xwrk(1:p),X(1:kp),E(1:kp,1:p))
+         call mat_mult(Xwrk(1:p),X(1:kpp),E(1:kpp,1:p))
          call mat_mult(C(1:p),Xwrk(1:p),R(1:p,1:p))
-         !> cheap error estimate
-         err_est = 0.0_wp; wrk = 0.0_wp
-         wrk(1:p,1:p) = matmul(phi(kpm+1:kp,1:p),R(1:p,1:p))        ! e_mT @ phi(tH) @ e_1 @ R
-         em = matmul(H(kp+1:kpp,kpm+1:kp),wrk(1:p,1:p))             ! h_{m+1,m} @ wrk
+         !> cheap error estimate (this is actually the size of the included correction thus too conservative)
+         err_est = 0.0_wp
+         em = matmul(E(kp+1:kpp,1:p),R(1:p,1:p))
          err_est = norm_fro(em)
-         !> correction
-         call mat_zero(Cwrk)
-         call mat_mult(Cwrk(1:p),X(kp+1:kpp),E(kp+1:kpp,1:p))
-         call mat_axpby(C,1.0_wp,Cwrk,1.0_wp)
          if (err_est .lt. tol) then
             if (verbose) then
                if (p.eq.1) then
@@ -206,7 +192,11 @@ contains
       if (err_est .gt. tol) then
          info = -1
          if (verbose) then
-            write(*, *) 'Arnoldi-based approxmation of the exp. propagator did not converge'
+            if (p.eq.1) then
+               write(*, *) 'Arnoldi approxmation of the action of the exp. propagator did not converge'
+            else
+               write(*, *) 'Block Arnoldi approxmation of the action of the exp. propagator did not converge'
+            endif
             write(*, *) '    maximum n° of vectors reached: ', nstep+1,&
                         & 'per input vector, total:', kpp
             write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
@@ -252,7 +242,7 @@ contains
       class(abstract_vector), allocatable :: X(:)
       real(kind=wp), allocatable          :: H(:,:)
       !> Normalisation & temp arrays
-      real(kind=wp), allocatable          :: E(:,:), invH(:,:), phi(:,:), wrk(:,:)
+      real(kind=wp), allocatable          :: E(:,:)
       real(kind=wp), allocatable          :: Id(:,:)
       class(abstract_vector), allocatable :: xwrk
       real(kind=wp)                       :: err_est, beta
@@ -265,12 +255,10 @@ contains
       info = 0
       
       ! allocate memory
-      allocate(X(1:nk+1), source=b); allocate(H(1:nk+1,1:nk))      ! Arnoldi factorization
-      allocate(E(1:nk+1,1:nk))                                     ! Dense matrix exponential
-      allocate(invH(1:nk,1:nk)); allocate(phi(1:nk,1:nk));         ! Correction
+      allocate(X(1:nk+1), source=b); allocate(H(1:nk+1,1:nk+1))    ! Arnoldi factorization with extended Hesseberg matrix
+      allocate(E(1:nk+1,1:nk+1))                                   ! Dense matrix exponential
       allocate(Id(1:nk,1:nk)); Id = 0.0_wp; forall (i=1:nk) Id(i, i) = 1.0_wp
       ! scratch arrays
-      allocate(wrk(1:nk,1:nk))
       allocate(xwrk, source=b)
       
       !> normalize input vector and set initialise Krylov subspace
@@ -288,26 +276,16 @@ contains
          E = 0.0_wp
          !> compute kth stop of the Arnoldi factorization
          call arnoldi_factorization(A, X(1:kp), H(1:kp,1:k), info, kstart=k, kend=k)
-         !> compute the (dense) matrix exponential of the Hessenberg matrix
-         call expm(E(1:k,1:k), tau*H(1:k,1:k))
-         !> compute correction based on last row of Hessenberg matrix
-         wrk = 0.0_wp; invH = 0.0_wp
-         invH(1:k,1:k) = tau*H(1:k,1:k)
-         call inv(invH(1:k,1:k))
-         wrk = E(1:k,1:k) - Id(1:k,1:k)
-         phi(1:k,1:k) = matmul(invH(1:k,1:k), wrk(1:k,1:k))    ! phi(tH)
-         !> add correction row(s) to exptH
-         E(kp,1:k) = phi(k,1:k)
+         !> compute the (dense) matrix exponential of the extended Hessenberg matrix
+         call expm(E(1:kp,1:kp), tau*H(1:kp,1:kp))
          !> project back into original space
-         call get_vec(xwrk, X(1:k), E(1:k,1))
+         call get_vec(xwrk, X(1:kp), E(1:kp,1))
          call c%axpby(0.0_wp, xwrk, beta)
-         !> cheap error estimate
-         err_est = H(kp,k) * abs(phi(k,1) * beta)   ! h_{m+1,m} @ | e_mT @ phi(tH) @ e_1 @ beta |
-         !> correction
-         !call c%axpby(1.0_wp, X(kp), E(kp,1))
+         !> cheap error estimate (this is actually the size of the included correction thus too conservative)
+         err_est = abs(E(kp,1) * beta)
          if (err_est .lt. tol) then
             if (verbose) then
-               write(*, *) 'Block Arnoldi approxmation of the action of the exp. propagator converged'
+               write(*, *) 'Arnoldi-based approxmation of the exp. propagator converged'
                write(*, *) '    n° of vectors:', kp
                write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
                write(*, *) '    desired tolerance:           tol = ', tol
