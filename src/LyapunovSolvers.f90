@@ -3,6 +3,7 @@ module LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
    use LightROM_utils
    use LightROM_expmlib
+   use stdlib_linalg, only : eye
    implicit none
 
    !> work arrays
@@ -123,16 +124,12 @@ module LightROM_LyapunovSolvers
       !> Information flag
       integer                , intent(out)   :: info
 
-      !> Local variables
-      class(abstract_vector) , allocatable   :: Ucmp(:) 
-      real(kind=wp)          , allocatable   :: Scmp(:,:)     
+      !> Local variables   
       integer                                :: rk, istep, nsteps, iostep
       real(kind=wp)                          :: T
       logical, parameter                     :: verbose = .true.
       T = 0.0_wp
       rk = size(U)
-      allocate(Ucmp(1:rk), source=U(1)); 
-      allocate(Scmp(1:rk,1:rk));
 
       ! --> Reset desired tau to match Tend
       nsteps = ceiling(Tend/tau)
@@ -144,19 +141,12 @@ module LightROM_LyapunovSolvers
       endif
 
       dlra : do istep = 1, nsteps
-         if ( mod(istep,iostep) .eq. 0 ) then
-            call mat_zero(Ucmp); Scmp = 0.0_wp
-            call mat_copy(Ucmp(1:rk),U(1:rk))
-            Scmp(1:rk,1:rk) = S(1:rk,1:rk)
-         endif
          !> dynamical low-rank approximation step
          call numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info)
 
          T = T + tau
          !> here we should do some checks such as whether we have reached steady state
          if ( mod(istep,iostep) .eq. 0 ) then
-            Scmp(1:rk,1:rk) = S(1:rk,1:rk) - Scmp(1:rk,1:rk)
-            write(*,*) '||dS/dt||_fro = ', norm_fro(Scmp)/tau
             if (verbose) then
                write(*, *) "INFO : ", ISTEP, " steps of DLRA computed."
             endif
@@ -239,7 +229,8 @@ module LightROM_LyapunovSolvers
          R = 0.0_wp; wrk = 0.0_wp
 
          !> Apply propagator to initial basis
-         if (.not. allocated(Uwrk)) allocate(Uwrk, source=U(1)); call Uwrk%zero()
+         if (.not. allocated(Uwrk)) allocate(Uwrk, source=U(1))
+         call Uwrk%zero()
          do i = 1, rk
             call A%matvec(U(i), Uwrk)
             call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
@@ -266,15 +257,15 @@ module LightROM_LyapunovSolvers
 
          !> Local variables
          class(abstract_vector) , allocatable   :: U1(:) 
-         integer :: rk
+         integer                                :: rk
 
          rk = size(U)
          allocate(U1(1:rk), source=U(1)); call mat_zero(U1)
 
          call K_step(U1, S, U,     B, tau, info)
-         
+
          call S_step(    S, U, U1,    tau, info)
-         
+
          call L_step(    S, U, U1, B, tau, info)
          
          !> Copy data to output
@@ -305,8 +296,9 @@ module LightROM_LyapunovSolvers
          info = 0
 
          rk = size(U)
-         if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1)); call mat_zero(Uwrk)
-         if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); Swrk = 0.0_wp
+         if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1));
+         if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); 
+         call mat_zero(Uwrk); Swrk = 0.0_wp
 
          call mat_mult(U1, U, S)               ! K0
          call apply_outerproduct(Uwrk, B, U)   ! Kdot
@@ -338,8 +330,9 @@ module LightROM_LyapunovSolvers
          info = 0
 
          rk = size(U)
-         if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1)); call mat_zero(Uwrk)
-         if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); Swrk = 0.0_wp
+         if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1));
+         if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); 
+         call mat_zero(Uwrk); Swrk = 0.0_wp
 
          call apply_outerproduct(Uwrk, B, U)
          call mat_mult(Swrk, U1, Uwrk)          ! - Sdot
@@ -369,7 +362,8 @@ module LightROM_LyapunovSolvers
          info = 0
 
          rk = size(U)
-         if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1)); call mat_zero(Uwrk)
+         if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1));
+         call mat_zero(Uwrk)
 
          call mat_mult(Uwrk, U, transpose(S))  ! L0.T
          call apply_outerproduct(U, B, U1)     ! Ldot.T
