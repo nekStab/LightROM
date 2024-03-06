@@ -20,7 +20,7 @@ module Laplacian
 
   ! --> Mesh related parameters.
   real(kind=wp), parameter :: L  = 1.0_wp  !> Domain length
-  integer      , parameter :: nx = 4      !> Number of grid points
+  integer      , parameter :: nx = 10      !> Number of grid points
   real(kind=wp), parameter :: dx = L/nx    !> Grid size.
 
   !-------------------------------------------
