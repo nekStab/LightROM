@@ -56,7 +56,11 @@ contains
 !     
 !      Later, we might also do this for real matrices.
 !     
+      if ( amax .lt. 1e-12) amax = 1e-12  ! to avoid problems with zero matrix
+
       lmax = int ( log10 ( amax ) )
+
+      if ( lmax .lt. -2 ) lmax = 0
    
       if ( integ ) then
         npline = 79 / ( lmax + 3 )
@@ -127,7 +131,7 @@ contains
             if ( integ ) then
               write ( *, iform ) int ( a(i,jlo:jhi) )
             else
-              write ( *, '(2x,5g14.6)' ) a(i,jlo:jhi)
+              write ( *, '(2x,10g14.6)' ) a(i,jlo:jhi)
             end if
          
           end do
