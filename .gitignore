@@ -36,4 +36,4 @@ example/laplacian1D
 example/laplacian2D
 
 # swap & tmp files
-.*~
+*~

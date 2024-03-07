@@ -35,8 +35,16 @@ test-drive.tag = "v0.4.0"
 #-----     SETUP FOR THE LAPLACIAN EXAMPLE     -----
 #---------------------------------------------------
 
-name = "Laplacian"
+name = "Laplacian1D"
 source-dir = "example/laplacian1D"
+
+[example.dependencies]
+rklib = { git="https://github.com/jacobwilliams/rklib.git" }
+
+[[example]]
+
+name = "Laplacian2D"
+source-dir = "example/laplacian2D"
 
 [example.dependencies]
 rklib = { git="https://github.com/jacobwilliams/rklib.git" }
