@@ -272,13 +272,21 @@ contains
          E = 0.0_wp
          !> compute kth stop of the Arnoldi factorization
          call arnoldi_factorization(A, X(1:kp), H(1:kp,1:k), info, kstart=k, kend=k)
+         !> compute approximation
+         if (info .eq. k) then ! Arnoldi breakdown
+            kp = k             ! do not consider extended matrix
+         endif
          !> compute the (dense) matrix exponential of the extended Hessenberg matrix
          call expm(E(1:kp,1:kp), tau*H(1:kp,1:kp))
          !> project back into original space
          call get_vec(xwrk, X(1:kp), E(1:kp,1))
          call c%axpby(0.0_wp, xwrk, beta)
          !> cheap error estimate (this is actually the magnitude of the included correction thus too conservative)
-         err_est = abs(E(kp,1) * beta)
+         if (info .eq. k) then ! --> approximation is exact
+            err_est = 0.0_wp
+         else
+            err_est = abs(E(kp,1) * beta)
+         endif
          if (err_est .lt. tol) then
             if (verbose) then
                write(*, *) 'Arnoldi-based approxmation of the exp. propagator converged'
