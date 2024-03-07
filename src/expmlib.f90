@@ -81,6 +81,10 @@ contains
       ! tau    : Integration time for the exponential propagator, real_wp              [Input]
       ! tol    : tolerance for the error estimator (not implemented yet), real_wp      [Input]
       ! info   : Exit information flag, integer,                                       [Output]
+      !             info = 0       normal exit
+      !             info < 0       approximation not converged
+      !                              --> choose more permissive tolerance or more krylov vectors
+      !             info = k > 0   approximation exact using k Krylov vectors
       ! nkryl  : Optional, maximum number of arnoldi steps, integer                    [Input]
       !
       !  References:
@@ -160,6 +164,10 @@ contains
          E = 0.0_wp; call mat_zero(Xwrk)
          !> compute kth stop of the Arnoldi factorization
          call arnoldi_factorization(A, X(1:kpp), H(1:kpp,1:kp), info, kstart=k, kend=k, block_size=p)
+         !> compute approximation
+         if (info .eq. kp) then ! Arnoldi breakdown
+            kpp = kp           ! do not consider extended matrix
+         endif
          !> compute the (dense) matrix exponential of the extended Hessenberg matrix
          call expm(E(1:kpp,1:kpp),tau*H(1:kpp,1:kpp))
          !> project back into original space
@@ -167,9 +175,12 @@ contains
          call mat_mult(Xwrk(1:p),X(1:kpp),E(1:kpp,1:p))
          call mat_mult(C(1:p),Xwrk(1:p),R(1:p,1:p))
          !> cheap error estimate (this is actually the magnitude of the included correction thus too conservative)
-         err_est = 0.0_wp
-         em = matmul(E(kp+1:kpp,1:p),R(1:p,1:p))
-         err_est = norm_fro(em)
+         if (info .eq. kp) then ! --> approximation is exact
+            err_est = 0.0_wp
+         else
+            em = matmul(E(kp+1:kpp,1:p),R(1:p,1:p))
+            err_est = norm_fro(em)
+         endif
          if (err_est .lt. tol) then
             if (verbose) then
                if (p.eq.1) then
