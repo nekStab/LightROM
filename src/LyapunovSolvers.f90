@@ -140,7 +140,7 @@ module LightROM_LyapunovSolvers
       endif
 
       dlra : do istep = 1, nsteps
-         !write(*,*) 'istep', istep
+         
          !> dynamical low-rank approximation step
          call numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info)
 
@@ -243,8 +243,6 @@ module LightROM_LyapunovSolvers
          !> Update low-rank coefficient matrix
          wrk = matmul(S, transpose(R))
          S   = matmul(R, wrk)
-
-         call print_mat(rk,rk,S,'M step')
 
          return
       end subroutine M_forward_map

@@ -11,7 +11,6 @@ module LightROM_expmlib
    private
    !> Matrix operations for abstract vector types
    public :: kexpm, expm
-   public :: log2, log10, norm_linf, norm_fro, factorial
 
    interface kexpm
       module procedure kexpm_vec
@@ -153,53 +152,61 @@ contains
       R = 0.0_wp
       call mat_zero(Xwrk)
       call mat_copy(Xwrk(1:p),B(1:p))
-      call qr_factorization(Xwrk(1:p),R(1:p,1:p),perm(1:p,1:p),info)
-      call initialize_krylov_subspace(X,Xwrk(1:p))
-      H = 0.0_wp
-   
-      expm_arnoldi: do k = 1, nk 
-         kpm = (k-1)*p
-         kp  = kpm + p
-         kpp = kp  + p
-         !> reset wrk arrays
-         E = 0.0_wp; call mat_zero(Xwrk)
-         !> compute kth stop of the Arnoldi factorization
-         call arnoldi_factorization(A, X(1:kpp), H(1:kpp,1:kp), info, kstart=k, kend=k, block_size=p)
-         !> compute approximation
-         if (info .eq. kp) then ! Arnoldi breakdown
-            kpp = kp           ! do not consider extended matrix
-         endif
-         !> compute the (dense) matrix exponential of the extended Hessenberg matrix
-         call expm(E(1:kpp,1:kpp),tau*H(1:kpp,1:kpp))
-         !> project back into original space
-         call mat_zero(C)
-         call mat_mult(Xwrk(1:p),X(1:kpp),E(1:kpp,1:p))
-         call mat_mult(C(1:p),Xwrk(1:p),R(1:p,1:p))
-         !> cheap error estimate (this is actually the magnitude of the included correction thus too conservative)
-         if (info .eq. kp) then ! --> approximation is exact
-            err_est = 0.0_wp
-         else
-            em = matmul(E(kp+1:kpp,1:p),R(1:p,1:p))
-            err_est = norm_fro(em)
-         endif
-         if (err_est .lt. tol) then
-            if (verbose) then
-               if (p.eq.1) then
-                  write(*, *) 'Arnoldi approxmation of the action of the exp. propagator converged'
-               else
-                  write(*, *) 'Block Arnoldi approxmation of the action of the exp. propagator converged'
-               endif 
-               write(*, *) '    n° of vectors:', k+1, 'per input vector, total:', kpp
-               write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
-               write(*, *) '    desired tolerance:           tol = ', tol
-               write(*, *)
+      call qr_factorization(Xwrk(1:p),R(1:p,1:p),perm(1:p,1:p),info,ifpivot=.true.)
+      if (norm2(R(1:p,1:p)) .lt. tol) then
+         call mat_zeros(C)
+         err_est = 0.0_wp
+         k = 0
+         kpp = p
+      else
+         call initialize_krylov_subspace(X,Xwrk(1:p))
+         H = 0.0_wp
+         
+         expm_arnoldi: do k = 1, nk 
+            kpm = (k-1)*p
+            kp  = kpm + p
+            kpp = kp  + p
+            !> reset wrk arrays
+            E = 0.0_wp; call mat_zero(Xwrk)
+            !> compute kth stop of the Arnoldi factorization
+            call arnoldi_factorization(A, X(1:kpp), H(1:kpp,1:kp), info, kstart=k, kend=k, block_size=p)
+            !> compute approximation
+            if (info .eq. kp) then ! Arnoldi breakdown
+               kpp = kp           ! do not consider extended matrix
             endif
-            ! --> Exit the Arnoldi iteration.
-            exit expm_arnoldi
-         endif
-      end do expm_arnoldi
+            !> compute the (dense) matrix exponential of the extended Hessenberg matrix
+            call expm(E(1:kpp,1:kpp),tau*H(1:kpp,1:kpp))
+            !> project back into original space
+            call mat_zero(C)
+            call mat_mult(Xwrk(1:p),X(1:kpp),E(1:kpp,1:p))
+            call mat_mult(C(1:p),Xwrk(1:p),R(1:p,1:p))
+            !> cheap error estimate (this is actually the magnitude of the included correction thus too conservative)
+            if (info .eq. kp) then ! --> approximation is exact
+               err_est = 0.0_wp
+            else
+               em = matmul(E(kp+1:kpp,1:p),R(1:p,1:p))
+               err_est = norm2(em)
+            endif
+            if (err_est .lt. tol) then
+               ! --> Exit the Arnoldi iteration.
+               exit expm_arnoldi
+            endif
+         end do expm_arnoldi
+      endif
    
-      if (err_est .gt. tol) then
+      if (err_est .le. tol) then
+         if (verbose) then
+            if (p.eq.1) then
+               write(*, *) 'Arnoldi approxmation of the action of the exp. propagator converged'
+            else
+               write(*, *) 'Block Arnoldi approxmation of the action of the exp. propagator converged'
+            endif 
+            write(*, *) '    n° of vectors:', k+1, 'per input vector, total:', kpp
+            write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
+            write(*, *) '    desired tolerance:           tol = ', tol
+            write(*, *)
+         endif
+      else
          info = -1
          if (verbose) then
             if (p.eq.1) then
@@ -271,48 +278,54 @@ contains
       
       !> normalize input vector and set initialise Krylov subspace
       beta = b%norm()
-      !call initialize_krylov_subspace(X,b)
-      call mat_zero(X)
-      call X(1)%axpby(0.0_wp, b, 1.0_wp)
-      call X(1)%scal(1.0/beta)
-      H = 0.0_wp
+      if ( beta < tol) then   ! input is zero
+         call c%zero()
+         err_est = 0.0_wp
+         kp = 1
+      else
+         call mat_zero(X)
+         call X(1)%axpby(0.0_wp, b, 1.0_wp)
+         call X(1)%scal(1.0/beta)
+         H = 0.0_wp
 
-      expm_arnoldi: do k = 1, nk 
-         km = k - 1
-         kp = k + 1
-         !> reset wrk arrays
-         E = 0.0_wp
-         !> compute kth stop of the Arnoldi factorization
-         call arnoldi_factorization(A, X(1:kp), H(1:kp,1:k), info, kstart=k, kend=k)
-         !> compute approximation
-         if (info .eq. k) then ! Arnoldi breakdown
-            kp = k             ! do not consider extended matrix
-         endif
-         !> compute the (dense) matrix exponential of the extended Hessenberg matrix
-         call expm(E(1:kp,1:kp), tau*H(1:kp,1:kp))
-         !> project back into original space
-         call get_vec(xwrk, X(1:kp), E(1:kp,1))
-         call c%axpby(0.0_wp, xwrk, beta)
-         !> cheap error estimate (this is actually the magnitude of the included correction thus too conservative)
-         if (info .eq. k) then ! --> approximation is exact
-            err_est = 0.0_wp
-         else
-            err_est = abs(E(kp,1) * beta)
-         endif
-         if (err_est .lt. tol) then
-            if (verbose) then
-               write(*, *) 'Arnoldi-based approxmation of the exp. propagator converged'
-               write(*, *) '    n° of vectors:', kp
-               write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
-               write(*, *) '    desired tolerance:           tol = ', tol
-               write(*, *)
+         expm_arnoldi: do k = 1, nk 
+            km = k - 1
+            kp = k + 1
+            !> reset wrk arrays
+            E = 0.0_wp
+            !> compute kth stop of the Arnoldi factorization
+            call arnoldi_factorization(A, X(1:kp), H(1:kp,1:k), info, kstart=k, kend=k)
+            !> compute approximation
+            if (info .eq. k) then ! Arnoldi breakdown
+               kp = k             ! do not consider extended matrix
             endif
-            ! --> Exit the Arnoldi iteration.
-            exit expm_arnoldi
-         endif
-      end do expm_arnoldi
+            !> compute the (dense) matrix exponential of the extended Hessenberg matrix
+            call expm(E(1:kp,1:kp), tau*H(1:kp,1:kp))
+            !> project back into original space
+            call get_vec(xwrk, X(1:kp), E(1:kp,1))
+            call c%axpby(0.0_wp, xwrk, beta)
+            !> cheap error estimate (this is actually the magnitude of the included correction thus too conservative)
+            if (info .eq. k) then ! --> approximation is exact
+               err_est = 0.0_wp
+            else
+               err_est = abs(E(kp,1) * beta)
+            endif
+            if (err_est .lt. tol) then
+               ! --> Exit the Arnoldi iteration.
+               exit expm_arnoldi
+            endif
+         end do expm_arnoldi
+      endif
 
-      if (err_est .gt. tol) then
+      if (err_est .le. tol) then
+         if (verbose) then
+            write(*, *) 'Arnoldi-based approxmation of the exp. propagator converged'
+            write(*, *) '    n° of vectors:', kp
+            write(*, *) '    estimated error:   ||err_est||_2 = ', err_est
+            write(*, *) '    desired tolerance:           tol = ', tol
+            write(*, *)
+         endif
+      else
          info = -1
          if (verbose) then
             write(*, *) 'Arnoldi-based approxmation of the exp. propagator did not converge'
@@ -387,8 +400,8 @@ contains
      integer, optional,      intent(in)  :: order
      integer                             :: p_order
      !> Internal
-     real(kind=wp), allocatable :: A2(:,:), Q(:,:), X(:,:), invQ(:,:)
-     real(kind=wp)              :: a_norm, c, norm_li
+     real(kind=wp), allocatable :: A2(:,:), Q(:,:), X(:,:), invQ(:,:), wrk(:)
+     real(kind=wp)              :: a_norm, c
      integer                    :: n, ee, k, s
      logical                    :: p
 
@@ -398,9 +411,10 @@ contains
      n = size(A,1)
      allocate(A2(1:n,1:n)); allocate(X(1:n,1:n))
      allocate(Q(1:n,1:n));  allocate(invQ(1:n,1:n))
+     allocate(wrk(1:n))
 
      !> Compute the L-infinity norm.
-     a_norm = norm_linf(A)
+     a_norm = norml(A)  !dlange('I', n, n, A, n, wrk)
      !> Determine a scaling factor for the matrix.
      ee = int(log2(a_norm)) + 1
      s  = max(0, ee + 1)
@@ -451,15 +465,7 @@ contains
      y = log(x) / log(2.0_wp)
    end function log2
 
-   function log10(x) result(y)
-      ! compute the base-2 logarithm of the input
-      implicit none
-      real(kind=wp), intent(in) :: x
-      real(kind=wp) :: y
-      y = log(x) / log(10.0_wp)
-    end function log10
-
-   function norm_linf(A) result(norm)
+   function norml(A) result(norm)
       ! compute the infinity norm of the real-valued input matrix A
       implicit none   
       real(kind=wp), intent(in) :: A(:,:)
@@ -473,35 +479,6 @@ contains
       row_sum = sum ( abs ( A(i,1:n) ) )
       norm = max ( norm, row_sum )
       end do
-   end function norm_linf
-
-   function norm_fro(A) result(norm)
-      ! compute the frobenuius norm of the real-valued input matrix A
-      implicit none   
-      real(kind=wp), intent(in) :: A(:,:)
-      !> internals
-      integer       :: i, j, n
-      real(kind=wp) :: norm
-      !> initialize
-      norm = 0.0_wp
-      n = size(A,1)
-      do i = 1, n
-         do j = 1, n
-            norm = norm + A(i,j)**2
-         end do
-      end do
-      norm = sqrt(norm)
-   end function norm_fro
-
-   function factorial(n) result(y)
-      ! compute n!
-      implicit none
-      integer, intent(in) :: n 
-      integer :: i, y
-      y = 1
-      do i = 2, n
-         y = y*i 
-      end do
-   end function factorial
+   end function norml
 
 end module LightROM_expmlib

@@ -206,11 +206,11 @@ module TestExpm
 
       !> Compute 2-norm of the error
       call mat_mult(err,Xkryl(1:p),Xkryl(1:p))
-      alpha = sqrt(norm_fro(err))
+      alpha = sqrt(norm2(err))
       write(*,*) '--------------------------------------------------------------------'
       write(*, *) '    true error (seq.):   ||error||_2 = ', alpha
       call mat_mult(err,Xkryl_block(1:p),Xkryl_block(1:p))
-      alpha = sqrt(norm_fro(err))
+      alpha = sqrt(norm2(err))
       write(*, *) '    true error (block):  ||error||_2 = ', alpha
      
       call check(error, alpha < rtol)
