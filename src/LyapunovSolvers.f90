@@ -11,7 +11,7 @@ module LightROM_LyapunovSolvers
    real(kind=wp),           allocatable   :: Swrk(:,:)
 
    private
-   public :: numerical_low_rank_splitting_integrator
+   public :: numerical_low_rank_splitting_integrator, M_forward_map, G_forward_map
 
    contains
 
@@ -127,13 +127,12 @@ module LightROM_LyapunovSolvers
       !> Local variables   
       integer                                :: rk, istep, nsteps, iostep
       real(kind=wp)                          :: T
-      logical, parameter                     :: verbose = .true.
+      logical, parameter                     :: verbose = .false.
       T = 0.0_wp
       rk = size(U)
 
-      ! --> Reset desired tau to match Tend
-      nsteps = ceiling(Tend/tau)
-      tau    = Tend/nsteps
+      ! --> Compute number of steps
+      nsteps = floor(Tend/tau)
 
       iostep = nsteps/10
       if ( iostep .eq. 0 ) then
@@ -141,6 +140,7 @@ module LightROM_LyapunovSolvers
       endif
 
       dlra : do istep = 1, nsteps
+         !write(*,*) 'istep', istep
          !> dynamical low-rank approximation step
          call numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info)
 
@@ -148,13 +148,15 @@ module LightROM_LyapunovSolvers
          !> here we should do some checks such as whether we have reached steady state
          if ( mod(istep,iostep) .eq. 0 ) then
             if (verbose) then
-               write(*, *) "INFO : ", ISTEP, " steps of DLRA computed."
+               write(*, *) "INFO : ", ISTEP, " steps of DLRA computed. T = ",T
             endif
          endif
       enddo dlra
       return
 
-   contains
+      end subroutine numerical_low_rank_splitting_integrator
+
+   !contains
 
       !-----------------------------
       !-----     UTILITIES     -----
@@ -227,6 +229,7 @@ module LightROM_LyapunovSolvers
          !> Allocate memory
          allocate(R(1:rk,1:rk)); allocate(wrk(1:rk,1:rk)); 
          R = 0.0_wp; wrk = 0.0_wp
+         call print_mat(rk,rk,S,'M step start')
 
          !> Apply propagator to initial basis
          if (.not. allocated(Uwrk)) allocate(Uwrk, source=U(1))
@@ -235,11 +238,14 @@ module LightROM_LyapunovSolvers
             call A%matvec(U(i), Uwrk)
             call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
          enddo
+         call print_mat(rk,rk,S,'M step pr orth')
          !> Reorthonormalize in-place
          call qr_factorization(U, R, info)
          !> Update low-rank coefficient matrix
          wrk = matmul(S, transpose(R))
          S   = matmul(R, wrk)
+
+         call print_mat(rk,rk,S,'M step')
 
          return
       end subroutine M_forward_map
@@ -264,7 +270,7 @@ module LightROM_LyapunovSolvers
 
          call K_step(U1, S, U,     B, tau, info)
 
-         call S_step(    S, U, U1,    tau, info)
+         call S_step(    S, U, U1, B, tau, info)
 
          call L_step(    S, U, U1, B, tau, info)
          
@@ -311,12 +317,14 @@ module LightROM_LyapunovSolvers
          return
       end subroutine K_step
 
-      subroutine S_step(S, U, U1, tau, info)
+      subroutine S_step(S, U, U1, B, tau, info)
          !> Low-rank factors
          real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
          !> Low-rank factors
          class(abstract_vector) , intent(in)    :: U(:)   ! old basis
          class(abstract_vector) , intent(in)    :: U1(:)  ! updated basis
+         !> low-rank rhs
+         class(abstract_vector) , intent(in)    :: B(:)
          !> Integration step size
          real(kind=wp)          , intent(in)    :: tau
          !> Information flag
@@ -375,6 +383,6 @@ module LightROM_LyapunovSolvers
          return
       end subroutine L_step 
 
-   end subroutine numerical_low_rank_splitting_integrator
+   !end subroutine numerical_low_rank_splitting_integrator
 
 end module lightROM_LyapunovSolvers

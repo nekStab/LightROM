@@ -23,7 +23,8 @@ source-form = "free"
 
 [dependencies]
 stdlib = "*"
-LightKrylov.git = "https://github.com/nekStab/LightKrylov"
+LightKrylov = { path = "../LightKrylov" }
+#{ git = "https://github.com/nekStab/LightKrylov.git", branch = "dev"}
 
 [dev-dependencies]
 test-drive.git = "https://github.com/fortran-lang/test-drive"

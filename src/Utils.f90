@@ -8,13 +8,14 @@ module lightrom_utils
 
 contains
 
-   subroutine print_mat(m,n,A)
+   subroutine print_mat(m, n, A, name)
 
       implicit none
 
       integer , intent(in)                         :: n
       integer , intent(in)                         :: m
       real (kind=wp)  , intent(in)                 :: a(m,n)
+      character(*) , optional,  intent(in)         :: name
 
       !> internals
       real (kind=wp) :: amax
@@ -29,6 +30,11 @@ contains
       integer :: jlo
       integer :: lmax
       integer :: npline
+
+      write(*,*)
+      if (present(name)) then
+         write(*,*) 'Output matrix: ', trim(name)
+      endif
 !     
 !      Check if all entries are integral.
 !     
@@ -66,7 +72,7 @@ contains
         npline = 79 / ( lmax + 3 )
         write ( iform, '(''('',i2,''I'',i2,'')'')' ) npline, lmax+3
       else
-        npline = 10
+        npline = 8
         iform = ' '
       end if
 !     
@@ -91,7 +97,7 @@ contains
           if ( integ ) then
             write ( *, iform ) ( int ( a(i,1) ), i = ilo, ihi )
           else
-            write ( *, '(2x,10g10.2)' ) a(ilo:ihi,1)
+            write ( *, '(2x,8g10.2)' ) a(ilo:ihi,1)
           end if
        
         end do
@@ -107,7 +113,7 @@ contains
           if ( integ ) then
             write ( *, iform ) int ( a(1,jlo:jhi) )
           else
-            write ( *, '(2x,10g10.2)' ) a(1,jlo:jhi)
+            write ( *, '(2x,8g10.2)' ) a(1,jlo:jhi)
           end if
        
         end do
@@ -131,7 +137,7 @@ contains
             if ( integ ) then
               write ( *, iform ) int ( a(i,jlo:jhi) )
             else
-              write ( *, '(2x,10g14.6)' ) a(i,jlo:jhi)
+              write ( *, '(2x,8g14.6)' ) a(i,jlo:jhi)
             end if
          
           end do
