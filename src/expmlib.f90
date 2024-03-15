@@ -125,7 +125,7 @@ contains
       class(abstract_vector), allocatable :: X(:)
       real(kind=wp), allocatable          :: H(:,:)
       !> Normalisation & temp arrays
-      real(kind=wp), allocatable          :: R(:,:), E(:,:), em(:,:)
+      real(kind=wp), allocatable          :: R(:,:), E(:,:), em(:,:), perm(:,:)
       class(abstract_vector), allocatable :: Xwrk(:), Cwrk(:)
       real(kind=wp) :: err_est
 
@@ -140,6 +140,7 @@ contains
 
       ! allocate memory
       allocate(R(1:p,1:p))                         ! QR factorization
+      allocate(perm(1:p,1:p))
       allocate(X(1:p*(nk+1)), source=B(1)); 
       allocate(H(1:p*(nk+1),1:p*(nk+1)))           ! Arnoldi factorization with extended Hessenberg matrix
       allocate(E(1:p*(nk+1),1:nk))                 ! Dense matrix exponential
@@ -152,7 +153,7 @@ contains
       R = 0.0_wp
       call mat_zero(Xwrk)
       call mat_copy(Xwrk(1:p),B(1:p))
-      call qr_factorization(Xwrk(1:p),R(1:p,1:p),info)
+      call qr_factorization(Xwrk(1:p),R(1:p,1:p),perm(1:p,1:p),info)
       call initialize_krylov_subspace(X,Xwrk(1:p))
       H = 0.0_wp
    
