@@ -125,15 +125,13 @@ module LightROM_LyapunovSolvers
       !> Information flag
       integer,                             intent(out)   :: info
       !> Routine for computation of the exponential propagator
-      procedure(abstract_exptA), optional    :: exptA
-      !class(abstract_opts),      optional, intent(in)    :: options
+      procedure(abstract_exptA), optional                :: exptA
 
       !> Local variables   
       integer                                :: rk, istep, nsteps, iostep
       real(kind=wp)                          :: T
       logical, parameter                     :: verbose = .false.
       procedure(abstract_exptA), pointer     :: p_exptA => null()
-      !type(kexpm_opts), optional, intent(in) :: exptA_opts
 
       T = 0.0_wp
       rk = size(U)
@@ -141,18 +139,6 @@ module LightROM_LyapunovSolvers
       ! Optional arguments
       if (present(exptA)) then
          p_exptA => exptA
-         !if (present(options)) then
-         !   select type (options)
-         !   type is (kexpm_opts)
-         !      opts = kexpm_opts( &
-         !      tol=options%tol, &
-         !      verbose=options%verbose, &
-         !      kdim=options%kdim &
-         !      )
-         !   end select
-         !else
-         !   exptA_opts = kexpm_opts()
-         !end if   
       else
          p_exptA => k_exptA
       endif
@@ -201,8 +187,7 @@ module LightROM_LyapunovSolvers
          !> Information flag
          integer,                   intent(out)   :: info
          !> Routine for computation of the exponential propagator
-         procedure(abstract_exptA)    :: exptA
-         !type(kexpm_opts),          intent(in)    :: options
+         procedure(abstract_exptA)                :: exptA
 
          !> Local variables
          integer        ::   istep, nsteps, integrator
@@ -249,7 +234,6 @@ module LightROM_LyapunovSolvers
          integer,                   intent(out)   :: info
          !> Routine for computation of the exponential propagator
          procedure(abstract_exptA)    :: exptA
-         !class(abstract_opts),      intent(in)    :: options
 
          !> Local variables
          class(abstract_vector), allocatable      :: Uwrk  ! basis
@@ -267,7 +251,7 @@ module LightROM_LyapunovSolvers
          if (.not. allocated(Uwrk)) allocate(Uwrk, source=U(1))
          call Uwrk%zero()
          do i = 1, rk
-            call exptA(Uwrk, A, U(i), tau, info) !, options)
+            call exptA(Uwrk, A, U(i), tau, info)
             call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
          enddo
          !> Reorthonormalize in-place
