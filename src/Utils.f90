@@ -42,13 +42,11 @@ contains
 
       do i = 1, m
         do j = 1, n
-
           if ( integ ) then
             if ( a(i,j) /= real ( int ( a(i,j) ),kind=wp) ) then
               integ = .false.
             end if
           end if
-       
         end do
       end do
 !     
@@ -63,9 +61,7 @@ contains
 !      Later, we might also do this for real matrices.
 !     
       if ( amax .lt. 1e-12) amax = 1e-12  ! to avoid problems with zero matrix
-
       lmax = int ( log10 ( amax ) )
-
       if ( lmax .lt. -2 ) lmax = 0
    
       if ( integ ) then
@@ -79,7 +75,6 @@ contains
 !      Print a scalar quantity.
 !     
       if ( m == 1 .and. n == 1 ) then
-      
         if ( integ ) then
           write ( *, iform ) int ( a(1,1) )
         else
@@ -89,60 +84,45 @@ contains
 !      Column vector of length M,
 !     
       else if ( n == 1 ) then
-      
         do ilo = 1, m, npline
-
           ihi = min ( ilo+npline-1, m )
-
           if ( integ ) then
             write ( *, iform ) ( int ( a(i,1) ), i = ilo, ihi )
           else
             write ( *, '(2x,8g10.2)' ) a(ilo:ihi,1)
           end if
-       
         end do
 !     
 !      Row vector of length N,
 !     
       else if ( m == 1 ) then
-      
         do jlo = 1, n, npline
-
           jhi = min ( jlo+npline-1, n )
-
           if ( integ ) then
             write ( *, iform ) int ( a(1,jlo:jhi) )
           else
             write ( *, '(2x,8g10.2)' ) a(1,jlo:jhi)
           end if
-       
         end do
 !     
 !      M by N Array
 !     
       else
-      
         do jlo = 1, n, npline
-
           jhi = min ( jlo+npline-1, n )
-
           if ( npline < n ) then
             write ( *, '(a)' ) ' '
             write ( *, '(a,i8,a,i8)' ) 'Matrix columns ', jlo, ' to ', jhi
             write ( *, '(a)' ) ' '
           end if
-       
           do i = 1, m
-
             if ( integ ) then
               write ( *, iform ) int ( a(i,jlo:jhi) )
             else
               write ( *, '(2x,8g14.6)' ) a(i,jlo:jhi)
             end if
-         
           end do
         end do
-     
       end if
       write(*,*)
    
