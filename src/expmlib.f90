@@ -25,7 +25,7 @@ module LightROM_expmlib
    end type kexpm_opts
 
    abstract interface
-      subroutine abstract_exptA(vec_out, A, vec_in, tau, info, options)
+      subroutine abstract_exptA(vec_out, A, vec_in, tau, info)
          import abstract_linop, abstract_vector, abstract_opts, wp
          !> Solution 
          class(abstract_vector),         intent(out) :: vec_out
@@ -36,8 +36,6 @@ module LightROM_expmlib
          real(kind=wp),                  intent(in)  :: tau
          !> Information flag.
          integer,                        intent(out) :: info
-         class(abstract_opts), optional, intent(in)  :: options
-         !! Options passed to the exponential propagator.
       end subroutine abstract_exptA
    end interface
 
