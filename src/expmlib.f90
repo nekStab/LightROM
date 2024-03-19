@@ -46,7 +46,7 @@ module LightROM_expmlib
 
 contains
 
-   subroutine k_exptA(vec_out, A, vec_in, tau, info, options)
+   subroutine k_exptA(vec_out, A, vec_in, tau, info)
       
       class(abstract_vector),         intent(out) :: vec_out
       !> Linear problem.        
@@ -56,29 +56,17 @@ contains
       real(kind=wp),                  intent(in)  :: tau
       !> Information flag.
       integer,                        intent(out) :: info
-      class(abstract_opts), optional, intent(in)  :: options
 
       ! Internals
-      type(kexpm_opts)                            :: opts
       real(kind=wp)                               :: tol
       integer                                     :: kdim
       logical                                     :: verbose
 
-      ! Deals with the optional arguments.
-      if (present(options)) then
-         select type (options)
-         type is (kexpm_opts)
-            opts = kexpm_opts( &
-                   tol=options%tol, &
-                   verbose=options%verbose, &
-                   kdim=options%kdim &
-                   )
-         end select
-      else
-         opts = kexpm_opts()
-      end if
+      tol     = atol
+      verbose = .false.
+      kdim    = 30
 
-      call kexpm(vec_out, A, vec_in, tau, tol, info, verbosity = opts%verbose, kdim = opts%kdim)        
+      call kexpm(vec_out, A, vec_in, tau, tol, info, verbosity = verbose, kdim =kdim)
 
    end subroutine k_exptA
 
