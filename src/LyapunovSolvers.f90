@@ -1,8 +1,8 @@
 module LightROM_LyapunovSolvers
    use LightKrylov
+   use LightKrylov_expmlib
    use LightROM_LyapunovUtils
    use LightROM_utils
-   use LightROM_expmlib
    use stdlib_linalg, only : eye
    implicit none
 

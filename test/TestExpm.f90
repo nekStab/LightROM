@@ -1,8 +1,8 @@
 module TestExpm
    use LightKrylov
+   use LightKrylov_expmlib
    use TestVector
    use TestMatrices
-   Use LightROM_expmlib
    use testdrive  , only : new_unittest, unittest_type, error_type, check
    use stdlib_math, only : all_close
    implicit none

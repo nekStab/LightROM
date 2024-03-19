@@ -1,6 +1,6 @@
 module LightROM_LyapunovUtils
    Use LightKrylov
-   Use Lightrom_expmlib
+   Use LightKrylov_expmlib
    implicit none
 
    private
