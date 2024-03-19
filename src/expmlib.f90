@@ -1,16 +1,45 @@
 module LightROM_expmlib
    Use LightKrylov
-   Use lightkrylov_utils
-   Use lightrom_utils
+   Use LightKrylov_Utils
+   Use LightROM_Utils
 
-   !> Fortran standard library.
+   ! Fortran standard library.
    use stdlib_optval, only: optval
 
    implicit none
 
    private
-   !> Matrix operations for abstract vector types
+   ! Matrix operations for abstract vector types
    public :: kexpm, expm
+   ! Action of the exponential propagator on a vector
+   public :: abstract_exptA, k_exptA
+
+   type, extends(abstract_opts), public :: kexpm_opts
+      !! Extended `abstract_opts` type to pass options to `kexpm`
+      real(kind=wp) :: tol = atol
+      !! Absolute tolerance (default: `epsilon(1.0_wp)`).
+      logical :: verbose = .false.
+      !! Verbosity control (default: `.false.`).
+      integer :: kdim = 30
+      !! Dimension of the Krylov subspace (default: 30).
+   end type kexpm_opts
+
+   abstract interface
+      subroutine abstract_exptA(vec_out, A, vec_in, tau, info, options)
+         import abstract_linop, abstract_vector, abstract_opts, wp
+         !> Solution 
+         class(abstract_vector),         intent(out) :: vec_out
+         !> Linear problem.
+         class(abstract_linop),          intent(in)  :: A
+         class(abstract_vector),         intent(in)  :: vec_in
+         !> Time horizon ofr integration
+         real(kind=wp),                  intent(in)  :: tau
+         !> Information flag.
+         integer,                        intent(out) :: info
+         class(abstract_opts), optional, intent(in)  :: options
+         !! Options passed to the exponential propagator.
+      end subroutine abstract_exptA
+   end interface
 
    interface kexpm
       module procedure kexpm_vec
@@ -19,7 +48,43 @@ module LightROM_expmlib
 
 contains
 
-   subroutine kexpm_mat(C, A, B, tau, tol, info, verbosity, nkryl)
+   subroutine k_exptA(vec_out, A, vec_in, tau, info, options)
+      
+      class(abstract_vector),         intent(out) :: vec_out
+      !> Linear problem.        
+      class(abstract_linop),          intent(in)  :: A
+      class(abstract_vector),         intent(in)  :: vec_in
+      !> Time horizon ofr integration
+      real(kind=wp),                  intent(in)  :: tau
+      !> Information flag.
+      integer,                        intent(out) :: info
+      class(abstract_opts), optional, intent(in)  :: options
+
+      ! Internals
+      type(kexpm_opts)                            :: opts
+      real(kind=wp)                               :: tol
+      integer                                     :: kdim
+      logical                                     :: verbose
+
+      ! Deals with the optional arguments.
+      if (present(options)) then
+         select type (options)
+         type is (kexpm_opts)
+            opts = kexpm_opts( &
+                   tol=options%tol, &
+                   verbose=options%verbose, &
+                   kdim=options%kdim &
+                   )
+         end select
+      else
+         opts = kexpm_opts()
+      end if
+
+      call kexpm(vec_out, A, vec_in, tau, tol, info, verbosity = opts%verbose, kdim = opts%kdim)        
+
+   end subroutine k_exptA
+
+   subroutine kexpm_mat(C, A, B, tau, tol, info, verbosity, kdim)
 
       !=======================================================================================
       ! Krylov-based approximation of the action the exponential propagator on a matrix B
@@ -84,7 +149,7 @@ contains
       !             info < 0       approximation not converged
       !                              --> choose more permissive tolerance or more krylov vectors
       !             info = k > 0   approximation exact using k Krylov vectors
-      ! nkryl  : Optional, maximum number of arnoldi steps, integer                    [Input]
+      ! kdim   : Optional, maximum number of arnoldi steps, integer                    [Input]
       !
       !  References:
       ! -----------
@@ -114,7 +179,7 @@ contains
       !> Optional
       logical, optional,      intent(in)  :: verbosity
       logical                             :: verbose
-      integer, optional,      intent(in)  :: nkryl
+      integer, optional,      intent(in)  :: kdim
       integer                             :: nstep
       
       !> internals
@@ -133,7 +198,7 @@ contains
 
        !> Optional arguemnts
       verbose = optval(verbosity, .false.)
-      nstep   = optval(nkryl, kmax)
+      nstep   = optval(kdim, kmax)
       nk      = nstep*p
       info = 0
 
@@ -153,8 +218,8 @@ contains
       call mat_zero(Xwrk)
       call mat_copy(Xwrk(1:p),B(1:p))
       call qr_factorization(Xwrk(1:p),R(1:p,1:p),perm(1:p,1:p),info,ifpivot=.true.)
-      if (norm2(R(1:p,1:p)) .lt. tol) then
-         call mat_zeros(C)
+      if (norm2(R(1:p,1:p)) .eq. 0.0_wp) then ! input is zero
+         call mat_zero(C)
          err_est = 0.0_wp
          k = 0
          kpp = p
@@ -225,7 +290,7 @@ contains
       return
    end subroutine kexpm_mat
 
-   subroutine kexpm_vec(c, A, b, tau, tol, info, verbosity, nkryl)
+   subroutine kexpm_vec(c, A, b, tau, tol, info, verbosity, kdim)
 
       !=======================================================================================
       ! Krylov-based approximation of the action the exponential propagator on a matrix B
@@ -249,7 +314,7 @@ contains
       !> Optional
       logical, optional,      intent(in)  :: verbosity
       logical                             :: verbose
-      integer, optional,      intent(in)  :: nkryl
+      integer, optional,      intent(in)  :: kdim
       integer                             :: nstep
          
       !> internals
@@ -265,7 +330,7 @@ contains
       
       !> Optional arguemnts
       verbose = optval(verbosity, .false.)
-      nstep   = optval(nkryl, kmax)
+      nstep   = optval(kdim, kmax)
       nk      = nstep
       
       info = 0
@@ -278,7 +343,7 @@ contains
       
       !> normalize input vector and set initialise Krylov subspace
       beta = b%norm()
-      if ( beta < tol) then   ! input is zero
+      if ( beta .eq. 0.0_wp ) then   ! input is zero
          call c%zero()
          err_est = 0.0_wp
          kp = 1

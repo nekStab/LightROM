@@ -121,7 +121,7 @@ module TestExpm
       Xref%data = Xmat(:)
       
       !> Compute Krylov matrix exponential using the arnoldi method
-      call kexpm(Xkryl, A, Q, tau, tol, info, verbosity = .true., nkryl = nkmax)
+      call kexpm(Xkryl, A, Q, tau, tol, info, verbosity = .true., kdim = nkmax)
       call Xkryl%axpby(1.0_wp, Xref, -1.0_wp)
       
       !> Compute 2-norm of the error
@@ -194,12 +194,12 @@ module TestExpm
       write(*,*) 'SEQUENTIAL ARNOLDI'
       do i = 1,p
          write(*,*) '    column',i
-         call kexpm(Xkryl(i:i), A, Q(i:i), tau, tol, info, verbosity = .true., nkryl = nkmax)
+         call kexpm(Xkryl(i:i), A, Q(i:i), tau, tol, info, verbosity = .true., kdim = nkmax)
          call Xkryl(i)%axpby(1.0_wp, Xref(i), -1.0_wp)
       end do
       write(*,*) 'BLOCK-ARNOLDI'
       !> Compute Krylov matrix exponential using block-arnoldi method
-      call kexpm(Xkryl_block(1:p), A, Q(1:p), tau, tol, info, verbosity = .true., nkryl = nkmax)
+      call kexpm(Xkryl_block(1:p), A, Q(1:p), tau, tol, info, verbosity = .true., kdim = nkmax)
       do i = 1,p
          call Xkryl_block(i)%axpby(1.0_wp, Xref(i), -1.0_wp)
       end do

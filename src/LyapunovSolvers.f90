@@ -11,7 +11,8 @@ module LightROM_LyapunovSolvers
    real(kind=wp),           allocatable   :: Swrk(:,:)
 
    private
-   public :: numerical_low_rank_splitting_integrator, M_forward_map, G_forward_map
+   public :: numerical_low_rank_splitting_integrator
+   !public :: M_forward_map, G_forward_map, K_step, S_step, L_step
 
    contains
 
@@ -235,7 +236,7 @@ module LightROM_LyapunovSolvers
          if (.not. allocated(Uwrk)) allocate(Uwrk, source=U(1))
          call Uwrk%zero()
          do i = 1, rk
-            call A%matvec(U(i), Uwrk)
+            call k_exptA(Uwrk, A, U(i), tau, info)
             call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
          enddo
          !> Reorthonormalize in-place
@@ -310,7 +311,7 @@ module LightROM_LyapunovSolvers
          !> Construct solution U1
          call mat_axpby(U1, 1.0_wp, Uwrk, tau) ! K0 + tau*Kdot
          !> Orthonormalize in-place
-         call qr_factorization(U1, Swrk, P, info)
+         call qr_factorization(U1, Swrk, P, info, ifpivot = .true.)
          S = Swrk
 
          return
