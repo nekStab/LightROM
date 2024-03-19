@@ -110,27 +110,52 @@ module LightROM_LyapunovSolvers
    !     340, 602-614
    !
    !=======================================================================================
-   subroutine numerical_low_rank_splitting_integrator(U,S,A,B,Tend,tau,torder,info)
+   subroutine numerical_low_rank_splitting_integrator(U,S,A,B,Tend,tau,torder,info,exptA)
       !> Low-rank factors
-      class(abstract_vector) , intent(inout) :: U(:) ! basis
-      real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
+      class(abstract_vector),              intent(inout) :: U(:) ! basis
+      real(kind=wp),                       intent(inout) :: S(:,:) ! coefficients
       !> System
-      class(abstract_linop)  , intent(in)    :: A    ! linear operator
-      class(abstract_vector) , intent(in)    :: B(:) !
+      class(abstract_linop),               intent(in)    :: A    ! linear operator
+      class(abstract_vector),              intent(in)    :: B(:) !
       !> Integration time and step size
-      real(kind=wp)          , intent(in)    :: Tend
-      real(kind=wp)          , intent(inout) :: tau  ! desired/effective time step
+      real(kind=wp),                       intent(in)    :: Tend
+      real(kind=wp),                       intent(inout) :: tau  ! desired/effective time step
       !> Order of time integration
-      integer                , intent(in)    :: torder
+      integer,                             intent(in)    :: torder
       !> Information flag
-      integer                , intent(out)   :: info
+      integer,                             intent(out)   :: info
+      !> Routine for computation of the exponential propagator
+      procedure(abstract_exptA), optional    :: exptA
+      !class(abstract_opts),      optional, intent(in)    :: options
 
       !> Local variables   
       integer                                :: rk, istep, nsteps, iostep
       real(kind=wp)                          :: T
       logical, parameter                     :: verbose = .false.
+      procedure(abstract_exptA), pointer     :: p_exptA => null()
+      !type(kexpm_opts), optional, intent(in) :: exptA_opts
+
       T = 0.0_wp
       rk = size(U)
+
+      ! Optional arguments
+      if (present(exptA)) then
+         p_exptA => exptA
+         !if (present(options)) then
+         !   select type (options)
+         !   type is (kexpm_opts)
+         !      opts = kexpm_opts( &
+         !      tol=options%tol, &
+         !      verbose=options%verbose, &
+         !      kdim=options%kdim &
+         !      )
+         !   end select
+         !else
+         !   exptA_opts = kexpm_opts()
+         !end if   
+      else
+         p_exptA => k_exptA
+      endif
 
       ! --> Compute number of steps
       nsteps = floor(Tend/tau)
@@ -143,7 +168,7 @@ module LightROM_LyapunovSolvers
       dlra : do istep = 1, nsteps
          
          !> dynamical low-rank approximation step
-         call numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info)
+         call numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info, p_exptA)
 
          T = T + tau
          !> here we should do some checks such as whether we have reached steady state
@@ -162,19 +187,22 @@ module LightROM_LyapunovSolvers
       !-----------------------------
       !-----     UTILITIES     -----
       !-----------------------------
-      subroutine numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info)
+      subroutine numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info, exptA)
          !> Low-rank factors
-         class(abstract_vector) , intent(inout) :: U(:) ! basis
-         real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
+         class(abstract_vector),    intent(inout) :: U(:) ! basis
+         real(kind=wp),             intent(inout) :: S(:,:) ! coefficients
          !> Linear operator and rhs Cholesky factor
-         class(abstract_linop)  , intent(in)    :: A    ! linear operator
-         class(abstract_vector) , intent(in)    :: B(:)
+         class(abstract_linop),     intent(in)    :: A    ! linear operator
+         class(abstract_vector),    intent(in)    :: B(:)
          !> Integration step size
-         real(kind=wp)          , intent(in)    :: tau
+         real(kind=wp),             intent(in)    :: tau
          !> Order of time integration
-         integer                , intent(in)    :: torder
+         integer,                   intent(in)    :: torder
          !> Information flag
-         integer                , intent(out)   :: info
+         integer,                   intent(out)   :: info
+         !> Routine for computation of the exponential propagator
+         procedure(abstract_exptA)    :: exptA
+         !type(kexpm_opts),          intent(in)    :: options
 
          !> Local variables
          integer        ::   istep, nsteps, integrator
@@ -197,35 +225,38 @@ module LightROM_LyapunovSolvers
 
          select case (integrator)
          case (1) ! Lie-Trotter splitting
-            call M_forward_map(U, S, A, tau, info)
+            call M_forward_map(U, S, A, tau, info, exptA)
             call G_forward_map(U, S, B, tau, info)
          case (2) ! Strang splitting
-            call M_forward_map(U, S, A, 0.5*tau, info)
+            call M_forward_map(U, S, A, 0.5*tau, info, exptA)
             call G_forward_map(U, S, B,     tau, info)
-            call M_forward_map(U, S, A, 0.5*tau, info)
+            call M_forward_map(U, S, A, 0.5*tau, info, exptA)
          end select
 
          return
 
       end subroutine numerical_low_rank_splitting_step
 
-      subroutine M_forward_map(U, S, A, tau, info)
+      subroutine M_forward_map(U, S, A, tau, info, exptA)
          !> Low-rank factors
-         class(abstract_vector) , intent(inout) :: U(:)   ! basis
-         real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
+         class(abstract_vector),    intent(inout) :: U(:)   ! basis
+         real(kind=wp),             intent(inout) :: S(:,:) ! coefficients
          !> Linear operator
-         class(abstract_linop)  , intent(in)    :: A 
+         class(abstract_linop),     intent(in)    :: A 
          !> Integration step size
-         real(kind=wp)          , intent(in)    :: tau
+         real(kind=wp),             intent(in)    :: tau
          !> Information flag
-         integer                , intent(out)   :: info
+         integer,                   intent(out)   :: info
+         !> Routine for computation of the exponential propagator
+         procedure(abstract_exptA)    :: exptA
+         !class(abstract_opts),      intent(in)    :: options
 
          !> Local variables
-         class(abstract_vector) , allocatable   :: Uwrk  ! basis
-         real(kind=wp)          , allocatable   :: R(:,:)   ! QR coefficient matrix
-         real(kind=wp)          , allocatable   :: P(:,:)   ! Permutation matrix
-         real(kind=wp)          , allocatable   :: wrk(:,:)
-         integer                                :: i, rk
+         class(abstract_vector), allocatable      :: Uwrk  ! basis
+         real(kind=wp),          allocatable      :: R(:,:)   ! QR coefficient matrix
+         real(kind=wp),          allocatable      :: P(:,:)   ! Permutation matrix
+         real(kind=wp),          allocatable      :: wrk(:,:)
+         integer                                  :: i, rk
 
          rk = size(U)
          !> Allocate memory
@@ -236,7 +267,7 @@ module LightROM_LyapunovSolvers
          if (.not. allocated(Uwrk)) allocate(Uwrk, source=U(1))
          call Uwrk%zero()
          do i = 1, rk
-            call k_exptA(Uwrk, A, U(i), tau, info)
+            call exptA(Uwrk, A, U(i), tau, info) !, options)
             call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
          enddo
          !> Reorthonormalize in-place
