@@ -255,7 +255,7 @@ module LightROM_LyapunovSolvers
             call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
          enddo
          !> Reorthonormalize in-place
-         call qr_factorization(U, R, P, info, ifpivot = .true.)
+         call qr_factorization(U, R, P, info)
          !> Update low-rank coefficient matrix
          wrk = matmul(S, transpose(R))
          S   = matmul(R, wrk)
@@ -326,7 +326,7 @@ module LightROM_LyapunovSolvers
          !> Construct solution U1
          call mat_axpby(U1, 1.0_wp, Uwrk, tau) ! K0 + tau*Kdot
          !> Orthonormalize in-place
-         call qr_factorization(U1, Swrk, P, info, ifpivot = .true.)
+         call qr_factorization(U1, Swrk, P, info)
          S = Swrk
 
          return
