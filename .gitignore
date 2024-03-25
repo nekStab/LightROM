@@ -33,7 +33,8 @@
 
 # testing folder
 example/laplacian1D
-example/laplacian2D
+example/DLRA_laplacian2D/output.txt
+example/DLRA_laplacian2D/laplacian.gpp
 
 # swap & tmp files
 *~
