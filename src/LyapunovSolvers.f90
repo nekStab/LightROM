@@ -1,6 +1,7 @@
 module LightROM_LyapunovSolvers
    use LightKrylov
    use LightKrylov_expmlib
+   use lightkrylov_BaseKrylov
    use LightROM_LyapunovUtils
    use LightROM_utils
    use stdlib_linalg, only : eye
@@ -238,13 +239,13 @@ module LightROM_LyapunovSolvers
          !> Local variables
          class(abstract_vector), allocatable      :: Uwrk  ! basis
          real(kind=wp),          allocatable      :: R(:,:)   ! QR coefficient matrix
-         real(kind=wp),          allocatable      :: P(:,:)   ! Permutation matrix
+         integer,                allocatable      :: perm(:)   ! Permutation vector
          real(kind=wp),          allocatable      :: wrk(:,:)
          integer                                  :: i, rk
 
          rk = size(U)
          !> Allocate memory
-         allocate(R(1:rk,1:rk)); allocate(P(1:rk,1:rk)); allocate(wrk(1:rk,1:rk)); 
+         allocate(R(1:rk,1:rk)); allocate(perm(1:rk)); allocate(wrk(1:rk,1:rk)); 
          R = 0.0_wp; wrk = 0.0_wp
 
          !> Apply propagator to initial basis
@@ -255,9 +256,9 @@ module LightROM_LyapunovSolvers
             call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
          enddo
          !> Reorthonormalize in-place
-         call qr_factorization(U, R, P, info, ifpivot = .true.)
+         call qr_factorization(U, R, perm, info, ifpivot = .true.)
          !> Update low-rank coefficient matrix
-         R   = matmul(R, transpose(P))
+         call apply_permutation(R, perm, trans = .true.)
          wrk = matmul(S, transpose(R))
          S   = matmul(R, wrk)
 
@@ -311,7 +312,7 @@ module LightROM_LyapunovSolvers
          !> Local variables
          class(abstract_vector) , allocatable   :: Uwrk(:)   
          real(kind=wp)          , allocatable   :: Swrk(:,:)
-         real(kind=wp)          , allocatable   :: P(:,:)   ! Permutation matrix
+         integer                , allocatable   :: perm(:)   ! Permutation vector
          integer                                :: rk
 
          info = 0
@@ -319,7 +320,7 @@ module LightROM_LyapunovSolvers
          rk = size(U)
          if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1));
          if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); 
-         allocate(P(1:rk,1:rk)); P = 0.0_wp
+         allocate(perm(1:rk)); perm = 0
          call mat_zero(Uwrk); Swrk = 0.0_wp
 
          call mat_mult(U1, U, S)               ! K0
@@ -327,7 +328,7 @@ module LightROM_LyapunovSolvers
          !> Construct solution U1
          call mat_axpby(U1, 1.0_wp, Uwrk, tau) ! K0 + tau*Kdot
          !> Orthonormalize in-place
-         call qr_factorization(U1, Swrk, P, info)
+         call qr_factorization(U1, Swrk, perm, info, ifpivot = .false.)
          S = Swrk
 
          return
