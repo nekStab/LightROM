@@ -8,7 +8,9 @@ module LightROM_LyapunovSolvers
    implicit none
 
    !> work arrays
+   class(abstract_vector) , allocatable   :: U1(:)
    class(abstract_vector),  allocatable   :: Uwrk(:)
+   class(abstract_vector) , allocatable   :: BBTU(:)
    real(kind=wp),           allocatable   :: Swrk(:,:)
 
    private
@@ -277,17 +279,20 @@ module LightROM_LyapunovSolvers
       integer                , intent(out)   :: info
 
       !> Local variables
-      class(abstract_vector) , allocatable   :: U1(:) 
+      class(abstract_vector) , allocatable   :: U1(:)
+      class(abstract_vector) , allocatable   :: BBTU(:)
       integer                                :: rk
 
       rk = size(U)
-      allocate(U1(1:rk), source=U(1)); call mat_zero(U1)
+      if (.not. allocated(U1))   allocate(U1(1:rk),   source=U(1)); 
+      if (.not. allocated(BBTU)) allocate(BBTU(1:rk), source=U(1));
+      call mat_zero(U1); call mat_zero(BBTU)
 
-      call K_step(U1, S, U,     B, tau, info)
+      call K_step(U1, S, BBTU, U,     B, tau, info)
 
-      call S_step(    S, U, U1, B, tau, info)
+      call S_step(    S, BBTU, U, U1,    tau, info)
 
-      call L_step(    S, U, U1, B, tau, info)
+      call L_step(    S,       U, U1, B, tau, info)
       
       !> Copy data to output
       call mat_copy(U, U1)
@@ -295,10 +300,11 @@ module LightROM_LyapunovSolvers
       return
    end subroutine G_forward_map
 
-   subroutine K_step(U1, S, U, B, tau, info)
+   subroutine K_step(U1, S, BBTU, U, B, tau, info)
       !> Low-rank factors
       class(abstract_vector) , intent(out)   :: U1(:)  ! basis
       real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
+      class(abstract_vector) , intent(out)   :: BBTU(:)  ! basis
       !> Low-rank factors
       class(abstract_vector) , intent(in)    :: U(:)   ! basis
       
@@ -310,7 +316,6 @@ module LightROM_LyapunovSolvers
       integer                , intent(out)   :: info
 
       !> Local variables
-      class(abstract_vector) , allocatable   :: Uwrk(:)   
       real(kind=wp)          , allocatable   :: Swrk(:,:)
       integer                , allocatable   :: perm(:)   ! Permutation vector
       integer                                :: rk
@@ -318,15 +323,14 @@ module LightROM_LyapunovSolvers
       info = 0
 
       rk = size(U)
-      if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1));
       if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); 
       allocate(perm(1:rk)); perm = 0
-      call mat_zero(Uwrk); Swrk = 0.0_wp
+      Swrk = 0.0_wp
 
       call mat_mult(U1, U, S)               ! K0
-      call apply_outerproduct(Uwrk, B, U)   ! Kdot
+      call apply_outerproduct(BBTU, B, U)   ! Kdot
       !> Construct solution U1
-      call mat_axpby(U1, 1.0_wp, Uwrk, tau) ! K0 + tau*Kdot
+      call mat_axpby(U1, 1.0_wp, BBTU, tau) ! K0 + tau*Kdot
       !> Orthonormalize in-place
       call qr_factorization(U1, Swrk, perm, info, ifpivot = .true.)
       call apply_permutation(Swrk, perm, trans = .true.)
@@ -335,33 +339,28 @@ module LightROM_LyapunovSolvers
       return
    end subroutine K_step
 
-   subroutine S_step(S, U, U1, B, tau, info)
+   subroutine S_step(S, BBTU, U, U1, tau, info)
       !> Low-rank factors
       real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
+      class(abstract_vector) , intent(in)    :: BBTU(:)  ! basis
       !> Low-rank factors
       class(abstract_vector) , intent(in)    :: U(:)   ! old basis
       class(abstract_vector) , intent(in)    :: U1(:)  ! updated basis
-      !> low-rank rhs
-      class(abstract_vector) , intent(in)    :: B(:)
       !> Integration step size
       real(kind=wp)          , intent(in)    :: tau
       !> Information flag
       integer                , intent(out)   :: info
 
       !> Local variables
-      class(abstract_vector) , allocatable   :: Uwrk(:)
       real(kind=wp)          , allocatable   :: Swrk(:,:)
       integer                                :: rk
 
       info = 0
 
       rk = size(U)
-      if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1));
       if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); 
-      call mat_zero(Uwrk); Swrk = 0.0_wp
-
-      call apply_outerproduct(Uwrk, B, U)
-      call mat_mult(Swrk, U1, Uwrk)          ! - Sdot
+      Swrk = 0.0_wp
+      call mat_mult(Swrk, U1, BBTU)          ! - Sdot
       !> Construct solution S1
       call mat_axpby(S, 1.0_wp, Swrk, -tau)
 
