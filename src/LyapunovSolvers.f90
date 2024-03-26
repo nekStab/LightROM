@@ -85,22 +85,24 @@ module LightROM_LyapunovSolvers
    ! - The current implementation can only deal with constant linear inhomogeneities. The
    !   algorithm can be extended to deal with general (non-linear) inhomogeneities (see
    !   Lubich & Oseledets (2014) and Mena et al. (2018))
-   ! - The current implementation is first order in time for the non-stiff solution. 
-   !   Higher order schemes are possible (see Lubich & Oseledets (2014))
    ! - The current implementation does not require an adjoint integrator. This means that
    !   the temporal order of the basic operator splitting scheme is limited to 1 (Lie-Trotter
    !   splitting) or at most 2 (Strang splitting). Higher order integrators are possible, but 
-   !   require at least some backward integration (via the adjoint) in BOTH parts. 
+   !   require at least some backward integration (via the adjoint) in BOTH parts of the splitting. 
    !   (see Sheng-Suzuki and Goldman-Kaper theorems)
    !
-   ! Input/Output Parameters:
+    ! Input/Output Parameters:
    ! ------------------------
-   ! - A        : Linear Operator (SPD)                     [Input]
-   ! - B        : Low-rank rhs of the Lyapunov equation     [Input]
-   ! - X        : Initial/Updated solution                  [Input/Output]
-   ! - info     : Iteration Information flag                [Output]
-   ! - tol      : Tolerance for convergence                 [Optional, Input]
-   ! - verbosity: Verbosity control flag                    [Optional, Input]
+   ! - U      : Low-Rank factor of the solution           [Input/Output]
+   ! - S      : Coefficients of the solution              [Input/Output]
+   ! - A      : Linear Operator (SPD)                     [Input]
+   ! - B      : Low-rank rhs of the Lyapunov equation     [Input]
+   ! - Tend   : Time horizon for integration              [Input]
+   ! - tau    : Integration time-step                     [Input]
+   ! - torder : Order of the time integration (1/2)       [Input]
+   ! - info   : Iteration Information flag                [Output]
+   ! - tol    : Tolerance for convergence                 [Optional, Input]
+   ! - exptA  : Procedure for exponential propagator      [Optiomal, Input}
    !
    ! References:
    ! -----------
