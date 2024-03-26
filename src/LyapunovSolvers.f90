@@ -167,239 +167,237 @@ module LightROM_LyapunovSolvers
       enddo dlra
       return
 
-      end subroutine numerical_low_rank_splitting_integrator
+   end subroutine numerical_low_rank_splitting_integrator
 
-   !contains
 
-      !-----------------------------
-      !-----     UTILITIES     -----
-      !-----------------------------
-      subroutine numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info, exptA)
-         !> Low-rank factors
-         class(abstract_vector),    intent(inout) :: U(:) ! basis
-         real(kind=wp),             intent(inout) :: S(:,:) ! coefficients
-         !> Linear operator and rhs Cholesky factor
-         class(abstract_linop),     intent(in)    :: A    ! linear operator
-         class(abstract_vector),    intent(in)    :: B(:)
-         !> Integration step size
-         real(kind=wp),             intent(in)    :: tau
-         !> Order of time integration
-         integer,                   intent(in)    :: torder
-         !> Information flag
-         integer,                   intent(out)   :: info
-         !> Routine for computation of the exponential propagator
-         procedure(abstract_exptA)                :: exptA
 
-         !> Local variables
-         integer        ::   istep, nsteps, integrator
+   !-----------------------------
+   !-----     UTILITIES     -----
+   !-----------------------------
+   subroutine numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info, exptA)
+      !> Low-rank factors
+      class(abstract_vector),    intent(inout) :: U(:) ! basis
+      real(kind=wp),             intent(inout) :: S(:,:) ! coefficients
+      !> Linear operator and rhs Cholesky factor
+      class(abstract_linop),     intent(in)    :: A    ! linear operator
+      class(abstract_vector),    intent(in)    :: B(:)
+      !> Integration step size
+      real(kind=wp),             intent(in)    :: tau
+      !> Order of time integration
+      integer,                   intent(in)    :: torder
+      !> Information flag
+      integer,                   intent(out)   :: info
+      !> Routine for computation of the exponential propagator
+      procedure(abstract_exptA)                :: exptA
 
-         if ( torder .eq. 1 ) then 
-            integrator = 1
-         else if ( torder .eq. 2 ) then
-            integrator = 2
-         else if ( torder .gt. 2 ) then
-            write(*,*) "INFO : Time-integration order for the operator splitting of d > 2 &
-                        &requires adjoint solves and is not implemented."
-            write(*,*) "       Resetting torder = 2." 
-            info = 1
-            integrator = 2
-         else 
-            write(*,*) "INFO : Invalid time-integration order specified."
-            info = -1
-            integrator = 2
-         endif
+      !> Local variables
+      integer        ::   istep, nsteps, integrator
 
-         select case (integrator)
-         case (1) ! Lie-Trotter splitting
-            call M_forward_map(U, S, A, tau, info, exptA)
-            call G_forward_map(U, S, B, tau, info)
-         case (2) ! Strang splitting
-            call M_forward_map(U, S, A, 0.5*tau, info, exptA)
-            call G_forward_map(U, S, B,     tau, info)
-            call M_forward_map(U, S, A, 0.5*tau, info, exptA)
-         end select
+      if ( torder .eq. 1 ) then 
+         integrator = 1
+      else if ( torder .eq. 2 ) then
+         integrator = 2
+      else if ( torder .gt. 2 ) then
+         write(*,*) "INFO : Time-integration order for the operator splitting of d > 2 &
+                     &requires adjoint solves and is not implemented."
+         write(*,*) "       Resetting torder = 2." 
+         info = 1
+         integrator = 2
+      else 
+         write(*,*) "INFO : Invalid time-integration order specified."
+         info = -1
+         integrator = 2
+      endif
 
-         return
+      select case (integrator)
+      case (1) ! Lie-Trotter splitting
+         call M_forward_map(U, S, A, tau, info, exptA)
+         call G_forward_map(U, S, B, tau, info)
+      case (2) ! Strang splitting
+         call M_forward_map(U, S, A, 0.5*tau, info, exptA)
+         call G_forward_map(U, S, B,     tau, info)
+         call M_forward_map(U, S, A, 0.5*tau, info, exptA)
+      end select
 
-      end subroutine numerical_low_rank_splitting_step
+      return
 
-      subroutine M_forward_map(U, S, A, tau, info, exptA)
-         !> Low-rank factors
-         class(abstract_vector),    intent(inout) :: U(:)   ! basis
-         real(kind=wp),             intent(inout) :: S(:,:) ! coefficients
-         !> Linear operator
-         class(abstract_linop),     intent(in)    :: A 
-         !> Integration step size
-         real(kind=wp),             intent(in)    :: tau
-         !> Information flag
-         integer,                   intent(out)   :: info
-         !> Routine for computation of the exponential propagator
-         procedure(abstract_exptA)    :: exptA
+   end subroutine numerical_low_rank_splitting_step
 
-         !> Local variables
-         class(abstract_vector), allocatable      :: Uwrk  ! basis
-         real(kind=wp),          allocatable      :: R(:,:)   ! QR coefficient matrix
-         integer,                allocatable      :: perm(:)   ! Permutation vector
-         real(kind=wp),          allocatable      :: wrk(:,:)
-         integer                                  :: i, rk
+   subroutine M_forward_map(U, S, A, tau, info, exptA)
+      !> Low-rank factors
+      class(abstract_vector),    intent(inout) :: U(:)   ! basis
+      real(kind=wp),             intent(inout) :: S(:,:) ! coefficients
+      !> Linear operator
+      class(abstract_linop),     intent(in)    :: A 
+      !> Integration step size
+      real(kind=wp),             intent(in)    :: tau
+      !> Information flag
+      integer,                   intent(out)   :: info
+      !> Routine for computation of the exponential propagator
+      procedure(abstract_exptA)    :: exptA
 
-         rk = size(U)
-         !> Allocate memory
-         allocate(R(1:rk,1:rk)); allocate(perm(1:rk)); allocate(wrk(1:rk,1:rk)); 
-         R = 0.0_wp; wrk = 0.0_wp
+      !> Local variables
+      class(abstract_vector), allocatable      :: Uwrk  ! basis
+      real(kind=wp),          allocatable      :: R(:,:)   ! QR coefficient matrix
+      integer,                allocatable      :: perm(:)   ! Permutation vector
+      real(kind=wp),          allocatable      :: wrk(:,:)
+      integer                                  :: i, rk
 
-         !> Apply propagator to initial basis
-         if (.not. allocated(Uwrk)) allocate(Uwrk, source=U(1))
-         call Uwrk%zero()
-         do i = 1, rk
-            call exptA(Uwrk, A, U(i), tau, info)
-            call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
-         enddo
-         !> Reorthonormalize in-place
-         call qr_factorization(U, R, perm, info, ifpivot = .true.)
-         !> Update low-rank coefficient matrix
-         call apply_permutation(R, perm, trans = .true.)
-         wrk = matmul(S, transpose(R))
-         S   = matmul(R, wrk)
+      rk = size(U)
+      !> Allocate memory
+      allocate(R(1:rk,1:rk)); allocate(perm(1:rk)); allocate(wrk(1:rk,1:rk)); 
+      R = 0.0_wp; wrk = 0.0_wp
 
-         return
-      end subroutine M_forward_map
+      !> Apply propagator to initial basis
+      if (.not. allocated(Uwrk)) allocate(Uwrk, source=U(1))
+      call Uwrk%zero()
+      do i = 1, rk
+         call exptA(Uwrk, A, U(i), tau, info)
+         call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
+      enddo
+      !> Reorthonormalize in-place
+      call qr_factorization(U, R, perm, info, ifpivot = .true.)
+      !> Update low-rank coefficient matrix
+      call apply_permutation(R, perm, trans = .true.)
+      wrk = matmul(S, transpose(R))
+      S   = matmul(R, wrk)
 
-      subroutine G_forward_map(U, S, B, tau, info)
-         !> Low-rank factors
-         class(abstract_vector) , intent(inout) :: U(:)   ! basis
-         real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
-         !> low-rank rhs
-         class(abstract_vector) , intent(in)    :: B(:)
-         !> Integration step size
-         real(kind=wp)          , intent(in)    :: tau
-         !> Information flag
-         integer                , intent(out)   :: info
+      return
+   end subroutine M_forward_map
 
-         !> Local variables
-         class(abstract_vector) , allocatable   :: U1(:) 
-         integer                                :: rk
+   subroutine G_forward_map(U, S, B, tau, info)
+      !> Low-rank factors
+      class(abstract_vector) , intent(inout) :: U(:)   ! basis
+      real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
+      !> low-rank rhs
+      class(abstract_vector) , intent(in)    :: B(:)
+      !> Integration step size
+      real(kind=wp)          , intent(in)    :: tau
+      !> Information flag
+      integer                , intent(out)   :: info
 
-         rk = size(U)
-         allocate(U1(1:rk), source=U(1)); call mat_zero(U1)
+      !> Local variables
+      class(abstract_vector) , allocatable   :: U1(:) 
+      integer                                :: rk
 
-         call K_step(U1, S, U,     B, tau, info)
+      rk = size(U)
+      allocate(U1(1:rk), source=U(1)); call mat_zero(U1)
 
-         call S_step(    S, U, U1, B, tau, info)
+      call K_step(U1, S, U,     B, tau, info)
 
-         call L_step(    S, U, U1, B, tau, info)
-         
-         !> Copy data to output
-         call mat_copy(U, U1)
-                  
-         return
-      end subroutine G_forward_map
+      call S_step(    S, U, U1, B, tau, info)
 
-      subroutine K_step(U1, S, U, B, tau, info)
-         !> Low-rank factors
-         class(abstract_vector) , intent(out)   :: U1(:)  ! basis
-         real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
-         !> Low-rank factors
-         class(abstract_vector) , intent(in)    :: U(:)   ! basis
-         
-         !> low-rank rhs
-         class(abstract_vector) , intent(in)    :: B(:)
-         !> Integration step size
-         real(kind=wp)          , intent(in)    :: tau
-         !> Information flag
-         integer                , intent(out)   :: info
+      call L_step(    S, U, U1, B, tau, info)
+      
+      !> Copy data to output
+      call mat_copy(U, U1)
+               
+      return
+   end subroutine G_forward_map
 
-         !> Local variables
-         class(abstract_vector) , allocatable   :: Uwrk(:)   
-         real(kind=wp)          , allocatable   :: Swrk(:,:)
-         integer                , allocatable   :: perm(:)   ! Permutation vector
-         integer                                :: rk
+   subroutine K_step(U1, S, U, B, tau, info)
+      !> Low-rank factors
+      class(abstract_vector) , intent(out)   :: U1(:)  ! basis
+      real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
+      !> Low-rank factors
+      class(abstract_vector) , intent(in)    :: U(:)   ! basis
+      
+      !> low-rank rhs
+      class(abstract_vector) , intent(in)    :: B(:)
+      !> Integration step size
+      real(kind=wp)          , intent(in)    :: tau
+      !> Information flag
+      integer                , intent(out)   :: info
 
-         info = 0
+      !> Local variables
+      class(abstract_vector) , allocatable   :: Uwrk(:)   
+      real(kind=wp)          , allocatable   :: Swrk(:,:)
+      integer                , allocatable   :: perm(:)   ! Permutation vector
+      integer                                :: rk
 
-         rk = size(U)
-         if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1));
-         if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); 
-         allocate(perm(1:rk)); perm = 0
-         call mat_zero(Uwrk); Swrk = 0.0_wp
+      info = 0
 
-         call mat_mult(U1, U, S)               ! K0
-         call apply_outerproduct(Uwrk, B, U)   ! Kdot
-         !> Construct solution U1
-         call mat_axpby(U1, 1.0_wp, Uwrk, tau) ! K0 + tau*Kdot
-         !> Orthonormalize in-place
-         call qr_factorization(U1, Swrk, perm, info, ifpivot = .false.)
-         S = Swrk
+      rk = size(U)
+      if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1));
+      if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); 
+      allocate(perm(1:rk)); perm = 0
+      call mat_zero(Uwrk); Swrk = 0.0_wp
 
-         return
-      end subroutine K_step
+      call mat_mult(U1, U, S)               ! K0
+      call apply_outerproduct(Uwrk, B, U)   ! Kdot
+      !> Construct solution U1
+      call mat_axpby(U1, 1.0_wp, Uwrk, tau) ! K0 + tau*Kdot
+      !> Orthonormalize in-place
+      call qr_factorization(U1, Swrk, perm, info, ifpivot = .false.)
+      S = Swrk
 
-      subroutine S_step(S, U, U1, B, tau, info)
-         !> Low-rank factors
-         real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
-         !> Low-rank factors
-         class(abstract_vector) , intent(in)    :: U(:)   ! old basis
-         class(abstract_vector) , intent(in)    :: U1(:)  ! updated basis
-         !> low-rank rhs
-         class(abstract_vector) , intent(in)    :: B(:)
-         !> Integration step size
-         real(kind=wp)          , intent(in)    :: tau
-         !> Information flag
-         integer                , intent(out)   :: info
+      return
+   end subroutine K_step
 
-         !> Local variables
-         class(abstract_vector) , allocatable   :: Uwrk(:)
-         real(kind=wp)          , allocatable   :: Swrk(:,:)
-         integer                                :: rk
+   subroutine S_step(S, U, U1, B, tau, info)
+      !> Low-rank factors
+      real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
+      !> Low-rank factors
+      class(abstract_vector) , intent(in)    :: U(:)   ! old basis
+      class(abstract_vector) , intent(in)    :: U1(:)  ! updated basis
+      !> low-rank rhs
+      class(abstract_vector) , intent(in)    :: B(:)
+      !> Integration step size
+      real(kind=wp)          , intent(in)    :: tau
+      !> Information flag
+      integer                , intent(out)   :: info
 
-         info = 0
+      !> Local variables
+      class(abstract_vector) , allocatable   :: Uwrk(:)
+      real(kind=wp)          , allocatable   :: Swrk(:,:)
+      integer                                :: rk
 
-         rk = size(U)
-         if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1));
-         if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); 
-         call mat_zero(Uwrk); Swrk = 0.0_wp
+      info = 0
 
-         call apply_outerproduct(Uwrk, B, U)
-         call mat_mult(Swrk, U1, Uwrk)          ! - Sdot
-         !> Construct solution S1
-         call mat_axpby(S, 1.0_wp, Swrk, -tau)
+      rk = size(U)
+      if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1));
+      if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); 
+      call mat_zero(Uwrk); Swrk = 0.0_wp
 
-         return
-      end subroutine S_step
+      call apply_outerproduct(Uwrk, B, U)
+      call mat_mult(Swrk, U1, Uwrk)          ! - Sdot
+      !> Construct solution S1
+      call mat_axpby(S, 1.0_wp, Swrk, -tau)
 
-      subroutine L_step(S, U, U1, B, tau, info)
-         !> Low-rank factors
-         real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
-         !> Low-rank factors
-         class(abstract_vector) , intent(inout) :: U(:)   ! basis before Kstep
-         class(abstract_vector) , intent(in)    :: U1(:)   ! basis after Kstep
-         !> low-rank rhs
-         class(abstract_vector) , intent(in)    :: B(:)
-         !> Integration step size
-         real(kind=wp)          , intent(in)    :: tau
-         !> Information flag
-         integer                , intent(out)   :: info
+      return
+   end subroutine S_step
 
-         !> Local variables
-         class(abstract_vector) , allocatable   :: Uwrk(:)
-         integer                                :: rk
+   subroutine L_step(S, U, U1, B, tau, info)
+      !> Low-rank factors
+      real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
+      !> Low-rank factors
+      class(abstract_vector) , intent(inout) :: U(:)   ! basis before Kstep
+      class(abstract_vector) , intent(in)    :: U1(:)   ! basis after Kstep
+      !> low-rank rhs
+      class(abstract_vector) , intent(in)    :: B(:)
+      !> Integration step size
+      real(kind=wp)          , intent(in)    :: tau
+      !> Information flag
+      integer                , intent(out)   :: info
 
-         info = 0
+      !> Local variables
+      class(abstract_vector) , allocatable   :: Uwrk(:)
+      integer                                :: rk
 
-         rk = size(U)
-         if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1));
-         call mat_zero(Uwrk)
+      info = 0
 
-         call mat_mult(Uwrk, U, transpose(S))  ! L0.T
-         call apply_outerproduct(U, B, U1)     ! Ldot.T
-         !> Construct solution Uwrk.T
-         call mat_axpby(Uwrk, 1.0_wp, U, tau)
-         !> Update S
-         call mat_mult(S, Uwrk, U1)
+      rk = size(U)
+      if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=U(1));
+      call mat_zero(Uwrk)
 
-         return
-      end subroutine L_step 
+      call mat_mult(Uwrk, U, transpose(S))  ! L0.T
+      call apply_outerproduct(U, B, U1)     ! Ldot.T
+      !> Construct solution Uwrk.T
+      call mat_axpby(Uwrk, 1.0_wp, U, tau)
+      !> Update S
+      call mat_mult(S, Uwrk, U1)
 
-   !end subroutine numerical_low_rank_splitting_integrator
+      return
+   end subroutine L_step
 
 end module lightROM_LyapunovSolvers
