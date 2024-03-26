@@ -328,7 +328,8 @@ module LightROM_LyapunovSolvers
       !> Construct solution U1
       call mat_axpby(U1, 1.0_wp, Uwrk, tau) ! K0 + tau*Kdot
       !> Orthonormalize in-place
-      call qr_factorization(U1, Swrk, perm, info, ifpivot = .false.)
+      call qr_factorization(U1, Swrk, perm, info, ifpivot = .true.)
+      call apply_permutation(Swrk, perm, trans = .true.)
       S = Swrk
 
       return
