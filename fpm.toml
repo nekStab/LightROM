@@ -49,3 +49,11 @@ source-dir = "example/DLRA_laplacian2D"
 
 [example.dependencies]
 rklib = { git="https://github.com/jacobwilliams/rklib.git" }
+
+[[example]]
+
+name = "DLRA_laplacian2D_abstract_lti"
+source-dir = "example/DLRA_laplacian2D_abstract_lti"
+
+[example.dependencies]
+rklib = { git="https://github.com/jacobwilliams/rklib.git" }
