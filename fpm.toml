@@ -9,7 +9,7 @@ description = "Lightweight fortran library for reduced-order modeling of LTI sys
 [build]
 auto-executables = true
 auto-tests = true
-auto-examples = true
+auto-examples = false
 module-naming = false
 link = ["blas", "lapack"]
 
@@ -29,26 +29,6 @@ LightKrylov = { path = "../LightKrylov" }
 [dev-dependencies]
 test-drive.git = "https://github.com/fortran-lang/test-drive"
 test-drive.tag = "v0.4.0"
-
-[[example]]
-
-#---------------------------------------------------
-#-----     SETUP FOR THE LAPLACIAN EXAMPLE     -----
-#---------------------------------------------------
-
-name = "Laplacian1D"
-source-dir = "example/laplacian1D"
-
-[example.dependencies]
-rklib = { git="https://github.com/jacobwilliams/rklib.git" }
-
-[[example]]
-
-name = "DLRA_laplacian2D"
-source-dir = "example/DLRA_laplacian2D"
-
-[example.dependencies]
-rklib = { git="https://github.com/jacobwilliams/rklib.git" }
 
 [[example]]
 
