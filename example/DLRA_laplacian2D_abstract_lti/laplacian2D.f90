@@ -1,11 +1,11 @@
-module laplacian2D
+module laplacian2D_LTI
    !> RKLIB module for time integration.
    use rklib_module
    !> exmplib module for exponential propagator
    use LightKrylov_expmlib
    !> LightKrylov for linear algebra.
    use LightKrylov
-   !use LightROM
+   use lightrom_AbstractLTIsystems
    !> Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
@@ -48,15 +48,22 @@ module laplacian2D
    real(kind=wp)            :: BBT(N**2)
 
    !-----------------------------------
-   !-----     MATVEC LAPLACIAN    -----
+   !-----     LAPLACE OPERATOR    -----
    !-----------------------------------
 
    type, extends(abstract_linop), public :: laplace_operator
    contains
       private
-      procedure, pass(self), public :: matvec  => direct_matvec_laplace_operator
-      procedure, pass(self), public :: rmatvec => direct_matvec_laplace_operator     ! dummy since Lyapunov equation for Laplacian is symmetric
+      procedure, pass(self), public :: matvec  => direct_matvec_laplace
+      procedure, pass(self), public :: rmatvec => direct_matvec_laplace     ! dummy since Lyapunov equation for Laplacian is symmetric
    end type laplace_operator
+
+   !-----------------------------------------------
+   !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
+   !-----------------------------------------------
+
+   type, extends(abstract_lti_system), public :: lti_system
+   end type lti_system
 
    !------------------------------------------
    !-----     EXPONENTIAL PROPAGATOR     -----
@@ -71,6 +78,76 @@ module laplacian2D
    end type rklib_exptA_laplacian
 
 contains
+
+   !-----     TYPE-BOUND PROCEDURE FOR VECTORS     -----
+
+   subroutine zero(self)
+      class(state_vector), intent(inout) :: self
+      self%state = 0.0_wp
+      return
+   end subroutine zero
+
+   real(kind=wp) function dot(self, vec) result(alpha)
+      class(state_vector)   , intent(in) :: self
+      class(abstract_vector), intent(in) :: vec
+      select type(vec)
+      type is (state_vector)
+         alpha = dot_product(self%state, vec%state)
+      end select
+      return
+   end function dot
+
+   subroutine scal(self, alpha)
+      class(state_vector), intent(inout) :: self
+      real(kind=wp)      , intent(in)    :: alpha
+      self%state = self%state * alpha
+      return
+   end subroutine scal
+
+   subroutine axpby(self, alpha, vec, beta)
+      class(state_vector)   , intent(inout) :: self
+      class(abstract_vector), intent(in)    :: vec
+      real(kind=wp)         , intent(in)    :: alpha, beta
+      select type(vec)
+      type is (state_vector)
+         self%state = alpha*self%state + beta*vec%state
+      end select
+      return
+   end subroutine axpby
+
+   subroutine rand(self, ifnorm)
+      class(state_vector), intent(inout) :: self
+      logical, optional,   intent(in)    :: ifnorm
+      ! internals
+      logical :: normalize
+      real(kind=wp) :: alpha
+      normalize = optval(ifnorm,.true.)
+      call random_number(self%state)
+      if (normalize) then
+         alpha = self%norm()
+         call self%scal(1.0/alpha)
+      endif
+      return
+   end subroutine rand
+
+   !-----     TYPE-BOUND PROCEDURE FOR LAPLACE OPERATOR    -----
+
+   subroutine direct_matvec_laplace(self, vec_in, vec_out)
+      !> Linear Operator.
+      class(laplace_operator),intent(in)  :: self
+      !> Input vector.
+      class(abstract_vector) , intent(in)  :: vec_in
+      !> Output vector.
+      class(abstract_vector) , intent(out) :: vec_out
+      select type(vec_in)
+      type is (state_vector)
+         select type(vec_out)
+         type is (state_vector)
+            call laplacian(vec_out%state, vec_in%state)
+         end select
+      end select
+      return
+   end subroutine direct_matvec_laplace
 
    !---------------------------------------
    !-----     CONSTRUCT THE MESH      -----
@@ -152,90 +229,6 @@ contains
       return
    end subroutine rhs
 
-   !=========================================================
-   !=========================================================
-   !=====                                               =====
-   !=====     LIGHTKRYLOV MANDATORY IMPLEMENTATIONS     =====
-   !=====                                               =====
-   !=========================================================
-   !=========================================================
-
-   !----------------------------------------------------
-   !-----     TYPE-BOUND PROCEDURE FOR VECTORS     -----
-   !----------------------------------------------------
-
-   subroutine zero(self)
-      class(state_vector), intent(inout) :: self
-      self%state = 0.0_wp
-      return
-   end subroutine zero
-
-   real(kind=wp) function dot(self, vec) result(alpha)
-      class(state_vector)   , intent(in) :: self
-      class(abstract_vector), intent(in) :: vec
-      select type(vec)
-      type is (state_vector)
-         alpha = dot_product(self%state, vec%state)
-      end select
-      return
-   end function dot
-
-   subroutine scal(self, alpha)
-      class(state_vector), intent(inout) :: self
-      real(kind=wp)      , intent(in)    :: alpha
-      self%state = self%state * alpha
-      return
-   end subroutine scal
-
-   subroutine axpby(self, alpha, vec, beta)
-      class(state_vector)   , intent(inout) :: self
-      class(abstract_vector), intent(in)    :: vec
-      real(kind=wp)         , intent(in)    :: alpha, beta
-      select type(vec)
-      type is (state_vector)
-         self%state = alpha*self%state + beta*vec%state
-      end select
-      return
-   end subroutine axpby
-
-   subroutine rand(self, ifnorm)
-      class(state_vector), intent(inout) :: self
-      logical, optional,   intent(in)    :: ifnorm
-      ! internals
-      logical :: normalize
-      real(kind=wp) :: alpha
-      normalize = optval(ifnorm,.true.)
-      call random_number(self%state)
-      if (normalize) then
-         alpha = self%norm()
-         call self%scal(1.0/alpha)
-      endif
-      return
-   end subroutine rand
-
-   !---------------------------------------------------------------
-   !-----     TYPE-BOUND PROCEDURES FOR LAPLACIAN OPERATOR    -----
-   !---------------------------------------------------------------
-
-   subroutine direct_matvec_laplace_operator(self, vec_in, vec_out)
-      !> Linear Operator.
-      class(laplace_operator),intent(in)  :: self
-      !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
-      !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
-
-      select type(vec_in)
-      type is (state_vector)
-         select type(vec_out)
-         type is (state_vector)
-            call laplacian(vec_out%state, vec_in%state)
-         end select
-      end select
-   
-      return
-   end subroutine direct_matvec_laplace_operator
-
    !-----------------------------------------------------------------------------
    !-----     TYPE-BOUND PROCEDURES FOR THE EXPONENTIAL PROPAGATOR RKLIB    -----
    !-----------------------------------------------------------------------------
@@ -267,4 +260,4 @@ contains
       return
    end subroutine direct_solver_vec
 
-end module laplacian2D
+end module laplacian2D_LTI

@@ -2,8 +2,9 @@ program demo
    use LightKrylov
    use LightKrylov_expmlib
    use lightKrylov_utils
-   use Laplacian2D
-   use Laplacian2D_Lyapunov
+   use Laplacian2D_LTI
+   use Laplacian2D_LTI_Lyapunov
+   use lightrom_AbstractLTIsystems
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
    use LightROM_utils
@@ -35,6 +36,12 @@ program demo
 
    ! Exponential propagator (RKlib).
    type(rklib_lyapunov_mat), allocatable :: RK_propagator
+
+   ! LTI system
+   type(lti_system)                :: LTI
+   type(state_vector), allocatable :: CT(:)
+   real(kind=wp), allocatable      :: D(:,:)
+   integer                         :: p
 
    ! Laplacian
    type(laplace_operator),   allocatable :: A
@@ -69,7 +76,7 @@ program demo
    ! LAPACK SOLUTION
    real(wp)  :: Xref(N,N)
    ! DSYTD2
-   real(wp)  :: D(N), work(N), wr(N), wi(N)
+   real(wp)  :: Dm(N), work(N), wr(N), wi(N)
    real(wp)  :: E(N-1), tw(N-1)
    real(wp)  :: T(N,N), Q(N,N), Z(N,N), Vdata(N,N), Wdata(N,N), Ydata(N,N)
    real(wp)  :: scale
@@ -110,6 +117,13 @@ program demo
    BBTdata = -matmul(Bdata(:,1:rk_b), transpose(Bdata(:,1:rk_b)))
    BBT(1:N**2) = -reshape(BBTdata, shape(BBT))
 
+   p = 1
+   LTI = lti_system()
+   allocate(LTI%A,         source=A)
+   allocate(LTI%B(1:rk_b), source=B(1:rk_b));
+   allocate(LTI%CT(1:p),   source=B(1)); call mat_zero(LTI%CT)
+   allocate(LTI%D(1:p,1:rk_b)); LTI%D = 0.0_wp
+
    ! Define initial condition
    call random_number(U0(:, 1:rk_X0))
    ! Compute SVD to get low-rank representation
@@ -134,10 +148,10 @@ program demo
    call build_operator(Adata)
 
    ! Transform operator to tridiagonal form
-   call dsytd2('L', N, Adata, N, D, E, tw, info)
+   call dsytd2('L', N, Adata, N, Dm, E, tw, info)
    
    ! Reconstruct T and Q
-   call reconstruct_TQ(T, Q, Adata(1:N,1:N), D, E, tw)
+   call reconstruct_TQ(T, Q, Adata(1:N,1:N), Dm, E, tw)
    
    ! compute real Schur form A = Z @ T @ Z.T
    call dhseqr('S', 'I', N, 1, N, T, N, wr, wi, Z, N, work, N, info )
@@ -225,7 +239,7 @@ program demo
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
             call numerical_low_rank_splitting_integrator(U(1:rk), S(1:rk,1:rk), &
-                                                       & A, B, Tend, dt, torder, info)
+                                                       & LTI, Tend, dt, torder, info)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution

@@ -1,5 +1,5 @@
-module Laplacian2D_Lyapunov
-   use Laplacian2D
+module Laplacian2D_LTI_Lyapunov
+   use Laplacian2D_LTI
    !> RKLIB module for time integration.
    use rklib_module
    !> exmplib module for exponential propagator
@@ -55,13 +55,56 @@ module Laplacian2D_Lyapunov
 
 contains
 
-   !=========================================
-   !=========================================
-   !=====                               =====
-   !=====     LAPLACIAN LYAPUNOV EQ     =====
-   !=====                               =====
-   !=========================================
-   !=========================================
+   !-----     TYPE-BOUND PROCEDURE FOR VECTORS     -----
+
+   subroutine zero(self)
+      class(state_matrix), intent(inout) :: self
+      self%state = 0.0_wp
+      return
+   end subroutine zero
+   
+   real(kind=wp) function dot(self, vec) result(alpha)
+      class(state_matrix)   , intent(in) :: self
+      class(abstract_vector), intent(in) :: vec
+      select type(vec)
+      type is(state_matrix)
+          alpha = dot_product(self%state, vec%state)
+      end select
+      return
+   end function dot
+   
+   subroutine scal(self, alpha)
+      class(state_matrix), intent(inout) :: self
+      real(kind=wp)      , intent(in)    :: alpha
+      self%state = self%state * alpha
+      return
+   end subroutine scal  
+   
+   subroutine axpby(self, alpha, vec, beta)
+      class(state_matrix)   , intent(inout) :: self
+      class(abstract_vector), intent(in)    :: vec
+      real(kind=wp)         , intent(in)    :: alpha, beta
+      select type(vec)
+      type is(state_matrix)
+          self%state = alpha*self%state + beta*vec%state
+      end select
+      return
+   end subroutine axpby
+   
+   subroutine rand(self, ifnorm)
+      class(state_matrix), intent(inout) :: self
+      logical, optional,   intent(in)    :: ifnorm
+      ! internals
+      logical :: normalize
+      real(kind=wp) :: alpha
+      normalize = optval(ifnorm, .true.)
+      call random_number(self%state)
+      if (normalize) then
+         alpha = self%norm()
+         call self%scal(1.0/alpha)
+      endif
+      return
+   end subroutine rand
 
    !---------------------------------------
    !-----     CONSTRUCT THE MESH      -----
@@ -156,67 +199,6 @@ contains
       return
    end subroutine rhs_lyap
 
-   !=========================================================
-   !=========================================================
-   !=====                                               =====
-   !=====     LIGHTKRYLOV MANDATORY IMPLEMENTATIONS     =====
-   !=====                                               =====
-   !=========================================================
-   !=========================================================
-
-   !----------------------------------------------------
-   !-----     TYPE-BOUND PROCEDURE FOR VECTORS     -----
-   !----------------------------------------------------
-
-   subroutine zero(self)
-      class(state_matrix), intent(inout) :: self
-      self%state = 0.0_wp
-      return
-   end subroutine zero
-
-   real(kind=wp) function dot(self, vec) result(alpha)
-      class(state_matrix)   , intent(in) :: self
-      class(abstract_vector), intent(in) :: vec
-      select type(vec)
-      type is(state_matrix)
-          alpha = dot_product(self%state, vec%state)
-      end select
-      return
-   end function dot
-
-   subroutine scal(self, alpha)
-      class(state_matrix), intent(inout) :: self
-      real(kind=wp)      , intent(in)    :: alpha
-      self%state = self%state * alpha
-      return
-   end subroutine scal  
-
-   subroutine axpby(self, alpha, vec, beta)
-      class(state_matrix)   , intent(inout) :: self
-      class(abstract_vector), intent(in)    :: vec
-      real(kind=wp)         , intent(in)    :: alpha, beta
-      select type(vec)
-      type is(state_matrix)
-          self%state = alpha*self%state + beta*vec%state
-      end select
-      return
-   end subroutine axpby
-
-   subroutine rand(self, ifnorm)
-      class(state_matrix), intent(inout) :: self
-      logical, optional,   intent(in)    :: ifnorm
-      ! internals
-      logical :: normalize
-      real(kind=wp) :: alpha
-      normalize = optval(ifnorm, .true.)
-      call random_number(self%state)
-      if (normalize) then
-         alpha = self%norm()
-         call self%scal(1.0/alpha)
-      endif
-      return
-   end subroutine rand
-
    !--------------------------------------------------------------
    !-----     TYPE-BOUND PROCEDURES FOR LYAPUNOV OPERATOR    -----
    !--------------------------------------------------------------
@@ -276,4 +258,4 @@ contains
       return
    end subroutine direct_solver_mat
 
-end module Laplacian2D_Lyapunov
+end module Laplacian2D_LTI_Lyapunov
