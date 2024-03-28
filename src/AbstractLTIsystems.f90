@@ -1,6 +1,6 @@
 module lightrom_AbstractLTIsystems
    !> Use the abstract linear operator types defined in LightKrylov.
-   use LightKrylov, only : abstract_linop
+   use LightKrylov, only : abstract_linop, abstract_vector
    implicit none
    include "dtypes.h"
 
@@ -17,40 +17,30 @@ module lightrom_AbstractLTIsystems
    !> Abstract continuous LTI system.
    type, extends(abstract_dynamical_system), abstract, public :: abstract_lti_system
       !> Dynamics matrix.
-      class(abstract_linop), allocatable :: A
+      class(abstract_linop),  allocatable :: A
       !> Input-to-state matrix.
-      class(abstract_linop), allocatable :: B
+      class(abstract_vector), allocatable :: B(:)
       !> State-to-output matrix.
-      class(abstract_linop), allocatable :: C
+      class(abstract_vector), allocatable :: CT(:)
       !> Feedthrough matrix.
-      real(kind=wp)        , allocatable :: D(:, :)
+      real(kind=wp)        ,  allocatable :: D(:, :)
    contains
-      private
-      procedure(abstract_apply), deferred, public :: apply_Q
-      procedure(abstract_apply), deferred, public :: apply_Rinv
    end type abstract_lti_system
-
-   abstract interface
-      subroutine abstract_apply(state)
-         use lightkrylov_AbstractVector
-         class(abstract_vector), intent(inout) :: state
-      end subroutine abstract_apply
-   end interface
 
    !> Abstract discrete LTI system.
    type, extends(abstract_dynamical_system), abstract, public :: abstract_dlti_system
       !> Dynamic matrix.
-      class(abstract_linop), allocatable :: A
+      class(abstract_linop),  allocatable :: A
       !> Input-to-state matrix.
-      class(abstract_linop), allocatable :: B
+      class(abstract_vector), allocatable :: B(:)
       !> State-to-output matrix.
-      class(abstract_linop), allocatable :: C
+      class(abstract_vector), allocatable :: CT(:)
       !> Feedthrough matrix.
-      real(kind=wp)        , allocatable :: D(:, :)
+      real(kind=wp)        ,  allocatable :: D(:, :)
       !> Sampling period.
-      real(kind=wp)                      :: dt = 1.0_wp
+      real(kind=wp)                       :: dt = 1.0_wp
    contains
-      private
+     private
    end type abstract_dlti_system
 
 contains
