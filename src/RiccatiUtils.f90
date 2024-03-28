@@ -4,7 +4,7 @@ module LightROM_RiccatiUtils
 
    private
    !> Matrix operations for abstract vector types
-   public :: apply_CTQC
+   public
 
    !------------------------------
    !-----     INTERFACES     -----
