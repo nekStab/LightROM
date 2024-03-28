@@ -173,8 +173,6 @@ module LightROM_LyapunovSolvers
 
    end subroutine numerical_low_rank_splitting_integrator
 
-
-
    !-----------------------------
    !-----     UTILITIES     -----
    !-----------------------------

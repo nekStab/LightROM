@@ -35,6 +35,7 @@
 example/laplacian1D
 example/DLRA_laplacian2D/output.txt
 example/DLRA_laplacian2D/laplacian.gpp
+example/DLRA_cartpole
 
 # data files
 *.npy
