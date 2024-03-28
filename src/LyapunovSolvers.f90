@@ -2,6 +2,7 @@ module LightROM_LyapunovSolvers
    use LightKrylov
    use LightKrylov_expmlib
    use lightkrylov_BaseKrylov
+   use lightrom_AbstractLTIsystems
    use LightROM_LyapunovUtils
    use LightROM_utils
    use stdlib_linalg, only : eye
@@ -115,13 +116,12 @@ module LightROM_LyapunovSolvers
    !     340, 602-614
    !
    !=======================================================================================
-   subroutine numerical_low_rank_splitting_integrator(U,S,A,B,Tend,tau,torder,info,exptA)
+   subroutine numerical_low_rank_splitting_integrator(U,S,LTI,Tend,tau,torder,info,exptA)
       !> Low-rank factors
       class(abstract_vector),              intent(inout) :: U(:) ! basis
       real(kind=wp),                       intent(inout) :: S(:,:) ! coefficients
-      !> System
-      class(abstract_linop),               intent(in)    :: A    ! linear operator
-      class(abstract_vector),              intent(in)    :: B(:) !
+      ! LTI system
+      class(abstract_lti_system),          intent(in)    :: LTI
       !> Integration time and step size
       real(kind=wp),                       intent(in)    :: Tend
       real(kind=wp),                       intent(inout) :: tau  ! desired/effective time step
@@ -159,7 +159,7 @@ module LightROM_LyapunovSolvers
       dlra : do istep = 1, nsteps
          
          !> dynamical low-rank approximation step
-         call numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info, p_exptA)
+         call numerical_low_rank_splitting_step(U, S, LTI, tau, torder, info, p_exptA)
 
          T = T + tau
          !> here we should do some checks such as whether we have reached steady state
@@ -176,13 +176,12 @@ module LightROM_LyapunovSolvers
    !-----------------------------
    !-----     UTILITIES     -----
    !-----------------------------
-   subroutine numerical_low_rank_splitting_step(U, S, A, B, tau, torder, info, exptA)
+   subroutine numerical_low_rank_splitting_step(U, S, LTI, tau, torder, info, exptA)
       !> Low-rank factors
       class(abstract_vector),    intent(inout) :: U(:) ! basis
       real(kind=wp),             intent(inout) :: S(:,:) ! coefficients
-      !> Linear operator and rhs Cholesky factor
-      class(abstract_linop),     intent(in)    :: A    ! linear operator
-      class(abstract_vector),    intent(in)    :: B(:)
+      ! LTI system
+      class(abstract_lti_system),intent(in)    :: LTI
       !> Integration step size
       real(kind=wp),             intent(in)    :: tau
       !> Order of time integration
@@ -213,24 +212,24 @@ module LightROM_LyapunovSolvers
 
       select case (integrator)
       case (1) ! Lie-Trotter splitting
-         call M_forward_map(U, S, A, tau, info, exptA)
-         call G_forward_map(U, S, B, tau, info)
+         call M_forward_map(U, S, LTI, tau, info, exptA)
+         call G_forward_map(U, S, LTI, tau, info)
       case (2) ! Strang splitting
-         call M_forward_map(U, S, A, 0.5*tau, info, exptA)
-         call G_forward_map(U, S, B,     tau, info)
-         call M_forward_map(U, S, A, 0.5*tau, info, exptA)
+         call M_forward_map(U, S, LTI, 0.5*tau, info, exptA)
+         call G_forward_map(U, S, LTI,     tau, info)
+         call M_forward_map(U, S, LTI, 0.5*tau, info, exptA)
       end select
 
       return
 
    end subroutine numerical_low_rank_splitting_step
 
-   subroutine M_forward_map(U, S, A, tau, info, exptA)
+   subroutine M_forward_map(U, S, LTI, tau, info, exptA)
       !> Low-rank factors
       class(abstract_vector),    intent(inout) :: U(:)   ! basis
       real(kind=wp),             intent(inout) :: S(:,:) ! coefficients
-      !> Linear operator
-      class(abstract_linop),     intent(in)    :: A 
+      ! LTI system
+      class(abstract_lti_system),intent(in)    :: LTI
       !> Integration step size
       real(kind=wp),             intent(in)    :: tau
       !> Information flag
@@ -254,7 +253,7 @@ module LightROM_LyapunovSolvers
       if (.not. allocated(Uwrk)) allocate(Uwrk, source=U(1))
       call Uwrk%zero()
       do i = 1, rk
-         call exptA(Uwrk, A, U(i), tau, info)
+         call exptA(Uwrk, LTI%A, U(i), tau, info)
          call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
       enddo
       !> Reorthonormalize in-place
@@ -267,12 +266,12 @@ module LightROM_LyapunovSolvers
       return
    end subroutine M_forward_map
 
-   subroutine G_forward_map(U, S, B, tau, info)
+   subroutine G_forward_map(U, S, LTI, tau, info)
       !> Low-rank factors
       class(abstract_vector) , intent(inout) :: U(:)   ! basis
       real(kind=wp)          , intent(inout) :: S(:,:) ! coefficients
-      !> low-rank rhs
-      class(abstract_vector) , intent(in)    :: B(:)
+      ! LTI system
+      class(abstract_lti_system),intent(in)  :: LTI
       !> Integration step size
       real(kind=wp)          , intent(in)    :: tau
       !> Information flag
@@ -288,11 +287,11 @@ module LightROM_LyapunovSolvers
       if (.not. allocated(BBTU)) allocate(BBTU(1:rk), source=U(1));
       call mat_zero(U1); call mat_zero(BBTU)
 
-      call K_step(U1, S, BBTU, U,     B, tau, info)
+      call K_step(U1, S, BBTU, U,     LTI%B, tau, info)
 
-      call S_step(    S, BBTU, U, U1,    tau, info)
+      call S_step(    S, BBTU, U, U1,        tau, info)
 
-      call L_step(    S,       U, U1, B, tau, info)
+      call L_step(    S,       U, U1, LTI%B, tau, info)
       
       !> Copy data to output
       call mat_copy(U, U1)

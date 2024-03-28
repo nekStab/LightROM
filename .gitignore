@@ -33,9 +33,9 @@
 
 # testing folder
 example/laplacian1D
-example/DLRA_laplacian2D/output.txt
-example/DLRA_laplacian2D/laplacian.gpp
-example/DLRA_cartpole
+example/DLRA_laplacian2D
+example/DLRA_laplacian2D_abstract_lti/output.txt
+example/DLRA_laplacian2D_abstract_lti/laplacian.gpp
 
 # data files
 *.npy
