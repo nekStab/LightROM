@@ -32,7 +32,7 @@ program demo
    ! vector of dt values
    real(wp), allocatable :: dtv(:)
    ! vector of rank values
-   real(wp), allocatable :: rkv(:)
+   integer,  allocatable :: rkv(:)
 
    ! Exponential propagator (RKlib).
    type(rklib_lyapunov_mat), allocatable :: RK_propagator
