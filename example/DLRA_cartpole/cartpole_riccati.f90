@@ -7,6 +7,9 @@ module cartpole_riccati
 
    implicit none
 
+   private
+   public :: CARE
+
    !-----------------------------------------------------------
    !-----     LIGHTKRYLOV VECTOR TYPE FOR MATRIX STATE    -----
    !-----------------------------------------------------------
@@ -105,16 +108,17 @@ contains
 
       xm = reshape(x, shape(xm))
 
-      !> Sets the internal variables.
-      vm  = 0.0_wp
-
-      vm = matmul(A, xm) + matmul(xm, transpose(A)) + CTQC - matmul(xm, matmul(BRinvBT, xm))
-
+      vm = CARE(xm, Amat, Qmat, BRinvBTmat)
       !> Combine the parts and copy result to the output array.
       f(1:N**2) = reshape(vm, shape(f))
       
       return
    end subroutine rhs_riccati
+
+   function CARE(X,A,Q,BRinvBT) result(Y)
+      real(kind=wp), dimension(n,n) :: X, A, Q, BRinvBT, Y
+      Y = matmul(transpose(Amat), X) + matmul(X, Amat) + Qmat - matmul(X, matmul(BRinvBTmat, X))
+   end function CARE
 
    !------------------------------------------------------------------------
    !-----     TYPE-BOUND PROCEDURES FOR THE EXPONENTIAL PROPAGATOR     -----
