@@ -6,6 +6,7 @@ module LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
    use LightROM_utils
    use stdlib_linalg, only : eye
+   use stdlib_optval, only : optval
    implicit none
 
    !> work arrays
@@ -16,7 +17,7 @@ module LightROM_LyapunovSolvers
 
    private
    public :: numerical_low_rank_splitting_integrator
-   !public :: M_forward_map, G_forward_map, K_step, S_step, L_step
+   public :: M_forward_map, G_forward_map, K_step, S_step, L_step
 
    contains
 
@@ -224,7 +225,7 @@ module LightROM_LyapunovSolvers
 
    end subroutine numerical_low_rank_splitting_step
 
-   subroutine M_forward_map(U, S, LTI, tau, info, exptA)
+   subroutine M_forward_map(U, S, LTI, tau, info, exptA, iftrans)
       !> Low-rank factors
       class(abstract_vector),    intent(inout) :: U(:)   ! basis
       real(kind=wp),             intent(inout) :: S(:,:) ! coefficients
@@ -236,6 +237,9 @@ module LightROM_LyapunovSolvers
       integer,                   intent(out)   :: info
       !> Routine for computation of the exponential propagator
       procedure(abstract_exptA)    :: exptA
+      !> use transpose
+      logical, optional,         intent(in)    :: iftrans
+      logical                                  :: trans
 
       !> Local variables
       class(abstract_vector), allocatable      :: Uwrk  ! basis
@@ -243,6 +247,9 @@ module LightROM_LyapunovSolvers
       integer,                allocatable      :: perm(:)   ! Permutation vector
       real(kind=wp),          allocatable      :: wrk(:,:)
       integer                                  :: i, rk
+
+      ! Optional argument
+      trans = optval(iftrans, .false.)
 
       rk = size(U)
       !> Allocate memory
@@ -253,7 +260,7 @@ module LightROM_LyapunovSolvers
       if (.not. allocated(Uwrk)) allocate(Uwrk, source=U(1))
       call Uwrk%zero()
       do i = 1, rk
-         call exptA(Uwrk, LTI%A, U(i), tau, info)
+         call exptA(Uwrk, LTI%A, U(i), tau, info, trans)
          call U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
       enddo
       !> Reorthonormalize in-place
