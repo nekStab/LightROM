@@ -354,7 +354,7 @@ module LightROM_RiccatiSolvers
       end if
 
       ! non-linear part --> Uwrk0
-      call mat_mult(BTU, LTI%B, U1)                                        !                                      B.T @ U0
+      call mat_mult(BTU, LTI%B, U)                                         !                                      B.T @ U0
       call mat_mult(Uwrk0, U1, matmul(UTB, matmul(Rinv, matmul(BTU, S))))  ! (U0 @ S0) @ (U0.T @ B) @ (R^(-1) @ ((B.T @ U0) @ S0))
       
       ! combine to form G( K @ U.T ) @ U --> Uwrk0
@@ -477,8 +477,8 @@ module LightROM_RiccatiSolvers
       end do
 
       ! non-linear part --> U
-      call mat_mult(BTU, LTI%B, Uwrk1)       !                                     B.T @ U0 @ S.T
       call mat_mult(UTB, U1, LTI%B)          !               U1.T @ B
+      call mat_mult(BTU, LTI%B, Uwrk1)       !                                      B.T @ U0 @ S.T
       Swrk0 = matmul(UTB, matmul(Rinv, BTU)) !              (U1.T @ B) @ (R^(-1) @ (B.T @ U0 @ S.T))
       call mat_mult(U, Uwrk1, Swrk0)         ! (U0 @ S.T) @ (U1.T @ B  @  R^(-1) @  B.T @ U0 @ S.T)
 
