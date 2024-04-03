@@ -1,5 +1,6 @@
 module LightROM_RiccatiSolvers
    use LightKrylov
+   use LightKrylov_utils, only : print_mat
    use LightKrylov_expmlib
    use lightkrylov_BaseKrylov
    use LightROM_LyapunovUtils
@@ -228,13 +229,18 @@ module LightROM_RiccatiSolvers
          call G_forward_map_riccati(U,     S,     LTI, Qc, Rinv,    tau, info)
       case (2) ! Strang splitting
          rk = size(U)
-         if (.not. allocated(Uwrk0)) allocate(Uwrk0(1:rk), source=Uwrk0(1)); call mat_zero(Uwrk0)
-         if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk)); Swrk0 = 0.0_wp
          call M_forward_map        (U,     S,     LTI,           0.5*tau, info, exptA, iftrans=.true.)
          ! Predictor step
+         if (.not. allocated(Uwrk0)) allocate(Uwrk0(1:rk), source=U(1:rk))
+         if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk))
+         ! Initialize with current state
+         call mat_copy(Uwrk0, U); Swrk0 = S
          call G_forward_map_riccati(Uwrk0, Swrk0, LTI, Qc, Rinv,     tau, info)
+         ! Compute the intermediate state at t = t0 + dt/2 as the 
+         ! average of states at t0 (U,S) and t0 + dt (Uwrk0,Swrk0)
+         call mat_axpby(Uwrk0, 0.5_wp, U, 0.5_wp)
          ! Second order integration
-         call G_forward_map_riccati(U,     S,     LTI, Qc, Rinv,     tau, info, Uwrk0, Swrk0)
+         call G_forward_map_riccati(U,     S,     LTI, Qc, Rinv,     tau, info, Uwrk0)
          call M_forward_map        (U,     S,     LTI,           0.5*tau, info, exptA, iftrans=.true.)
       end select
 
@@ -242,7 +248,7 @@ module LightROM_RiccatiSolvers
 
    end subroutine numerical_low_rank_splitting_riccati_step
 
-   subroutine G_forward_map_riccati(U, S, LTI, Qc, Rinv, tau, info, Upred, Spred)
+   subroutine G_forward_map_riccati(U, S, LTI, Qc, Rinv, tau, info, Upred)
       !> Low-rank factors
       class(abstract_vector),           intent(inout) :: U(:)   ! basis
       real(kind=wp),                    intent(inout) :: S(:,:) ! coefficients
@@ -257,8 +263,6 @@ module LightROM_RiccatiSolvers
       !> Intermediate values
       class(abstract_vector), optional, intent(in)    :: Upred(:)   ! basis
       class(abstract_vector),           allocatable   :: Up(:)  
-      real(kind=wp),          optional, intent(in)    :: Spred(:,:) ! coefficients
-      real(kind=wp),                    allocatable   :: Sp(:,:)
       
       !> Local variables
       class(abstract_vector),           allocatable   :: U1(:)
@@ -272,26 +276,22 @@ module LightROM_RiccatiSolvers
       if (.not. allocated(QU))  allocate(QU(1:rk), source=U(1)); call mat_zero(QU) 
       if (.not. allocated(UTB)) allocate(UTB(1:rk,1:m)); UTB = 0.0_wp
 
-      if ( present(Upred) .and. present(Spred) ) then
+      !if ( present(Upred) .and. present(Spred) ) then
+      if (present(Upred)) then
          ! second order in time
          allocate(Up(1:rk), source=Upred(1:rk))
-         allocate(Sp(1:rk,1:rk)); Sp = Spred
-         ! Compute the intermediate state at t = t0 + dt/2 as the 
-         ! average of states at t0 (U,S) and t0 + dt (Up,Sp)
-         call mat_axpby(Up, 0.5_wp, U, 0.5_wp)
-         call mat_axpby(Sp, 0.5_wp, S, 0.5_wp)
          ! first steps based on previous state (U,S)
-         call K_step_riccati(U1, S,  QU, UTB, U,      LTI, Qc, Rinv, 0.5*tau, info)
-         call S_step_riccati(    S,  QU, UTB, U,  U1, LTI, Qc, Rinv, 0.5*tau, info)
-         call L_step_riccati(    S,           U,  U1, LTI, Qc, Rinv,     tau, info)
+         call K_step_riccati(U1, S, QU, UTB, U,      LTI, Qc, Rinv, 0.5*tau, info)
+         call S_step_riccati(    S, QU, UTB, U,  U1, LTI, Qc, Rinv, 0.5*tau, info)
+         call L_step_riccati(    S,          U,  U1, LTI, Qc, Rinv,     tau, info)
          ! second set in reverse order based on intermediate state (Up,Sp)
-         call S_step_riccati(    Sp, QU, UTB, Up, U1, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true.)
-         call K_step_riccati(U1, Sp, QU, UTB, Up,     LTI, Qc, Rinv, 0.5*tau, info, reverse=.true.)
+         call S_step_riccati(    S, QU, UTB, Up, U1, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true.)
+         call K_step_riccati(U1, S, QU, UTB, Up,     LTI, Qc, Rinv, 0.5*tau, info, reverse=.true.)
       else
          ! first order in time
-         call K_step_riccati(U1, S,  QU, UTB, U,      LTI, Qc, Rinv,     tau, info)
-         call S_step_riccati(    S,  QU, UTB, U,  U1, LTI, Qc, Rinv,     tau, info)
-         call L_step_riccati(    S,           U,  U1, LTI, Qc, Rinv,     tau, info)
+         call K_step_riccati(U1, S, QU, UTB, U,      LTI, Qc, Rinv,     tau, info)
+         call S_step_riccati(    S, QU, UTB, U,  U1, LTI, Qc, Rinv,     tau, info)
+         call L_step_riccati(    S,          U,  U1, LTI, Qc, Rinv,     tau, info)
       end if
       
       !> Copy data to output
@@ -348,9 +348,6 @@ module LightROM_RiccatiSolvers
          ! compute QU and UTB and pass to S step
          call mat_zero(QU)
          call apply_CTQcC(QU, U, LTI, Qc)
-         !do i = 1, rk
-         !   call Q%matvec(U(i), QU(i))
-         !end do
          call mat_mult(UTB, U, LTI%B)                                      !              U0.T @ B
       end if
 
@@ -416,9 +413,6 @@ module LightROM_RiccatiSolvers
          ! compute QU and UTB pass it to K step
          call mat_zero(QU)
          call apply_CTQcC(QU, U, LTI, Qc)
-         !do i = 1, rk
-         !   call Q%matvec(U(i), QU(i))
-         !end do
          call mat_mult(UTB, U, LTI%B)                              !       U0.T @ B
       endif
       call mat_mult(Swrk0, U1, QU)
@@ -475,9 +469,6 @@ module LightROM_RiccatiSolvers
       ! Constant part --> Uwrk0
       call mat_zero(Uwrk0)
       call apply_CTQcC(Uwrk0, U1, LTI, Qc)
-      !do i = 1, rk
-      !   call Q%matvec(U1(i), Uwrk0(i))
-      !end do
 
       ! non-linear part --> U
       call mat_mult(UTB, U1, LTI%B)          !               U1.T @ B
@@ -503,12 +494,15 @@ module LightROM_RiccatiSolvers
       class(abstract_lti_system), intent(in)   :: LTI
       real(kind=wp),              intent(in)   :: Qc(:,:)
       ! internals
-      integer                                  :: rk_c
-      real(kind=wp),               allocatable :: wrk(:,:)
-      allocate(wrk(1:rk_c, 1:size(basis_in))); wrk = 0.0_wp
-      
+      integer                                  :: sc, sb
+      real(kind=wp),               allocatable :: wrk(:,:), wrk2(:,:)
+
+      sc = size(LTI%CT)
+      sb = size(basis_in)
+      allocate(wrk( 1:sc,1:sb)); wrk = 0.0_wp
+
       call mat_mult(wrk, LTI%CT, basis_in)
-      call mat_mult(basis_out, LTI%CT, matmul(wrk, Qc))
+      call mat_mult(basis_out, LTI%CT, matmul(Qc, wrk))
    
       return   
    end subroutine apply_CTQcC

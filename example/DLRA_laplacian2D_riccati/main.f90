@@ -223,4 +223,66 @@ program demo
                      & real(clock_stop-clock_start)/real(clock_rate)
    end do
 
+   !------------------
+   ! COMPUTE DLRA FOR SHORTEST INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
+   !------------------
+
+   write(*,*)
+   write(*,*) 'III. Compute approximate solution of the differential Riccati equation using DLRA:'
+   write(*,*)
+   write(*,'(A10,A4,A4,A10,A8,A26,A20)') 'DLRA:','  rk',' TO','dt','Tend','|| X_DLRA - X_RK ||_2/N', 'Elapsed time'
+   write(*,*) '         ------------------------------------------------------------------------'
+
+   ! Choose relevant reference case from RKlib
+   X_RKlib_ref = X_RKlib(:,:,1)
+
+   ! Choose input ranks and integration steps
+   nrk = 4; ndt = 5
+   allocate(rkv(1:nrk)); allocate(dtv(1:ndt)); 
+   rkv = (/ 2, 6, 10, 14 /)
+   dtv = logspace(-5.0_wp, -1.0_wp, ndt)
+
+   do torder = 1, 2
+      do i = 1, nrk
+         rk = rkv(i)
+
+         allocate(U(1:rk)); call mat_zero(U)
+         allocate(S(1:rk,1:rk)); S = 0.0_wp
+         write(*,'(A10,I1)') ' torder = ', torder
+
+         do j = ndt, 1, -1
+            dt = dtv(j)
+            if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
+
+            ! Reset input
+            call set_state(U(1:rk), U0(:,1:rk))
+            S(1:rk,1:rk) = S0(1:rk,1:rk)
+
+            ! run step
+            call system_clock(count=clock_start)     ! Start Timer
+            call numerical_low_rank_splitting_integrator_riccati(U(1:rk), S(1:rk,1:rk), &
+                                                 & LTI, Qc, Rinv, Tend, dt, torder, info)
+            call system_clock(count=clock_stop)      ! Stop Timer
+
+            ! Reconstruct solution
+            call get_state(U_out(:,1:rk), U)
+            X_out = matmul(U_out(:,1:rk), matmul(S(1:rk,1:rk), transpose(U_out(:,1:rk))))
+      
+            write(*,'(A10,I4," TO",I1,F10.6,F8.4,E26.8,F18.4," s")') 'OUTPUT', &
+                              & rk, torder, dt, Tend, &
+                              & norm2(X_RKlib_ref - X_out)/N, &
+                              & real(clock_stop-clock_start)/real(clock_rate)
+         end do
+
+         if (save) then
+            write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")'), torder, rk
+            call save_npy(oname, X_out)
+         end if
+
+         deallocate(U);
+         deallocate(S);
+
+      end do
+   end do
+
 end program demo
