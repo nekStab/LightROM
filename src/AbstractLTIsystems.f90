@@ -1,4 +1,4 @@
-module lightrom_AbstractLTIsystems
+module LightROM_AbstractLTIsystems
    !> Use the abstract linear operator types defined in LightKrylov.
    use LightKrylov, only : abstract_linop, abstract_vector
    implicit none
@@ -45,4 +45,4 @@ module lightrom_AbstractLTIsystems
 
 contains
 
-end module lightrom_AbstractLTIsystems
+end module LightROM_AbstractLTIsystems
