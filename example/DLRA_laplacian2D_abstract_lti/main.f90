@@ -4,7 +4,7 @@ program demo
    use lightKrylov_utils
    use Laplacian2D_LTI
    use Laplacian2D_LTI_Lyapunov
-   use lightrom_AbstractLTIsystems
+   use LightROM_AbstractLTIsystems
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
    use LightROM_utils
@@ -32,7 +32,7 @@ program demo
    ! vector of dt values
    real(wp), allocatable :: dtv(:)
    ! vector of rank values
-   real(wp), allocatable :: rkv(:)
+   integer,  allocatable :: rkv(:)
 
    ! Exponential propagator (RKlib).
    type(rklib_lyapunov_mat), allocatable :: RK_propagator
@@ -47,6 +47,7 @@ program demo
    type(laplace_operator),   allocatable :: A
 
    ! LR representation
+   type(LR_state)                  :: X
    type(state_vector), allocatable :: U(:)
    real(wp) , allocatable          :: S(:,:)
    
@@ -55,10 +56,10 @@ program demo
    real(wp), allocatable           :: X_RKlib(:,:,:)
    real(wp)                        :: X_RKlib_ref(N,N)
 
-    ! Initial condition
-   real(wp)                        :: U0(N, rkmax)
+   ! Initial condition
+   real(wp)                        :: U0_mat(N, rkmax)
    real(wp)                        :: S0(rkmax,rkmax)
-   real(wp)                        :: X0(N,N)
+   real(wp)                        :: X0_mat(N,N)
 
    ! OUTPUT
    real(wp)                        :: U_out(N,rkmax)
@@ -125,17 +126,17 @@ program demo
    allocate(LTI%D(1:p,1:rk_b)); LTI%D = 0.0_wp
 
    ! Define initial condition
-   call random_number(U0(:, 1:rk_X0))
+   call random_number(U0_mat(:, 1:rk_X0))
    ! Compute SVD to get low-rank representation
-   call svd(U0(:,1:rk_X0), U_svd(:,1:N), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
+   call svd(U0_mat(:,1:rk_X0), U_svd(:,1:N), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
    S0 = 0.0_wp
    do i = 1,rk_X0
       S0(i,i) = S_svd(i)
    end do
-   U0(:,1:rk_X0) = U_svd(:,1:rk_X0)
-
+   U0_mat(:,1:rk_X0) = U_svd(:,1:rk_X0)
+   
    ! Compute the full initial condition X0 = U_in @ S0 @ U_in.T
-   X0 = matmul( U0(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U0(:,1:rk_X0))))
+   X0_mat = matmul( U0_mat(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U0_mat(:,1:rk_X0))))
    
    !------------------
    ! COMPUTE EXACT SOLUTION OF THE LYAPUNOV EQUATION WITH LAPACK
@@ -184,7 +185,7 @@ program demo
    RK_propagator = rklib_lyapunov_mat(Tend)
 
    allocate(X_RKlib(N, N, nrep))
-   call set_state(X_mat_RKlib(1:1), X0)
+   call set_state(X_mat_RKlib(1:1), X0_mat)
    write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','|| X_RK - X_ref ||_2/N', 'Elapsed time'
    write(*,*) '         ------------------------------------------------------------------------'
    do irep = 1, nrep
@@ -233,18 +234,20 @@ program demo
             if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
 
             ! Reset input
-            call set_state(U(1:rk), U0(:,1:rk))
-            S(1:rk,1:rk) = S0(1:rk,1:rk)
+            call set_state(U(1:rk), U0_mat(:,1:rk))
+            ! populate LR state
+            X = LR_state()
+            allocate(X%U(1:rk), source=U(1:rk))
+            allocate(X%S(1:rk,1:rk)); X%S = S0(1:rk,1:rk)
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_integrator(U(1:rk), S(1:rk,1:rk), &
-                                                       & LTI, Tend, dt, torder, info)
+            call numerical_low_rank_splitting_integrator(X, LTI, Tend, dt, torder, info)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution
-            call get_state(U_out(:,1:rk), U)
-            X_out = matmul(U_out(:,1:rk), matmul(S(1:rk,1:rk), transpose(U_out(:,1:rk))))
+            call get_state(U_out(:,1:rk), X%U)
+            X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
       
             write(*,'(A10,I4," TO",I1,F10.6,F8.4,E26.8,F18.4," s")') 'OUTPUT', &
                               & rk, torder, dt, Tend, &
@@ -265,7 +268,7 @@ program demo
 
    if (save) then
       call save_npy("example/DLRA_laplacian2D/data_A.npy", Adata)
-      call save_npy("example/DLRA_laplacian2D/data_X0.npy", X0)
+      call save_npy("example/DLRA_laplacian2D/data_X0.npy", X0_mat)
       call save_npy("example/DLRA_laplacian2D/data_Q.npy", BBTdata)
       call save_npy("example/DLRA_laplacian2D/data_X_ref.npy", Xref)
       call save_npy("example/DLRA_laplacian2D/data_X_RK.npy", X_RKlib_ref)

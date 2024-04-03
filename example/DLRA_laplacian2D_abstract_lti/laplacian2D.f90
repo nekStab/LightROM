@@ -5,7 +5,7 @@ module laplacian2D_LTI
    use LightKrylov_expmlib
    !> LightKrylov for linear algebra.
    use LightKrylov
-   use lightrom_AbstractLTIsystems
+   use LightROM_AbstractLTIsystems
    !> Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
@@ -23,8 +23,8 @@ module laplacian2D_LTI
 
    ! --> Mesh related parameters.
    real(kind=wp), parameter :: L  = 1.0_wp  !> Domain length
-   integer      , parameter :: nx = 4      !> Number of grid points per direction
-   integer      , parameter :: N  = nx**2   !> total number of grid points
+   integer,       parameter :: nx = 4      !> Number of grid points per direction
+   integer,       parameter :: N  = nx**2   !> total number of grid points
    real(kind=wp), parameter :: dx = L/nx    !> Grid size.
    real(kind=wp), parameter :: dx2= dx**2   !> Grid size.
    integer,       parameter :: rk_b = 5     !> rank of the RHS
@@ -64,6 +64,13 @@ module laplacian2D_LTI
 
    type, extends(abstract_lti_system), public :: lti_system
    end type lti_system
+
+   !-------------------------------------------------------
+   !-----     LIGHTKRYLOV SYM LOW RANK STATE TYPE     -----
+   !-------------------------------------------------------
+
+   type, extends(abstract_sym_low_rank_state), public :: LR_state
+   end type LR_state
 
    !------------------------------------------
    !-----     EXPONENTIAL PROPAGATOR     -----
