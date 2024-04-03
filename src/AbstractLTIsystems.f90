@@ -43,6 +43,23 @@ module LightROM_AbstractLTIsystems
      private
    end type abstract_dlti_system
 
+   !--------------------------------------------------------------------
+   !-----     ABSTRACT LOW RANK REPRESENTATION TYPE DEFINITION     -----
+   !--------------------------------------------------------------------
+
+   !> General abstract type for general system.
+   type, abstract, public :: abstract_low_rank_representation
+   end type abstract_low_rank_representation
+
+   !> Abstract symmetric low-rank representation.
+   type, extends(abstract_low_rank_representation), abstract, public :: abstract_sym_low_rank_state
+      !> Low-Rank basis.
+      class(abstract_vector), allocatable :: U(:)
+      !> Coefficients
+      real(kind=wp)        ,  allocatable :: S(:, :)
+   contains
+   end type abstract_sym_low_rank_state
+
 contains
 
 end module LightROM_AbstractLTIsystems
