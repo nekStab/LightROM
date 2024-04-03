@@ -120,13 +120,13 @@ module LightROM_RiccatiSolvers
    !     340, 602-614
    !
    !=======================================================================================
-   subroutine numerical_low_rank_splitting_integrator_riccati(U,S,LTI,Q,Rinv,Tend,tau,torder,info,exptA)
+   subroutine numerical_low_rank_splitting_integrator_riccati(U,S,LTI,Qc,Rinv,Tend,tau,torder,info,exptA)
       !> Low-rank factors
       class(abstract_vector),              intent(inout) :: U(:) ! basis
       real(kind=wp),                       intent(inout) :: S(:,:) ! coefficients
       ! LTI system
       class(abstract_lti_system),          intent(in)    :: LTI
-      class(abstract_linop),               intent(in)    :: Q
+      real(kind=wp),                       intent(in)    :: Qc(:,:)
       real(kind=wp),                       intent(in)    :: Rinv(:,:)
       !> Integration time and step size
       real(kind=wp),                       intent(in)    :: Tend
@@ -164,7 +164,7 @@ module LightROM_RiccatiSolvers
       dlra : do istep = 1, nsteps
          
          !> dynamical low-rank approximation step
-         call numerical_low_rank_splitting_riccati_step(U, S, LTI, Q, Rinv, tau, torder, info, p_exptA)
+         call numerical_low_rank_splitting_riccati_step(U, S, LTI, Qc, Rinv, tau, torder, info, p_exptA)
 
          T = T + tau
          !> here we should do some checks such as whether we have reached steady state
@@ -184,13 +184,13 @@ module LightROM_RiccatiSolvers
    !-----------------------------
    !-----     UTILITIES     -----
    !-----------------------------
-   subroutine numerical_low_rank_splitting_riccati_step(U, S, LTI, Q, Rinv, tau, torder, info, exptA)
+   subroutine numerical_low_rank_splitting_riccati_step(U, S, LTI, Qc, Rinv, tau, torder, info, exptA)
       !> Low-rank factors
       class(abstract_vector),     intent(inout) :: U(:) ! basis
       real(kind=wp),              intent(inout) :: S(:,:) ! coefficients
       ! LTI system
       class(abstract_lti_system), intent(in)    :: LTI
-      class(abstract_linop),      intent(in)    :: Q
+      real(kind=wp),              intent(in)    :: Qc(:,:)
       real(kind=wp),              intent(in)    :: Rinv(:,:)
       !> Integration step size
       real(kind=wp),              intent(in)    :: tau
@@ -224,31 +224,31 @@ module LightROM_RiccatiSolvers
 
       select case (integrator)
       case (1) ! Lie-Trotter splitting
-         call M_forward_map        (U,     S,     LTI,             tau, info, exptA, iftrans=.true.)
-         call G_forward_map_riccati(U,     S,     LTI, Q, Rinv,    tau, info)
+         call M_forward_map        (U,     S,     LTI,              tau, info, exptA, iftrans=.true.)
+         call G_forward_map_riccati(U,     S,     LTI, Qc, Rinv,    tau, info)
       case (2) ! Strang splitting
          rk = size(U)
          if (.not. allocated(Uwrk0)) allocate(Uwrk0(1:rk), source=Uwrk0(1)); call mat_zero(Uwrk0)
          if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk)); Swrk0 = 0.0_wp
-         call M_forward_map        (U,     S,     LTI,          0.5*tau, info, exptA, iftrans=.true.)
+         call M_forward_map        (U,     S,     LTI,           0.5*tau, info, exptA, iftrans=.true.)
          ! Predictor step
-         call G_forward_map_riccati(Uwrk0, Swrk0, LTI, Q, Rinv,     tau, info)
+         call G_forward_map_riccati(Uwrk0, Swrk0, LTI, Qc, Rinv,     tau, info)
          ! Second order integration
-         call G_forward_map_riccati(U,     S,     LTI, Q, Rinv,     tau, info, Uwrk0, Swrk0)
-         call M_forward_map        (U,     S,     LTI,          0.5*tau, info, exptA, iftrans=.true.)
+         call G_forward_map_riccati(U,     S,     LTI, Qc, Rinv,     tau, info, Uwrk0, Swrk0)
+         call M_forward_map        (U,     S,     LTI,           0.5*tau, info, exptA, iftrans=.true.)
       end select
 
       return
 
    end subroutine numerical_low_rank_splitting_riccati_step
 
-   subroutine G_forward_map_riccati(U, S, LTI, Q, Rinv, tau, info, Upred, Spred)
+   subroutine G_forward_map_riccati(U, S, LTI, Qc, Rinv, tau, info, Upred, Spred)
       !> Low-rank factors
       class(abstract_vector),           intent(inout) :: U(:)   ! basis
       real(kind=wp),                    intent(inout) :: S(:,:) ! coefficients
       ! LTI system
       class(abstract_lti_system),       intent(in)    :: LTI
-      class(abstract_linop),            intent(in)    :: Q
+      real(kind=wp),                    intent(in)    :: Qc(:,:)
       real(kind=wp),                    intent(in)    :: Rinv(:,:)
       !> Integration step size         
       real(kind=wp),                    intent(in)    :: tau
@@ -281,17 +281,17 @@ module LightROM_RiccatiSolvers
          call mat_axpby(Up, 0.5_wp, U, 0.5_wp)
          call mat_axpby(Sp, 0.5_wp, S, 0.5_wp)
          ! first steps based on previous state (U,S)
-         call K_step_riccati(U1, S,  QU, UTB, U,      LTI, Q, Rinv, 0.5*tau, info)
-         call S_step_riccati(    S,  QU, UTB, U,  U1, LTI, Q, Rinv, 0.5*tau, info)
-         call L_step_riccati(    S,           U,  U1, LTI, Q, Rinv,     tau, info)
+         call K_step_riccati(U1, S,  QU, UTB, U,      LTI, Qc, Rinv, 0.5*tau, info)
+         call S_step_riccati(    S,  QU, UTB, U,  U1, LTI, Qc, Rinv, 0.5*tau, info)
+         call L_step_riccati(    S,           U,  U1, LTI, Qc, Rinv,     tau, info)
          ! second set in reverse order based on intermediate state (Up,Sp)
-         call S_step_riccati(    Sp, QU, UTB, Up, U1, LTI, Q, Rinv, 0.5*tau, info, reverse=.true.)
-         call K_step_riccati(U1, Sp, QU, UTB, Up,     LTI, Q, Rinv, 0.5*tau, info, reverse=.true.)
+         call S_step_riccati(    Sp, QU, UTB, Up, U1, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true.)
+         call K_step_riccati(U1, Sp, QU, UTB, Up,     LTI, Qc, Rinv, 0.5*tau, info, reverse=.true.)
       else
          ! first order in time
-         call K_step_riccati(U1, S,  QU, UTB, U,      LTI, Q, Rinv,     tau, info)
-         call S_step_riccati(    S,  QU, UTB, U,  U1, LTI, Q, Rinv,     tau, info)
-         call L_step_riccati(    S,           U,  U1, LTI, Q, Rinv,     tau, info)
+         call K_step_riccati(U1, S,  QU, UTB, U,      LTI, Qc, Rinv,     tau, info)
+         call S_step_riccati(    S,  QU, UTB, U,  U1, LTI, Qc, Rinv,     tau, info)
+         call L_step_riccati(    S,           U,  U1, LTI, Qc, Rinv,     tau, info)
       end if
       
       !> Copy data to output
@@ -300,7 +300,7 @@ module LightROM_RiccatiSolvers
       return
    end subroutine G_forward_map_riccati
 
-   subroutine K_step_riccati(U1, S, QU, UTB, U, LTI, Q, Rinv, tau, info, reverse)
+   subroutine K_step_riccati(U1, S, QU, UTB, U, LTI, Qc, Rinv, tau, info, reverse)
       !> Low-rank factors
       class(abstract_vector),     intent(out)   :: U1(:)  ! basis
       real(kind=wp),              intent(inout) :: S(:,:) ! coefficients
@@ -310,7 +310,7 @@ module LightROM_RiccatiSolvers
       class(abstract_vector),     intent(in)    :: U(:)   ! basis
       ! LTI system
       class(abstract_lti_system), intent(in)    :: LTI
-      class(abstract_linop),      intent(in)    :: Q
+      real(kind=wp),              intent(in)    :: Qc(:,:)
       real(kind=wp),              intent(in)    :: Rinv(:,:)
       !> Integration step size
       real(kind=wp),              intent(in)    :: tau
@@ -347,9 +347,10 @@ module LightROM_RiccatiSolvers
       if (.not. reverse_order) then
          ! compute QU and UTB and pass to S step
          call mat_zero(QU)
-         do i = 1, rk
-            call Q%matvec(U(i), QU(i))
-         end do
+         call apply_CTQcC(QU, U, LTI, Qc)
+         !do i = 1, rk
+         !   call Q%matvec(U(i), QU(i))
+         !end do
          call mat_mult(UTB, U, LTI%B)                                      !              U0.T @ B
       end if
 
@@ -371,7 +372,7 @@ module LightROM_RiccatiSolvers
       return
    end subroutine K_step_riccati
 
-   subroutine S_step_riccati(S, QU, UTB, U, U1, LTI, Q, Rinv, tau, info, reverse)
+   subroutine S_step_riccati(S, QU, UTB, U, U1, LTI, Qc, Rinv, tau, info, reverse)
       !> Low-rank factors
       real(kind=wp),              intent(inout) :: S(:,:) ! coefficients
       class(abstract_vector),     intent(inout) :: QU(:)  ! basis
@@ -381,7 +382,7 @@ module LightROM_RiccatiSolvers
       class(abstract_vector),     intent(in)    :: U1(:)  ! updated basis
       ! LTI system
       class(abstract_lti_system), intent(in)    :: LTI
-      class(abstract_linop),      intent(in)    :: Q
+      real(kind=wp),              intent(in)    :: Qc(:,:)
       real(kind=wp),              intent(in)    :: Rinv(:,:)
       !> Integration step size
       real(kind=wp),              intent(in)    :: tau
@@ -414,9 +415,10 @@ module LightROM_RiccatiSolvers
       if (reverse_order) then
          ! compute QU and UTB pass it to K step
          call mat_zero(QU)
-         do i = 1, rk
-            call Q%matvec(U(i), QU(i))
-         end do
+         call apply_CTQcC(QU, U, LTI, Qc)
+         !do i = 1, rk
+         !   call Q%matvec(U(i), QU(i))
+         !end do
          call mat_mult(UTB, U, LTI%B)                              !       U0.T @ B
       endif
       call mat_mult(Swrk0, U1, QU)
@@ -434,7 +436,7 @@ module LightROM_RiccatiSolvers
       return
    end subroutine S_step_riccati
 
-   subroutine L_step_riccati(S, U, U1, LTI, Q, Rinv, tau, info)
+   subroutine L_step_riccati(S, U, U1, LTI, Qc, Rinv, tau, info)
       !> Low-rank factors
       real(kind=wp),              intent(inout) :: S(:,:) ! coefficients
       !> Low-rank factors
@@ -442,7 +444,7 @@ module LightROM_RiccatiSolvers
       class(abstract_vector),     intent(in)    :: U1(:)   ! basis after Kstep
       ! LTI system
       class(abstract_lti_system), intent(in)    :: LTI
-      class(abstract_linop),      intent(in)    :: Q
+      real(kind=wp),              intent(in)    :: Qc(:,:)
       real(kind=wp),              intent(in)    :: Rinv(:,:)
       !> Integration step size
       real(kind=wp),              intent(in)    :: tau
@@ -472,9 +474,10 @@ module LightROM_RiccatiSolvers
 
       ! Constant part --> Uwrk0
       call mat_zero(Uwrk0)
-      do i = 1, rk
-         call Q%matvec(U1(i), Uwrk0(i))
-      end do
+      call apply_CTQcC(Uwrk0, U1, LTI, Qc)
+      !do i = 1, rk
+      !   call Q%matvec(U1(i), Uwrk0(i))
+      !end do
 
       ! non-linear part --> U
       call mat_mult(UTB, U1, LTI%B)          !               U1.T @ B
@@ -493,5 +496,21 @@ module LightROM_RiccatiSolvers
 
       return
    end subroutine L_step_riccati
+
+   subroutine apply_CTQcC(basis_out, basis_in, LTI, Qc)
+      class(abstract_vector),     intent(in)   :: basis_in(:)
+      class(abstract_vector),     intent(out)  :: basis_out(:)
+      class(abstract_lti_system), intent(in)   :: LTI
+      real(kind=wp),              intent(in)   :: Qc(:,:)
+      ! internals
+      integer                                  :: rk_c
+      real(kind=wp),               allocatable :: wrk(:,:)
+      allocate(wrk(1:rk_c, 1:size(basis_in))); wrk = 0.0_wp
+      
+      call mat_mult(wrk, LTI%CT, basis_in)
+      call mat_mult(basis_out, LTI%CT, matmul(wrk, Qc))
+   
+      return   
+   end subroutine apply_CTQcC
 
 end module lightROM_RiccatiSolvers

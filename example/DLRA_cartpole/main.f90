@@ -33,7 +33,6 @@ program demo
    ! LTI system
    type(lti_system)                :: LTI
    type(cartpole_linop)            :: A
-   type(identity_linop)            :: Q
    type(state_vector), allocatable :: CT(:)
    real(kind=wp), allocatable      :: D(:,:)
    integer                         :: p
@@ -56,6 +55,9 @@ program demo
    real(kind=wp)      :: F(n,n)
    real(kind=wp)      :: Ginv(n,n)
    real(kind=wp)      :: Xref(n,n)
+
+   real(wp)  :: Qc(rkmax,rkmax)
+   !real(wp)  :: Rinv(rkmax,rkmax)
 
    ! initial condition
    real(wp)                :: U0(n, rkmax)
@@ -204,7 +206,7 @@ program demo
             call system_clock(count=clock_start)     ! Start Timer
             call numerical_low_rank_splitting_integrator_riccati( &
                      & U(1:rk), S(1:rk,1:rk), &
-                     & LTI, Q, Rinv, &
+                     & LTI, Qc, Rinv, &
                      & Tend, dt, torder, info)
             call system_clock(count=clock_stop)      ! Stop Timer
 
