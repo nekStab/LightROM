@@ -41,6 +41,14 @@ module Laplacian2D_LTI_Base
    type, extends(abstract_lti_system), public :: lti_system
    end type lti_system
 
+   !-------------------------------------------------------
+   !-----     LIGHTKRYLOV SYM LOW RANK STATE TYPE     -----
+   !-------------------------------------------------------
+
+   type, extends(abstract_sym_low_rank_state), public :: LR_state
+   end type LR_state
+
+
    !-------------------------------------------
    !-----     LIGHTKRYLOV VECTOR TYPE     -----
    !-------------------------------------------

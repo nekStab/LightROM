@@ -51,11 +51,12 @@ program demo
    type(laplace_operator),   allocatable :: A
 
    ! LR representation
+   type(LR_state)                  :: X
    type(state_vector), allocatable :: U(:)
    real(wp) , allocatable          :: S(:,:)
    
    !> STATE MATRIX (RKlib)
-   type(state_matrix)              :: Xmat_RKlib(2)
+   type(state_matrix)              :: X_mat_RKlib(2)
    real(wp), allocatable           :: X_RKlib(:,:,:)
    real(wp)                        :: X_RKlib_ref(N,N)
 
@@ -206,17 +207,17 @@ program demo
    RK_prop_ricc = rklib_riccati_mat(Tend)
 
    allocate(X_RKlib(N, N, nrep))
-   call set_state(Xmat_RKlib(1:1), X0)
+   call set_state(X_mat_RKlib(1:1), X0)
    write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','|| dX/dt ||_2/N', 'Elapsed time'
    write(*,*) '         ------------------------------------------------------------------------'
    do irep = 1, nrep
       call system_clock(count=clock_start)     ! Start Timer
       ! integrate
-      call RK_prop_ricc%matvec(Xmat_RKlib(1), Xmat_RKlib(2))
+      call RK_prop_ricc%matvec(X_mat_RKlib(1), X_mat_RKlib(2))
       ! recover output
-      call get_state(X_RKlib(:,:,irep), Xmat_RKlib(2:2))
+      call get_state(X_RKlib(:,:,irep), X_mat_RKlib(2:2))
       ! replace input
-      call set_state(Xmat_RKlib(1:1), X_RKlib(:,:,irep))
+      call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,irep))
       call system_clock(count=clock_stop)      ! Stop Timer
       write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tend, &
                      & norm2(CARE(X_RKlib(:,:,irep), Adata, CTQcCdata, BRinvBTdata))/N, &
@@ -242,12 +243,16 @@ program demo
    rkv = (/ 2, 6, 10, 14 /)
    dtv = logspace(-5.0_wp, -1.0_wp, ndt)
 
+   X = LR_state()
+
    do torder = 1, 2
       do i = 1, nrk
          rk = rkv(i)
 
          allocate(U(1:rk)); call mat_zero(U)
          allocate(S(1:rk,1:rk)); S = 0.0_wp
+         allocate(X%U(1:rk), source=U(1:rk))
+         allocate(X%S(1:rk,1:rk)); 
          write(*,'(A10,I1)') ' torder = ', torder
 
          do j = ndt, 1, -1
@@ -255,18 +260,17 @@ program demo
             if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
 
             ! Reset input
-            call set_state(U(1:rk), U0(:,1:rk))
-            S(1:rk,1:rk) = S0(1:rk,1:rk)
+            call set_state(X%U, U0(:,1:rk))
+            X%S = S0(1:rk,1:rk)
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_integrator_riccati(U(1:rk), S(1:rk,1:rk), &
-                                                 & LTI, Qc, Rinv, Tend, dt, torder, info)
+            call numerical_low_rank_splitting_integrator_riccati(X, LTI, Qc, Rinv, Tend, dt, torder, info)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution
-            call get_state(U_out(:,1:rk), U)
-            X_out = matmul(U_out(:,1:rk), matmul(S(1:rk,1:rk), transpose(U_out(:,1:rk))))
+            call get_state(U_out(:,1:rk), X%U)
+            X_out = matmul(U_out(:,1:rk), matmul(X%S(1:rk,1:rk), transpose(U_out(:,1:rk))))
       
             write(*,'(A10,I4," TO",I1,F10.6,F8.4,E26.8,F18.4," s")') 'OUTPUT', &
                               & rk, torder, dt, Tend, &
@@ -279,6 +283,8 @@ program demo
             call save_npy(oname, X_out)
          end if
 
+         deallocate(X%U);
+         deallocate(X%S);
          deallocate(U);
          deallocate(S);
 
