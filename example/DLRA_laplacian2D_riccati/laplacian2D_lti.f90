@@ -13,7 +13,11 @@ module laplacian2D_LTI
 
    private
    ! problem parameters
-   public :: N, nx, dx, dx2, L, rk_b, rk_c, B, BBT, CT, CTQcC, Qcdata, BRinvBTdata
+   public :: N, nx, dx, dx2, L, rk_b, rk_c
+   ! problem definition
+   public :: B, CT
+   ! derived data
+   public :: CTQcC, Qcdata, BRinvBTdata, CTQcCdata
    ! mesh and operator
    public :: initialize_mesh, laplacian
 
@@ -46,12 +50,12 @@ module laplacian2D_LTI
    end type state_vector
 
    type(state_vector)       :: B(rk_b)
-   real(kind=wp)            :: BBT(N**2)
-   real(kind=wp)            :: BRinvBTdata(N,N)   ! -P   
    type(state_vector)       :: CT(rk_c)
+
    real(kind=wp)            :: CTQcC(N**2)
    real(kind=wp)            :: Qcdata(rk_c,rk_c)
    real(kind=wp)            :: CTQcCdata(N,N)
+   real(kind=wp)            :: BRinvBTdata(N,N)
 
    !-----------------------------------
    !-----     LAPLACE OPERATOR    -----

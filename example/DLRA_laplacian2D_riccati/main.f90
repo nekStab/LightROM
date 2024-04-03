@@ -10,7 +10,6 @@ program demo
    use LightROM_utils
 
    use Laplacian2D_LTI
-   use Laplacian2D_LTI_Lyapunov
    use Laplacian2D_LTI_Riccati
 
    use stdlib_optval, only : optval 
@@ -39,15 +38,12 @@ program demo
    integer,  allocatable :: rkv(:)
 
    ! Exponential propagator (RKlib).
-   type(rklib_lyapunov_mat), allocatable :: RK_prop_lyap
    type(rklib_riccati_mat), allocatable  :: RK_prop_ricc
 
    ! LTI system
    type(lti_system)                :: LTI
-   type(state_vector), allocatable :: CT(:)
    real(kind=wp), allocatable      :: D(:,:)
    integer                         :: p
-   type(LR_Q)                      :: Q
 
    ! Laplacian
    type(laplace_operator),   allocatable :: A
@@ -57,7 +53,7 @@ program demo
    real(wp) , allocatable          :: S(:,:)
    
    !> STATE MATRIX (RKlib)
-   type(state_matrix)              :: X_mat_RKlib(2)
+   type(state_matrix)              :: Xmat_RKlib(2)
    real(wp), allocatable           :: X_RKlib(:,:,:)
    real(wp)                        :: X_RKlib_ref(N,N)
 
@@ -77,20 +73,11 @@ program demo
    ! PROBLEM DEFINITION
    real(wp)  :: Adata(N,N)
    real(wp)  :: Bdata(N,rkmax)
-   real(wp)  :: BBTdata(N,N)
    real(wp)  :: CTdata(N,rkmax)
-   real(wp)  :: CTQcCdata(N,N)
+   real(wp)  :: Qc(rkmax,rkmax)
    real(wp)  :: Rinv(rkmax,rkmax)
    real(wp)  :: Bwrk(N,rkmax)
 
-   ! LAPACK SOLUTION LYAPUNOV
-   real(wp)  :: Xref(N,N)
-   ! DSYTD2
-   real(wp)  :: Dm(N), work(N), wr(N), wi(N)
-   real(wp)  :: E(N-1), tw(N-1)
-   real(wp)  :: T(N,N), Q(N,N), Z(N,N), Vdata(N,N), Wdata(N,N), Ydata(N,N)
-   real(wp)  :: scale
-   integer   :: isgn
    ! SVD
    real(wp)  :: U_svd(N,N)
    real(wp)  :: S_svd(rkmax)
@@ -98,202 +85,25 @@ program demo
 
    ! LAPACK SOLUTION RICATTI
    real(kind=wp)      :: Hdata(2*N,2*N)
-   real(kind=wp)      :: wr2(2*N), wi2(2*N)
+   real(kind=wp)      :: wr(2*N), wi(2*N)
    real(kind=wp)      :: VR(2*N,2*N)
-   integer, parameter :: Hlwork = 1040
-   real(kind=wp)      :: Hwork(Hlwork)
+   integer, parameter :: lwork = 1040
+   real(kind=wp)      :: work(lwork)
    real(kind=wp)      :: UR(2*N,N)
    real(kind=wp)      :: UI(2*N,N)
    logical            :: flag
    real(kind=wp)      :: F(N,N)
    real(kind=wp)      :: Ginv(N,N)
-   real(kind=wp)      :: Xref_ric(N,N)
+   real(kind=wp)      :: Xref(N,N)
    integer :: icnt
+
+   real(kind=wp)      :: test(N**2)
+   real(kind=wp)      :: test2(N**2)
 
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
-   _
+   
    call system_clock(count_rate=clock_rate)
-
-   write(*,*) '---------------------------------------------'
-   write(*,*) '   DYNAMIC LOW-RANK APPROXIMATION  -  DLRA'
-   write(*,*) '---------------------------------------------'
-   write(*,*)
-   write(*,*) 'LYAPUNOV EQUATION FOR THE 2D LAPLACE OPERATOR:'
-   write(*,*)
-   write(*,*) '    Algebraic Lyapunov equation:'
-   write(*,*) '                0 = A @ X + X @ A.T + Q'
-   write(*,*)
-   write(*,*) '    Differential Lyapunov equation:'
-   write(*,*) '          \dot{X} = A @ X + X @ A.T + Q'
-   write(*,*)
-   write(*,'(A16,I4,"x",I4)') '  Problem size: ', N, N
-   write(*,*)
-   write(*,*) '  Initial condition: rank(X0) =', rk_X0
-   write(*,*) '  Inhomogeneity:     rank(Q)  =', rk_B
-   write(*,*)
-   write(*,*) '---------------------------------------------'
-   write(*,*)
-
-   ! Define RHS B
-   call init_rand(B, ifnorm = .false.)
-   call get_state(Bdata(:,1:rk_b), B)
-   BBTdata = -matmul(Bdata(:,1:rk_b), transpose(Bdata(:,1:rk_b)))
-   BBT(1:N**2) = -reshape(BBTdata, shape(BBT))
-
-   p = 1
-   LTI = lti_system()
-   allocate(LTI%A,         source=A)
-   allocate(LTI%B(1:rk_b), source=B(1:rk_b));
-   allocate(LTI%CT(1:p),   source=B(1)); call mat_zero(LTI%CT)
-   allocate(LTI%D(1:p,1:rk_b)); LTI%D = 0.0_wp
-
-   ! Define initial condition
-   call random_number(U0(:, 1:rk_X0))
-   ! Compute SVD to get low-rank representation
-   call svd(U0(:,1:rk_X0), U_svd(:,1:N), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
-   S0 = 0.0_wp
-   do i = 1,rk_X0
-      S0(i,i) = S_svd(i)
-   end do
-   U0(:,1:rk_X0) = U_svd(:,1:rk_X0)
-
-   ! Compute the full initial condition X0 = U_in @ S0 @ U_in.T
-   X0 = matmul( U0(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U0(:,1:rk_X0))))
-   
-   !------------------
-   ! COMPUTE EXACT SOLUTION OF THE LYAPUNOV EQUATION WITH LAPACK
-   !------------------
-
-   write(*,*) 'I.   Exact solution of the algebraic Lyapunov equation (LAPACK):'
-   call system_clock(count=clock_start)     ! Start Timer
-
-   ! Explicit 2D laplacian
-   call build_operator(Adata)
-
-   ! Transform operator to tridiagonal form
-   call dsytd2('L', N, Adata, N, Dm, E, tw, info)
-   
-   ! Reconstruct T and Q
-   call reconstruct_TQ(T, Q, Adata(1:N,1:N), Dm, E, tw)
-   
-   ! compute real Schur form A = Z @ T @ Z.T
-   call dhseqr('S', 'I', N, 1, N, T, N, wr, wi, Z, N, work, N, info )
-
-   ! Change RHS Basis: base --> Q --> Z
-   Vdata = matmul(transpose(Q), matmul(BBTdata, Q))
-   Wdata = matmul(transpose(Z), matmul(  Vdata, Z))
-   
-   ! Compute solution of Lyapunov equation for Schur decomposition
-   isgn = 1; scale = 0.1_wp
-   call dtrsyl('N', 'T', isgn, N, N, T, N, T, N, Wdata, N, scale, info)
-
-   ! Return to original basis to obtain X_ref: Z --> Q --> base
-   Ydata = matmul(Z, matmul(Wdata, transpose(Z)))
-   Xref  = matmul(Q, matmul(Ydata, transpose(Q)))
-
-   call system_clock(count=clock_stop)      ! Stop Timer
-   write(*,'(A40,F10.4," s")') '--> X_ref.    Elapsed time:', real(clock_stop-clock_start)/real(clock_rate)
-   write(*,*)
-
-   !------------------
-   ! COMPUTE SOLUTION WITH RK FOR DIFFERENT INTEGRATION TIMES AND COMPARE TO STUART-BARTELS
-   !------------------
-
-   write(*,*) 'II.  Compute solution of the differential Lyapunov equation (Runge-Kutta):'
-   write(*,*)
-   ! initialize exponential propagator
-   nrep = 10
-   Tend = 0.1_wp
-   RK_prop_lyap = rklib_lyapunov_mat(Tend)
-
-   allocate(X_RKlib(N, N, nrep))
-   call set_state(X_mat_RKlib(1:1), X0)
-   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','|| X_RK - X_ref ||_2/N', 'Elapsed time'
-   write(*,*) '         ------------------------------------------------------------------------'
-   do irep = 1, nrep
-      call system_clock(count=clock_start)     ! Start Timer
-      ! integrate
-      call RK_prop_lyap%matvec(X_mat_RKlib(1), X_mat_RKlib(2))
-      ! recover output
-      call get_state(X_RKlib(:,:,irep), X_mat_RKlib(2:2))
-      ! replace input
-      call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,irep))
-      call system_clock(count=clock_stop)      ! Stop Timer
-      write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tend, &
-                     & norm2(X_RKlib(:,:,irep) - Xref)/N, &
-                     & real(clock_stop-clock_start)/real(clock_rate)
-   end do
-!   
-!   !------------------
-!   ! COMPUTE DLRA FOR SHORTEST INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
-!   !------------------
-!
-!   write(*,*)
-!   write(*,*) 'III. Compute approximate solution of the differential Lyapunov equation using DLRA:'
-!   write(*,*)
-!   write(*,'(A10,A4,A4,A10,A8,A26,A20)') 'DLRA:','  rk',' TO','dt','Tend','|| X_DLRA - X_RK ||_2/N', 'Elapsed time'
-!   write(*,*) '         ------------------------------------------------------------------------'
-!
-!   ! Choose relevant reference case from RKlib
-!   X_RKlib_ref = X_RKlib(:,:,1)
-!
-!   ! Choose input ranks and integration steps
-!   nrk = 4; ndt = 5
-!   allocate(rkv(1:nrk)); allocate(dtv(1:ndt)); 
-!   rkv = (/ 2, 6, 10, 14 /)
-!   dtv = logspace(-5.0_wp, -1.0_wp, ndt)
-!
-!   do torder = 1, 2
-!      do i = 1, nrk
-!         rk = rkv(i)
-!
-!         allocate(U(1:rk)); call mat_zero(U)
-!         allocate(S(1:rk,1:rk)); S = 0.0_wp
-!         write(*,'(A10,I1)') ' torder = ', torder
-!
-!         do j = ndt, 1, -1
-!            dt = dtv(j)
-!            if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
-!
-!            ! Reset input
-!            call set_state(U(1:rk), U0(:,1:rk))
-!            S(1:rk,1:rk) = S0(1:rk,1:rk)
-!
-!            ! run step
-!            call system_clock(count=clock_start)     ! Start Timer
-!            call numerical_low_rank_splitting_integrator(U(1:rk), S(1:rk,1:rk), &
-!                                                       & LTI, Tend, dt, torder, info)
-!            call system_clock(count=clock_stop)      ! Stop Timer
-!
-!            ! Reconstruct solution
-!            call get_state(U_out(:,1:rk), U)
-!            X_out = matmul(U_out(:,1:rk), matmul(S(1:rk,1:rk), transpose(U_out(:,1:rk))))
-!      
-!            write(*,'(A10,I4," TO",I1,F10.6,F8.4,E26.8,F18.4," s")') 'OUTPUT', &
-!                              & rk, torder, dt, Tend, &
-!                              & norm2(X_RKlib_ref - X_out)/N, &
-!                              & real(clock_stop-clock_start)/real(clock_rate)
-!         end do
-!
-!         if (save) then
-!            write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")'), torder, rk
-!            call save_npy(oname, X_out)
-!         end if
-!
-!         deallocate(U);
-!         deallocate(S);
-!
-!      end do
-!   end do
-!
-!   if (save) then
-!      call save_npy("example/DLRA_laplacian2D/data_A.npy", Adata)
-!      call save_npy("example/DLRA_laplacian2D/data_X0.npy", X0)
-!      call save_npy("example/DLRA_laplacian2D/data_Q.npy", BBTdata)
-!      call save_npy("example/DLRA_laplacian2D/data_X_ref.npy", Xref)
-!      call save_npy("example/DLRA_laplacian2D/data_X_RK.npy", X_RKlib_ref)
-!   end if
 
    write(*,*)
    write(*,*) 'RICCATI EQUATION FOR THE 2D LAPLACE OPERATOR:'
@@ -313,20 +123,40 @@ program demo
    write(*,*) '---------------------------------------------'
    write(*,*)
 
-   ! Define C
-   call init_rand(CT, ifnorm = .false.)
-   call get_state(CTdata(:,1:rk_c), CT)
-   Qcdata = eye(rk_c)
-   CTQcCdata = matmul(CTdata(:,1:rk_c), matmul( Qcdata, transpose(CTdata(:,1:rk_c))))
-   CTQcC(1:N**2) = reshape(CTQcCdata, shape(CTQcC))
-   ! Update LTI system
-   call mat_copy(LTI%CT(1:rk_c), CT)
+   ! Define C, Qc & compute CTQcC
+   Qc = eye(rkmax)
 
-   ! Define Rinv & compule BRinvBT
-   Rinv = 1e3*eye(rkmax)
-   Bwrk = matmul(Bdata, Rinv)
+   call init_rand(CT, ifnorm = .true.)
+   call get_state(CTdata(:,1:rk_c), CT)
+   CTQcCdata = matmul(CTdata(:,1:rk_c), matmul( Qc(1:rk_c,1:rk_c), transpose(CTdata(:,1:rk_c))))
+   CTQcC(1:N**2) = reshape(CTQcCdata, shape(CTQcC))
+   
+   ! Define B, Rinv & compule BRinvBT
+   Rinv = 1e1*eye(rkmax)
+
+   call init_rand(B, ifnorm = .true.)
+   Bdata = 0.0_wp
    call get_state(Bdata(:,1:rk_b), B)
-   BRinvBTdata = matmul( Bwrk, transpose(Bdata) )
+   Bwrk = 0.0_wp
+   Bwrk(:,1:rk_b) = matmul(Bdata(:,1:rk_b), Rinv(1:rk_b, 1:rk_b))
+   BRinvBTdata = matmul( Bwrk(:,1:rk_b), transpose(Bdata(:,1:rk_b)) )
+
+   ! Define LTI system
+   LTI = lti_system()
+   allocate(LTI%A,          source=A)
+   allocate(LTI%B(1:rk_b),  source=B(1:rk_b))
+   allocate(LTI%CT(1:rk_c), source=CT(1:rk_c))
+   allocate(LTI%D(1:p,1:rk_b)); LTI%D = 0.0_wp
+
+   !------------------
+   ! COMPUTE EXACT SOLUTION OF THE RICCATI EQUATION WITH LAPACK
+   !------------------
+
+   write(*,*) 'I.   Exact solution of the algebraic Riccati equation (LAPACK):'
+   call system_clock(count=clock_start)     ! Start Timer
+
+   ! Explicit 2D laplacian
+   call build_operator(Adata)
 
    ! construct Hmat
    Hdata = 0.0_wp
@@ -335,7 +165,7 @@ program demo
    Hdata(  1:N,  N+1:2*N) = -BRinvBTdata
    Hdata(N+1:2*N,  1:N  ) = -CTQcCdata
 
-   call dgeev('N', 'V', 2*N, Hdata, 2*N, wr2, wi2, VR, 2*N, VR, 2*N, Hwork, Hlwork, info)
+   call dgeev('N', 'V', 2*N, Hdata, 2*N, wr, wi, VR, 2*N, VR, 2*N, work, lwork, info)
 
    ! extract stable eigenspace
    UR = 0.0_wp
@@ -343,9 +173,9 @@ program demo
    icnt = 0
    flag = .true.
    do i = 1, 2*N
-      if ( wr2(i) .lt. 0.0 ) then
+      if ( wr(i) .lt. 0.0 ) then
          icnt = icnt + 1
-         if ( wi2(i) .eq. 0.0 ) then ! real
+         if ( wi(i) .eq. 0.0 ) then ! real
             UR(:,icnt) = VR(:,i)
          else                       ! complex
             if (flag) then
@@ -364,13 +194,15 @@ program demo
    F    = matmul(UR(n+1:2*N,:), transpose(UR(1:N,:))) + matmul(UI(n+1:2*n,:), transpose(UI(1:N,:)))
    Ginv = matmul(UR(  1:N,  :), transpose(UR(1:N,:))) + matmul(UI(  1:N,  :), transpose(UI(1:N,:)))
    call inv(Ginv)
-   Xref_ric = matmul(F, Ginv)
+   Xref = matmul(F, Ginv)
 
-   call print_mat(N,N,Xref_ric)
+   ! sanity check
+   !call print_mat(N,N,Xref)
+   !X0 = CARE(Xref, Adata, CTQcCdata, BRinvBTdata)
 
-   X0 = matmul(Adata, Xref_ric) + matmul(Xref_ric, transpose(Adata)) + CTQcCdata - matmul(Xref_ric, matmul(BRinvBTdata, Xref_ric))
-
-   call print_mat(N,N,X0)
+   call system_clock(count=clock_stop)      ! Stop Timer
+   write(*,'(A40,F10.4," s")') '--> X_ref.    Elapsed time:', real(clock_stop-clock_start)/real(clock_rate)
+   write(*,*)
 
    ! Define initial condition
    U0 = 0.0_wp
@@ -387,27 +219,29 @@ program demo
    X0 = matmul( U0(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U0(:,1:rk_X0))))
 
    ! initialize exponential propagator
-   nrep = 10
-   Tend = 2.0_wp
-   RK_prop_ricc = rklib_riccati_mat(Tend)
+   !nrep = 10
+   !Tend = 0.1_wp !2.0_wp
+   !RK_prop_ricc = rklib_riccati_mat(Tend)
+!
+   !allocate(X_RKlib(N, N, nrep))
+   !call set_state(Xmat_RKlib(1:1), X0)
+   !write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','|| dX/dt ||_2/N', 'Elapsed time'
+   !write(*,*) '         ------------------------------------------------------------------------'
+   !do irep = 1, nrep
+   !   call system_clock(count=clock_start)     ! Start Timer
+   !   ! integrate
+   !   call RK_prop_ricc%matvec(Xmat_RKlib(1), Xmat_RKlib(2))
+   !   ! recover output
+   !   call get_state(X_RKlib(:,:,irep), Xmat_RKlib(2:2))
+   !   call print_mat(N**2,1,Xmat_RKlib(2)%state)
+   !   ! replace input
+   !   call set_state(Xmat_RKlib(1:1), X_RKlib(:,:,irep))
+   !   call system_clock(count=clock_stop)      ! Stop Timer
+   !   write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tend, &
+   !                  & norm2(CARE(X_RKlib(:,:,irep), Adata, CTQcCdata, BRinvBTdata))/N, &
+   !                  & real(clock_stop-clock_start)/real(clock_rate)
+   !end do
 
-   allocate(X_RKlib(N, N, nrep))
-   call set_state_mat(Xmat_RKlib(1:1), X0)
-   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','|| dX/dt ||_2/N', 'Elapsed time'
-   write(*,*) '         ------------------------------------------------------------------------'
-   do irep = 1, nrep
-      call system_clock(count=clock_start)     ! Start Timer
-      ! integrate
-      call RK_prop_ricc%matvec(Xmat_RKlib(1), Xmat_RKlib(2))
-      ! recover output
-      call get_state_mat(X_RKlib(:,:,irep), Xmat_RKlib(2:2))
-      ! replace input
-      call set_state_mat(Xmat_RKlib(1:1), X_RKlib(:,:,irep))
-      call system_clock(count=clock_stop)      ! Stop Timer
-      write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tend, &
-                     & norm2(CARE(X_RKlib(:,:,irep), Adata, Qdata, BRinvBTdata))/N, &
-                     & real(clock_stop-clock_start)/real(clock_rate)
-   end do
 
 
 contains
@@ -500,40 +334,5 @@ contains
       end do
       return
    end subroutine build_operator
-
-   subroutine reconstruct_TQ(T, Q, A, D, E, tw)
-      !! Reconstruct tridiagonal matrix T and orthogonal projector Q from dsytd2 output (A, D, E)
-      real(kind=wp), intent(out) :: T(N,N)
-      real(kind=wp), intent(out) :: Q(N,N)
-      real(kind=wp), intent(in)  :: A(N,N)
-      real(kind=wp), intent(in)  :: D(N)
-      real(kind=wp), intent(in)  :: E(N-1)
-      real(kind=wp), intent(in)  :: tw(N-1)
-
-      ! internal variables
-      real(wp)  :: Hi(N,N)
-      real(wp)  :: vec(N,1)
-
-      ! Build orthogonal Q = H(1) @  H(2) @ ... @ H(n-1)
-      Q = eye(N)
-      do i = 1, N - 1
-         vec          = 0.0_wp
-         vec(i+1,1)   = 1.0_wp
-         vec(i+2:N,1) = A(i+2:N,i)
-         Hi           = eye(N) - tw(i) * matmul( vec, transpose(vec) )
-         Q            = matmul( Q, Hi )
-      end do
-
-      ! Build tridiagonal T
-      T = 0.0_wp
-      do i = 1, N
-         T(i,i) = D(i)
-      end do
-      do i = 1, N - 1
-         T(i,i+1) = E(i)
-         T(i+1,i) = E(i)
-      end do
-
-   end subroutine reconstruct_TQ
 
 end program demo

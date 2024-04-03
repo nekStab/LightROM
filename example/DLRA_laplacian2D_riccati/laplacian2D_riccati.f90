@@ -1,6 +1,5 @@
 module Laplacian2D_LTI_Riccati
    use Laplacian2D_LTI
-   use Laplacian2D_LTI_Lyapunov
    !> RKLIB module for time integration.
    use rklib_module
    !> LightKrylov for linear algebra.
@@ -11,29 +10,125 @@ module Laplacian2D_LTI_Riccati
    implicit none
 
    private
-   public :: rhs_riccati
+   public :: CARE, laplacian_mat
+
+   !-------------------------------------------
+   !-----     LIGHTKRYLOV VECTOR TYPE     -----
+   !-------------------------------------------
+
+   type, extends(abstract_vector), public :: state_matrix
+      real(kind=wp) :: state(N**2) = 0.0_wp
+   contains
+      private
+      procedure, pass(self), public :: zero
+      procedure, pass(self), public :: dot
+      procedure, pass(self), public :: scal
+      procedure, pass(self), public :: axpby
+      procedure, pass(self), public :: rand
+   end type state_matrix
 
    type, extends(abstract_linop), public :: rklib_riccati_mat
       real(kind=wp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec  => direct_solver_riccati_mat
-      procedure, pass(self), public :: rmatvec => direct_solver_riccati_mat                ! dummy, not used
+      procedure, pass(self), public :: rmatvec => direct_solver_riccati_mat  ! dummy, not used
    end type rklib_riccati_mat
-
-   !type, extends(abstract_linop), public :: LR_Q
-   !contains
-   !   private
-   !   procedure, pass(self), public :: matvec  => LR_Q_mat
-   !   procedure, pass(self), public :: rmatvec => LR_Q_mat                ! dummy since symmetric
-   !end type LR_Q
 
 contains
 
-   !function CARE(X,A,Q,BRinvBT) result(Y)
-   !   real(kind=wp), dimension(n,n) :: X, A, Q, BRinvBT, Y
-   !   Y = matmul(transpose(Adata), X) + matmul(X, Adata) + Qdata - matmul(X, matmul(BRinvBTdata, X))
-   !end function CARE
+   function CARE(X,A,Q,BRinvBT) result(Y)
+      real(kind=wp), dimension(n,n) :: X, A, Q, BRinvBT, Y
+      Y = matmul(transpose(A), X) + matmul(X, A) + Q - matmul(X, matmul(BRinvBT, X))
+   end function CARE
+
+!-----     TYPE-BOUND PROCEDURE FOR VECTORS     -----
+
+   subroutine zero(self)
+      class(state_matrix), intent(inout) :: self
+      self%state = 0.0_wp
+      return
+   end subroutine zero
+
+   real(kind=wp) function dot(self, vec) result(alpha)
+      class(state_matrix)   , intent(in) :: self
+      class(abstract_vector), intent(in) :: vec
+      select type(vec)
+      type is(state_matrix)
+          alpha = dot_product(self%state, vec%state)
+      end select
+      return
+   end function dot
+
+   subroutine scal(self, alpha)
+      class(state_matrix), intent(inout) :: self
+      real(kind=wp)      , intent(in)    :: alpha
+      self%state = self%state * alpha
+      return
+   end subroutine scal  
+
+   subroutine axpby(self, alpha, vec, beta)
+      class(state_matrix)   , intent(inout) :: self
+      class(abstract_vector), intent(in)    :: vec
+      real(kind=wp)         , intent(in)    :: alpha, beta
+      select type(vec)
+      type is(state_matrix)
+          self%state = alpha*self%state + beta*vec%state
+      end select
+      return
+   end subroutine axpby
+
+   subroutine rand(self, ifnorm)
+      class(state_matrix), intent(inout) :: self
+      logical, optional,   intent(in)    :: ifnorm
+      ! internals
+      logical :: normalize
+      real(kind=wp) :: alpha
+      normalize = optval(ifnorm, .true.)
+      call random_number(self%state)
+      if (normalize) then
+         alpha = self%norm()
+         call self%scal(1.0/alpha)
+      endif
+      return
+   end subroutine rand
+
+   subroutine laplacian_mat(flat_mat_out, flat_mat_in, transpose)
+   
+      !> State vector.
+      real(kind=wp)  , dimension(:), intent(in)  :: flat_mat_in
+      !> Time-derivative.
+      real(kind=wp)  , dimension(:), intent(out) :: flat_mat_out
+      !> Transpose
+      logical, optional :: transpose
+      logical           :: trans
+      
+      !> Internal variables.
+      integer :: j
+      real(kind=wp), dimension(N,N) :: mat, dmat
+      
+      !> Deal with optional argument
+      trans = optval(transpose,.false.)
+      
+      !> Sets the internal variables.
+      mat  = reshape(flat_mat_in(1:N**2),(/N, N/))
+      dmat = 0.0_wp
+      
+      if (trans) then
+          do j = 1,N
+             call laplacian(dmat(j,:), mat(j,:))
+          end do
+      else
+          do j = 1,N
+             call laplacian(dmat(:,j), mat(:,j))
+          end do
+      endif
+
+      !> Reshape for output
+      flat_mat_out = reshape(dmat, shape(flat_mat_in))
+       
+      return
+   end subroutine laplacian_mat
 
    !--------------------------------------------
    !-----    Riccati equation for RKlib    -----
@@ -52,7 +147,7 @@ contains
       !> Internal variables.
       integer :: i, j, k
       real(kind=wp), dimension(N,N) :: xm, BRinvBTdata
-      real(kind=wp), dimension(N**2) :: dv, dvT 
+      real(kind=wp), dimension(N**2) :: dv, dvT, CTQcC
 
       !> Sets the internal variables.
       dv  = 0.0_wp
@@ -80,7 +175,7 @@ contains
       class(abstract_vector) , intent(out) :: vec_out
       !> Time-integrator.
       type(rks54_class) :: prop
-      real(kind=wp)     :: dt = 0.1_wp
+      real(kind=wp)     :: dt = 0.0001_wp
 
       select type(vec_in)
       type is (state_matrix)
@@ -95,39 +190,5 @@ contains
 
       return
    end subroutine direct_solver_riccati_mat
-
-   !--------------------------------------------------
-   !-----     TYPE-BOUND PROCEDURES FOR LR_Q     -----
-   !--------------------------------------------------
-
-   !subroutine LR_Q_mat(self, vec_in, vec_out)
-   !   !> Linear Operator.
-   !   class(LR_Q) ,            intent(in)  :: self
-   !   !> Input vector.
-   !   class(abstract_vector) , intent(in)  :: vec_in
-   !   !> Output vector.
-   !   class(abstract_vector) , intent(out) :: vec_out
-   !
-   !   ! internal variables
-   !   integer :: i
-   !   real(kind=wp) , allocatable         :: wrk(:,:)
-   !   class(abstract_vector), allocatable :: Uwrk
-   !   select type(vec_in)
-   !   type is (state_vector)
-   !      select type(vec_out)
-   !      type is (state_vector)
-   !         allocate(wrk(1:size(CT),1))
-   !         do i = 1, size(CT)
-   !            wrk(i, 1) = CT(i)%dot(vec_in)
-   !         end do
-   !         allocate (Uwrk, source=CT(1))
-   !         call get_vec(Uwrk, CT, matmul(Qcdata, wrk(:,1)))
-   !         call vec_out%axpby(0.0_wp, Uwrk, 1.0_wp)
-   !      end select
-   !   end select
-   !
-   !   return
-   !end subroutine LR_Q_mat
-
 
 end module Laplacian2D_LTI_Riccati
