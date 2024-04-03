@@ -9,7 +9,9 @@ program demo
    use LightROM_RiccatiSolvers
    use LightROM_utils
 
-   use Laplacian2D_LTI
+   use Laplacian2D_LTI_Base
+   use Laplacian2D_LTI_Operators
+   use Laplacian2D_LTI_RKlib
    use Laplacian2D_LTI_Riccati
 
    use stdlib_optval, only : optval 
@@ -72,11 +74,6 @@ program demo
 
    ! PROBLEM DEFINITION
    real(wp)  :: Adata(N,N)
-   real(wp)  :: Bdata(N,rkmax)
-   real(wp)  :: CTdata(N,rkmax)
-   real(wp)  :: Qc(rkmax,rkmax)
-   real(wp)  :: Rinv(rkmax,rkmax)
-   real(wp)  :: Bwrk(N,rkmax)
 
    ! SVD
    real(wp)  :: U_svd(N,N)
@@ -105,48 +102,33 @@ program demo
    
    call system_clock(count_rate=clock_rate)
 
-   write(*,*)
-   write(*,*) 'RICCATI EQUATION FOR THE 2D LAPLACE OPERATOR:'
-   write(*,*)
-   write(*,*) '    Algebraic Lyapunov equation:'
-   write(*,*) '                0 = A @ X + X @ A.T + Q - X @ B @ R^{-1} @ B.T @ X'
-   write(*,*)
-   write(*,*) '    Differential Lyapunov equation:'
-   write(*,*) '          \dot{X} = A @ X + X @ A.T + Q - X @ B @ R^{-1} @ B.T @ X'
-   write(*,*)
-   write(*,'(A16,I4,"x",I4)') '  Problem size: ', N, N
-   write(*,*)
-   write(*,*) '  Initial condition: rank(X0) =', rk_X0
-   write(*,*) '  Inhomogeneity:     rank(Q)  =', rk_C
-   write(*,*) '  Inhomogeneity:     rank(B)  =', rk_B
-   write(*,*)
-   write(*,*) '---------------------------------------------'
-   write(*,*)
-
-   ! Define C, Qc & compute CTQcC
-   Qc = eye(rkmax)
-
-   call init_rand(CT, ifnorm = .true.)
-   call get_state(CTdata(:,1:rk_c), CT)
-   CTQcCdata = matmul(CTdata(:,1:rk_c), matmul( Qc(1:rk_c,1:rk_c), transpose(CTdata(:,1:rk_c))))
-   CTQcC(1:N**2) = reshape(CTQcCdata, shape(CTQcC))
-   
-   ! Define B, Rinv & compule BRinvBT
-   Rinv = 1e1*eye(rkmax)
-
-   call init_rand(B, ifnorm = .true.)
-   Bdata = 0.0_wp
-   call get_state(Bdata(:,1:rk_b), B)
-   Bwrk = 0.0_wp
-   Bwrk(:,1:rk_b) = matmul(Bdata(:,1:rk_b), Rinv(1:rk_b, 1:rk_b))
-   BRinvBTdata = matmul( Bwrk(:,1:rk_b), transpose(Bdata(:,1:rk_b)) )
+   ! Set up problem
+   call initialize_problem(1.0_wp, 0.0_wp)
 
    ! Define LTI system
    LTI = lti_system()
    allocate(LTI%A,          source=A)
    allocate(LTI%B(1:rk_b),  source=B(1:rk_b))
    allocate(LTI%CT(1:rk_c), source=CT(1:rk_c))
-   allocate(LTI%D(1:p,1:rk_b)); LTI%D = 0.0_wp
+   allocate(LTI%D(1:rk_c,1:rk_b)); LTI%D = 0.0_wp
+
+   write(*,*)
+   write(*,*) 'RICCATI EQUATION FOR THE 2D LAPLACE OPERATOR:'
+   write(*,*)
+   write(*,*) '    Algebraic Lyapunov equation:'
+   write(*,*) '                0 = A.T @ X + X @ A + C.T @ Qc @ C - X @ B @ R^{-1} @ B.T @ X'
+   write(*,*)
+   write(*,*) '    Differential Lyapunov equation:'
+   write(*,*) '          \dot{X} = A.T @ X + X @ A + C.T @ Qc @ C - X @ B @ R^{-1} @ B.T @ X'
+   write(*,*)
+   write(*,'(A16,I4,"x",I4)') '  Problem size: ', N, N
+   write(*,*)
+   write(*,*) '  Initial condition: rank(X0)            =', rk_X0
+   write(*,*) '  Inhomogeneity:     rank(C.T @ Qc @ C)  =', rk_C
+   write(*,*) '  Inhomogeneity:     rank(B)             =', rk_B
+   write(*,*)
+   write(*,*) '---------------------------------------------'
+   write(*,*)
 
    !------------------
    ! COMPUTE EXACT SOLUTION OF THE RICCATI EQUATION WITH LAPACK
@@ -219,120 +201,26 @@ program demo
    X0 = matmul( U0(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U0(:,1:rk_X0))))
 
    ! initialize exponential propagator
-   !nrep = 10
-   !Tend = 0.1_wp !2.0_wp
-   !RK_prop_ricc = rklib_riccati_mat(Tend)
-!
-   !allocate(X_RKlib(N, N, nrep))
-   !call set_state(Xmat_RKlib(1:1), X0)
-   !write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','|| dX/dt ||_2/N', 'Elapsed time'
-   !write(*,*) '         ------------------------------------------------------------------------'
-   !do irep = 1, nrep
-   !   call system_clock(count=clock_start)     ! Start Timer
-   !   ! integrate
-   !   call RK_prop_ricc%matvec(Xmat_RKlib(1), Xmat_RKlib(2))
-   !   ! recover output
-   !   call get_state(X_RKlib(:,:,irep), Xmat_RKlib(2:2))
-   !   call print_mat(N**2,1,Xmat_RKlib(2)%state)
-   !   ! replace input
-   !   call set_state(Xmat_RKlib(1:1), X_RKlib(:,:,irep))
-   !   call system_clock(count=clock_stop)      ! Stop Timer
-   !   write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tend, &
-   !                  & norm2(CARE(X_RKlib(:,:,irep), Adata, CTQcCdata, BRinvBTdata))/N, &
-   !                  & real(clock_stop-clock_start)/real(clock_rate)
-   !end do
+   nrep = 10
+   Tend = 0.1_wp
+   RK_prop_ricc = rklib_riccati_mat(Tend)
 
-
-
-contains
-
-   !--------------------------------------------------------------------
-   !-----     UTILITIES FOR STATE_VECTOR AND STATE MATRIX TYPES    -----
-   !--------------------------------------------------------------------
-
-   subroutine get_state(mat_out, state_in)
-      !! Utility function to transfer data from a state vector to a real array
-      real(kind=wp),          intent(out) :: mat_out(:,:)
-      class(abstract_vector), intent(in)  :: state_in(:)
-      ! internal variables
-      integer :: k, kdim
-      mat_out = 0.0_wp
-      select type (state_in)
-      type is (state_vector)
-         kdim = size(state_in)
-         call assert_shape(mat_out, (/ N, kdim /), 'get_state -> state_vector', 'mat_out')
-         do k = 1, kdim
-            mat_out(:,k) = state_in(k)%state
-         end do
-      type is (state_matrix)
-         call assert_shape(mat_out, (/ N, N /), 'get_state -> state_matrix', 'mat_out')
-         mat_out = reshape(state_in(1)%state, (/ N, N /))
-      end select
-      return
-   end subroutine get_state
-
-   subroutine set_state(state_out, mat_in)
-      !! Utility function to transfer data from a real array to a state vector
-      class(abstract_vector), intent(out) :: state_out(:)
-      real(kind=wp),          intent(in)  :: mat_in(:,:)
-      ! internal variables
-      integer       :: k, kdim
-      select type (state_out)
-      type is (state_vector)
-         kdim = size(state_out)
-         call assert_shape(mat_in, (/ N, kdim /), 'set_state -> state_vector', 'mat_in')
-         call mat_zero(state_out)
-         do k = 1, kdim
-            state_out(k)%state = mat_in(:,k)
-         end do
-      type is (state_matrix)
-         call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
-         call mat_zero(state_out)
-         state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
-      end select
-      return
-   end subroutine set_state
-
-   subroutine init_rand(state, ifnorm)
-      !! Utility function to initialize a state vector with random data
-      class(abstract_vector), intent(inout)  :: state(:)
-      logical, optional,      intent(in)     :: ifnorm
-      ! internal variables
-      integer :: k, kdim
-      logical :: normalize
-      normalize = optval(ifnorm,.true.)
-      select type (state)
-      type is (state_vector)
-         kdim = size(state)
-         do k = 1, kdim
-            call state(k)%rand(ifnorm = normalize)
-         end do
-      type is (state_matrix)
-         kdim = size(state)
-         do k = 1, kdim
-            call state(k)%rand(ifnorm = normalize)
-         end do
-      end select
-      return
-   end subroutine init_rand
-
-   subroutine build_operator(A)
-      !! Build the two-dimensional Laplace operator explicitly
-      real(kind=wp), intent(out) :: A(N,N)
-
-      A = -4.0_wp/dx2*eye(N)
-      do i = 1, nx
-         do j = 1, nx - 1
-            k = (i-1)*nx + j
-            A(k + 1, k) = 1.0_wp/dx2
-            A(k, k + 1) = 1.0_wp/dx2
-         end do 
-      end do
-      do i = 1, N-nx
-         A(i, i + nx) = 1.0_wp/dx2
-         A(i + nx, i) = 1.0_wp/dx2
-      end do
-      return
-   end subroutine build_operator
+   allocate(X_RKlib(N, N, nrep))
+   call set_state(Xmat_RKlib(1:1), X0)
+   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','|| dX/dt ||_2/N', 'Elapsed time'
+   write(*,*) '         ------------------------------------------------------------------------'
+   do irep = 1, nrep
+      call system_clock(count=clock_start)     ! Start Timer
+      ! integrate
+      call RK_prop_ricc%matvec(Xmat_RKlib(1), Xmat_RKlib(2))
+      ! recover output
+      call get_state(X_RKlib(:,:,irep), Xmat_RKlib(2:2))
+      ! replace input
+      call set_state(Xmat_RKlib(1:1), X_RKlib(:,:,irep))
+      call system_clock(count=clock_stop)      ! Stop Timer
+      write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tend, &
+                     & norm2(CARE(X_RKlib(:,:,irep), Adata, CTQcCdata, BRinvBTdata))/N, &
+                     & real(clock_stop-clock_start)/real(clock_rate)
+   end do
 
 end program demo
