@@ -30,21 +30,21 @@ LightKrylov = { path = "../LightKrylov" }
 test-drive.git = "https://github.com/fortran-lang/test-drive"
 test-drive.tag = "v0.4.0"
 
-[[example]]
-
-name = "DLRA_laplacian2D_abstract_lti"
-source-dir = "example/DLRA_laplacian2D_abstract_lti"
-
-[example.dependencies]
-rklib = { git="https://github.com/jacobwilliams/rklib.git" }
-
 #[[example]]
 #
-#name = "DLRA_laplacian2D_riccati"
-#source-dir = "example/DLRA_laplacian2D_riccati"
+#name = "DLRA_laplacian2D_abstract_lti"
+#source-dir = "example/DLRA_laplacian2D_abstract_lti"
 #
 #[example.dependencies]
 #rklib = { git="https://github.com/jacobwilliams/rklib.git" }
+
+[[example]]
+
+name = "DLRA_laplacian2D_riccati"
+source-dir = "example/DLRA_laplacian2D_riccati"
+
+[example.dependencies]
+rklib = { git="https://github.com/jacobwilliams/rklib.git" }
 
 [[example]]
 
