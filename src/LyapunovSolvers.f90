@@ -260,7 +260,8 @@ module LightROM_LyapunovSolvers
       allocate(wrk(1:rk,1:rk)); wrk = 0.0_wp
 
       !> Apply propagator to initial basis
-      if (.not. allocated(Uwrk)) allocate(Uwrk, source=X%U(1)); call Uwrk%zero()
+      if (.not. allocated(Uwrk)) allocate(Uwrk, source=X%U(1))
+      call Uwrk%zero()
       do i = 1, rk
          call exptA(Uwrk, LTI%A, X%U(i), tau, info, trans)
          call X%U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
@@ -291,8 +292,9 @@ module LightROM_LyapunovSolvers
       integer                                           :: rk
 
       rk = size(X%U)
-      if (.not. allocated(U1))   allocate(U1(1:rk),   source=X%U(1)); call mat_zero(U1)
-      if (.not. allocated(BBTU)) allocate(BBTU(1:rk), source=X%U(1)); call mat_zero(BBTU)
+      if (.not. allocated(U1))   allocate(U1(1:rk),   source=X%U(1))
+      if (.not. allocated(BBTU)) allocate(BBTU(1:rk), source=X%U(1))
+      call mat_zero(U1); call mat_zero(BBTU)
 
       call K_step(X, U1, BBTU, LTI%B, tau, info)
 
@@ -326,7 +328,8 @@ module LightROM_LyapunovSolvers
       info = 0
 
       rk = size(X%U)
-      if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); Swrk = 0.0_wp
+      if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk));
+      Swrk = 0.0_wp
       allocate(perm(1:rk)); perm = 0
 
       call mat_mult(U1, X%U, X%S)             ! K0
@@ -358,7 +361,8 @@ module LightROM_LyapunovSolvers
       info = 0
 
       rk = size(X%U)
-      if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); Swrk = 0.0_wp
+      if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk))
+      Swrk = 0.0_wp
       call mat_mult(Swrk, U1, BBTU)          ! - Sdot
       !> Construct solution S1
       call mat_axpby(X%S, 1.0_wp, Swrk, -tau)
@@ -384,7 +388,8 @@ module LightROM_LyapunovSolvers
       info = 0
 
       rk = size(X%U)
-      if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=X%U(1)); call mat_zero(Uwrk)
+      if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=X%U(1))
+      call mat_zero(Uwrk)
 
       call mat_mult(Uwrk, X%U, transpose(X%S))  ! L0.T
       call apply_outerproduct(X%U, B, U1)     ! Ldot.T

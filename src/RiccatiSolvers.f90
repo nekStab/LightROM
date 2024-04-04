@@ -5,7 +5,8 @@ module LightROM_RiccatiSolvers
    use lightkrylov_BaseKrylov
    use LightROM_LyapunovUtils
    use LightROM_LyapunovSolvers
-   use LightROM_utils
+   use LightROM_RiccatiUtils
+   !use LightROM_Utils
    use lightrom_AbstractLTIsystems
    use stdlib_optval, only : optval
    use stdlib_linalg, only : eye
@@ -17,9 +18,10 @@ module LightROM_RiccatiSolvers
    class(abstract_vector),  allocatable   :: QU(:)
    real(kind=wp),           allocatable   :: Swrk0(:,:)
    real(kind=wp),           allocatable   :: Swrk1(:,:)
-   real(kind=wp),           allocatable   :: BTU(:,:)
-   real(kind=wp),           allocatable   :: UTB(:,:)
-   integer,                 allocatable   :: perm(:)
+   ! prediction step
+   class(abstract_vector),  allocatable   :: Utmp0(:)
+   class(abstract_vector),  allocatable   :: Utmp1(:)
+   real(kind=wp),           allocatable   :: Stmp0(:,:)
 
    private
    public :: numerical_low_rank_splitting_integrator_riccati
@@ -175,8 +177,6 @@ module LightROM_RiccatiSolvers
          endif
       enddo dlra
 
-      deallocate(BTU); deallocate(UTB)
-
       return
 
    end subroutine numerical_low_rank_splitting_integrator_riccati
@@ -202,13 +202,15 @@ module LightROM_RiccatiSolvers
 
       !> Local variables
       integer                                            :: istep, nsteps, integrator, rk
-      class(abstract_vector), allocatable                :: Utmp0(:) ! basis
-      class(abstract_vector), allocatable                :: Utmp1(:) ! basis
-      real(kind=wp),          allocatable                :: Stmp0(:,:) ! coefficients
+      class(abstract_vector), allocatable                :: Utmp0(:)
+      class(abstract_vector), allocatable                :: Utmp1(:)
+      real(kind=wp),          allocatable                :: Stmp0(:,:)
 
       if ( torder .eq. 1 ) then 
          integrator = 1
       else if ( torder .eq. 2 ) then
+         write(*,*) 'Second order not yet implemented'
+         STOP 1
          integrator = 2
       else if ( torder .gt. 2 ) then
          write(*,*) "INFO : Time-integration order for the operator splitting of d > 2 &
@@ -227,12 +229,12 @@ module LightROM_RiccatiSolvers
          call M_forward_map        (X, LTI,              tau, info, exptA, iftrans=.true.)
          call G_forward_map_riccati(X, LTI, Qc, Rinv,    tau, info)
       case (2) ! Strang splitting
-         rk = size(X%U)
          call M_forward_map        (X, LTI,           0.5*tau, info, exptA, iftrans=.true.)
          ! Predictor step
-         allocate(Utmp0(1:rk), source=X%U(1:rk))
-         allocate(Utmp1(1:rk), source=X%U(1:rk))
-         allocate(Stmp0(1:rk,1:rk))
+         rk = size(X%U)
+         if (.not. allocated(Utmp0)) allocate(Utmp0(1:rk), source=X%U(1:rk))
+         if (.not. allocated(Utmp1)) allocate(Utmp1(1:rk), source=X%U(1:rk))
+         if (.not. allocated(Stmp0)) allocate(Stmp0(1:rk,1:rk))
          ! Save current state
          call mat_copy(Utmp0, X%U); Stmp0 = X%S
          ! First order integration
@@ -254,47 +256,47 @@ module LightROM_RiccatiSolvers
 
    subroutine G_forward_map_riccati(X, LTI, Qc, Rinv, tau, info, Upred)
       !> Low-rank state
-      class(abstract_sym_low_rank_state),  intent(inout) :: X
+      class(abstract_sym_low_rank_state),  intent(inout) :: X      ! current state
       ! LTI system
-      class(abstract_lti_system),       intent(in)    :: LTI
-      real(kind=wp),                    intent(in)    :: Qc(:,:)
-      real(kind=wp),                    intent(in)    :: Rinv(:,:)
+      class(abstract_lti_system),          intent(in)    :: LTI
+      real(kind=wp),                       intent(in)    :: Qc(:,:)
+      real(kind=wp),                       intent(in)    :: Rinv(:,:)
       !> Integration step size         
-      real(kind=wp),                    intent(in)    :: tau
+      real(kind=wp),                       intent(in)    :: tau
       !> Information flag
-      integer,                          intent(out)   :: info
+      integer,                             intent(out)   :: info
       !> Intermediate values
-      class(abstract_vector), optional, intent(in)    :: Upred(:)   ! basis
-      class(abstract_vector),           allocatable   :: Up(:)  
+      class(abstract_vector), optional,    intent(in)    :: Upred(:)
+      class(abstract_vector),              allocatable   :: Up(:)  
       
       !> Local variables
-      class(abstract_vector),           allocatable   :: U1(:)
-      class(abstract_vector),           allocatable   :: QU(:)
-      real(kind=wp),                    allocatable   :: UTB(:,:)
-      integer                                         :: m, rk
+      class(abstract_vector),              allocatable   :: U1(:)
+      class(abstract_vector),              allocatable   :: QU(:)
+      integer                                            :: rk
 
       rk = size(X%U)
-      m  = size(LTI%B)
-      if (.not. allocated(U1))  allocate(U1(1:rk), source=X%U(1)); call mat_zero(U1)
-      if (.not. allocated(QU))  allocate(QU(1:rk), source=X%U(1)); call mat_zero(QU) 
-      if (.not. allocated(UTB)) allocate(UTB(1:rk,1:m)); UTB = 0.0_wp
+      if (.not. allocated(U1))  allocate(U1( 1:rk), source=X%U(1)); 
+      if (.not. allocated(QU))  allocate(QU( 1:rk), source=X%U(1)); 
+      call mat_zero(U1); call mat_zero(QU)
 
       !if ( present(Upred) .and. present(Spred) ) then
       if (present(Upred)) then
+         write(*,*) 'Second order not implemented yet.'
+         STOP 1
          ! second order in time
          allocate(Up(1:rk), source=Upred(1:rk))
          ! first steps based on previous state (U,S)
-         call K_step_riccati(X, U1, QU, UTB, LTI, Qc, Rinv, 0.5*tau, info)
-         call S_step_riccati(X, U1, QU, UTB, LTI, Qc, Rinv, 0.5*tau, info)
-         call L_step_riccati(X, U1,          LTI, Qc, Rinv,     tau, info)
+         call K_step_riccati(X, U1, QU, LTI, Qc, Rinv, 0.5*tau, info)
+         call S_step_riccati(X, U1, QU, LTI, Qc, Rinv, 0.5*tau, info)
+         call L_step_riccati(X, U1,     LTI, Qc, Rinv,     tau, info)
          ! second set in reverse order based on intermediate state (Up,Sp)
-         call S_step_riccati(X, Up, QU, UTB, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true.)
-         call K_step_riccati(X, Up, QU, UTB, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true.)
+         call S_step_riccati(X, Up, QU, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true.)
+         call K_step_riccati(X, Up, QU, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true.)
       else
          ! first order in time
-         call K_step_riccati(X, U1, QU, UTB, LTI, Qc, Rinv,     tau, info)
-         call S_step_riccati(X, U1, QU, UTB, LTI, Qc, Rinv,     tau, info)
-         call L_step_riccati(X, U1,          LTI, Qc, Rinv,     tau, info)
+         call K_step_riccati(X, U1, QU, LTI, Qc, Rinv,     tau, info)
+         call S_step_riccati(X, U1, QU, LTI, Qc, Rinv,     tau, info)
+         call L_step_riccati(X, U1,     LTI, Qc, Rinv,     tau, info)
       end if
       
       !> Copy data to output
@@ -303,32 +305,28 @@ module LightROM_RiccatiSolvers
       return
    end subroutine G_forward_map_riccati
 
-   subroutine K_step_riccati(X, U1, QU, UTB, LTI, Qc, Rinv, tau, info, reverse)
+   subroutine K_step_riccati(X, U1, QU, LTI, Qc, Rinv, tau, info, reverse)
       !> Low-rank state
-      class(abstract_sym_low_rank_state), intent(inout) :: X
-      class(abstract_vector),     intent(out)   :: U1(:)  ! basis
-      class(abstract_vector),     intent(inout) :: QU(:)  ! basis
-      real(kind=wp),              intent(inout) :: UTB(:,:) ! matrix
+      class(abstract_sym_low_rank_state), intent(inout) :: X         ! current state
+      class(abstract_vector),             intent(out)   :: U1(:)     ! updated basis
+      class(abstract_vector),             intent(inout) :: QU(:)     ! tmp
       ! LTI system
-      class(abstract_lti_system), intent(in)    :: LTI
-      real(kind=wp),              intent(in)    :: Qc(:,:)
-      real(kind=wp),              intent(in)    :: Rinv(:,:)
+      class(abstract_lti_system),         intent(in)    :: LTI
+      real(kind=wp),                      intent(in)    :: Qc(:,:)
+      real(kind=wp),                      intent(in)    :: Rinv(:,:)
       !> Integration step size
-      real(kind=wp),              intent(in)    :: tau
+      real(kind=wp),                      intent(in)    :: tau
       !> Information flag
-      integer,                    intent(out)   :: info
+      integer,                            intent(out)   :: info
       !> in second order scheme, are we in the forward or reverse branch?
-      logical, optional,          intent(in)    :: reverse
-      logical                                   :: reverse_order
+      logical, optional,                  intent(in)    :: reverse
+      logical                                           :: reverse_order
 
       !> Local variables
-      class(abstract_vector),     allocatable   :: Uwrk0(:)
-      real(kind=wp),              allocatable   :: Swrk0(:,:)
-      real(kind=wp),              allocatable   :: BTU(:,:)
-      real(kind=wp),              allocatable   :: PTwrk(:,:)
-      real(kind=wp),              allocatable   :: Qwrk(:,:)
-      integer,                    allocatable   :: perm(:)   ! Permutation vector
-      integer                                   :: i, m, rk
+      class(abstract_vector),             allocatable   :: Uwrk0(:)
+      real(kind=wp),                      allocatable   :: Swrk0(:,:)
+      integer,                            allocatable   :: perm(:)   ! Permutation vector
+      integer                                           :: rk
 
       ! Optional arguments
       reverse_order = optval(reverse, .false.)
@@ -336,31 +334,27 @@ module LightROM_RiccatiSolvers
       info = 0
 
       rk = size(X%U)
-      m  = size(LTI%B)
-      if (.not. allocated(Uwrk0)) allocate(Uwrk0(1:rk), source=X%U(1)); call mat_zero(Uwrk0)
-      if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk)); Swrk0 = 0.0_wp
-      if (.not. allocated(BTU))   allocate(BTU(  1:m, 1:rk)); BTU   = 0.0_wp
-      if (.not. allocated(perm))  allocate(perm( 1:rk));      perm  = 0
+      if (.not. allocated(Uwrk0)) allocate(Uwrk0(1:rk), source=X%U(1)); 
+      if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk)); 
+      allocate(perm(1:rk)); perm = 0
+      call mat_zero(Uwrk0); Swrk0 = 0.0_wp
 
-      call mat_mult(U1, X%U, X%S)                         ! K0
-
+      call mat_mult(U1, X%U, X%S)                               ! K0 = U0 @ S0
       ! Constant part --> QU
       if (.not. reverse_order) then
-         ! compute QU and UTB and pass to S step
-         call mat_zero(QU)
-         call apply_CTQcC(QU, X%U, LTI, Qc)
-         call mat_mult(UTB, X%U, LTI%B)                                      !              U0.T @ B
+         ! compute QU and pass to S step
+         call apply_outerproduct_w(QU, X%U, LTI%CT, Qc)
       end if
 
       ! non-linear part --> Uwrk0
-      call mat_mult(BTU, LTI%B, X%U)                                         !                                      B.T @ U0
-      call mat_mult(Uwrk0, U1, matmul(UTB, matmul(Rinv, matmul(BTU, X%S))))  ! (U0 @ S0) @ (U0.T @ B) @ (R^(-1) @ ((B.T @ U0) @ S0))
+      call apply_p_outerproduct_w(Swrk0, X%U, U1, LTI%B, Rinv)  ! (U0.T) @ B @ R^(-1) @ B.T @ (U0 @ S0)
+      call mat_mult(Uwrk0, U1, Swrk0)                           ! (U0 @ S0) @ Swrk0
       
       ! combine to form G( K @ U.T ) @ U --> Uwrk0
       call mat_axpby(Uwrk0, -1.0_wp, QU, 1.0_wp)
 
       !> Construct solution U1
-      call mat_axpby(U1, 1.0_wp, Uwrk0, tau) ! K0 + tau*Kdot
+      call mat_axpby(U1, 1.0_wp, Uwrk0, tau)                   ! K0 + tau*Kdot
 
       !> Orthonormalize in-place
       call qr_factorization(U1, Swrk0, perm, info, ifpivot = .true.)
@@ -370,31 +364,27 @@ module LightROM_RiccatiSolvers
       return
    end subroutine K_step_riccati
 
-   subroutine S_step_riccati(X, U1, QU, UTB, LTI, Qc, Rinv, tau, info, reverse)
+   subroutine S_step_riccati(X, U1, QU, LTI, Qc, Rinv, tau, info, reverse)
       !> Low-rank state
-      class(abstract_sym_low_rank_state), intent(inout) :: X
-      class(abstract_vector),     intent(in)    :: U1(:)  ! updated basis
-      class(abstract_vector),     intent(inout) :: QU(:)  ! basis
-      real(kind=wp),              intent(inout) :: UTB(:,:) ! matrix
+      class(abstract_sym_low_rank_state), intent(inout) :: X      ! current state
+      class(abstract_vector),             intent(in)    :: U1(:)  ! updated basis
+      class(abstract_vector),             intent(inout) :: QU(:)  ! basis
       ! LTI system
-      class(abstract_lti_system), intent(in)    :: LTI
-      real(kind=wp),              intent(in)    :: Qc(:,:)
-      real(kind=wp),              intent(in)    :: Rinv(:,:)
+      class(abstract_lti_system),         intent(in)    :: LTI
+      real(kind=wp),                      intent(in)    :: Qc(:,:)
+      real(kind=wp),                      intent(in)    :: Rinv(:,:)
       !> Integration step size
-      real(kind=wp),              intent(in)    :: tau
+      real(kind=wp),                      intent(in)    :: tau
       !> Information flag
-      integer,                    intent(out)   :: info
+      integer,                            intent(out)   :: info
       !> in second order scheme, are we in the forward or reverse branch?
-      logical, optional,          intent(in)    :: reverse
-      logical                                   :: reverse_order
+      logical, optional,                  intent(in)    :: reverse
+      logical                                           :: reverse_order
 
       !> Local variables
-      real(kind=wp),              allocatable   :: BTU(:,:)
-      real(kind=wp),              allocatable   :: Pwrk1(:,:)
-      real(kind=wp),              allocatable   :: PTwrk(:,:)
-      real(kind=wp),              allocatable   :: Swrk0(:,:)
-      real(kind=wp),              allocatable   :: Swrk1(:,:)
-      integer                                   :: i, m, rk
+      real(kind=wp),                      allocatable   :: Swrk0(:,:)
+      real(kind=wp),                      allocatable   :: Swrk1(:,:)
+      integer                                           :: rk
 
       info = 0
 
@@ -402,23 +392,20 @@ module LightROM_RiccatiSolvers
       reverse_order = optval(reverse, .false.)
 
       rk = size(X%U)
-      m  = size(LTI%B)
-      if (.not. allocated(BTU))   allocate(BTU  (1:m, 1:rk)); BTU   = 0.0_wp
-      if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk)); Swrk0 = 0.0_wp
-      if (.not. allocated(Swrk1)) allocate(Swrk1(1:rk,1:rk)); Swrk1 = 0.0_wp 
+      if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk))
+      if (.not. allocated(Swrk1)) allocate(Swrk1(1:rk,1:rk))
+      Swrk0 = 0.0_wp; Swrk1 = 0.0_wp
 
       ! Constant part --> Swrk0
       if (reverse_order) then
-         ! compute QU and UTB pass it to K step
-         call mat_zero(QU)
-         call apply_CTQcC(QU, X%U, LTI, Qc)
-         call mat_mult(UTB, X%U, LTI%B)                              !       U0.T @ B
+         ! compute QU and pass to K step
+         call apply_outerproduct_w(QU, X%U, LTI%CT, Qc)
       endif
       call mat_mult(Swrk0, U1, QU)
 
       ! non-linear part --> Swrk1
-      call mat_mult(BTU, LTI%B, U1)                                !                              B.T @ U1
-      Swrk1 = matmul(X%S, matmul(UTB, matmul(Rinv, matmul(BTU, X%S)))) ! S0 @ (U0.T @ B @ (R^(-1) @ ((B.T @ U1) @ S0)))
+      call apply_p_outerproduct_w(Swrk1, X%U, U1, LTI%B, Rinv)    !       U0.T @ B @ R^(-1) @ B.T @ U1
+      Swrk1 = matmul(X%S, matmul(Swrk1, X%S))                     ! S0 @ (U0.T @ B @ R^(-1) @ B.T @ U1) @ S0
 
       ! combine to form -U1.T @ G( U1 @ S @ U0.T ) @ U0
       call mat_axpby(Swrk0, -1.0_wp, Swrk1, 1.0_wp)
@@ -432,76 +419,49 @@ module LightROM_RiccatiSolvers
    subroutine L_step_riccati(X, U1, LTI, Qc, Rinv, tau, info)
       !> Low-rank state
       class(abstract_sym_low_rank_state), intent(inout) :: X
-      class(abstract_vector),     intent(in)    :: U1(:)   ! basis after Kstep
+      class(abstract_vector),             intent(in)    :: U1(:)   ! basis after Kstep
       ! LTI system
-      class(abstract_lti_system), intent(in)    :: LTI
-      real(kind=wp),              intent(in)    :: Qc(:,:)
-      real(kind=wp),              intent(in)    :: Rinv(:,:)
+      class(abstract_lti_system),         intent(in)    :: LTI
+      real(kind=wp),                      intent(in)    :: Qc(:,:)
+      real(kind=wp),                      intent(in)    :: Rinv(:,:)
       !> Integration step size
-      real(kind=wp),              intent(in)    :: tau
+      real(kind=wp),                      intent(in)    :: tau
       !> Information flag
-      integer,                    intent(out)   :: info
+      integer,                            intent(out)   :: info
 
       !> Local variables
-      class(abstract_vector),     allocatable   :: Uwrk0(:)
-      class(abstract_vector),     allocatable   :: Uwrk1(:)
-      class(abstract_vector),     allocatable   :: Uwrk2(:)
-      real(kind=wp),              allocatable   :: Swrk0(:,:)
-      real(kind=wp),              allocatable   :: Swrk1(:,:)
-      real(kind=wp),              allocatable   :: Qwrk(:,:)
-      integer                                   :: i, m, rk
+      class(abstract_vector),             allocatable   :: Uwrk0(:)
+      class(abstract_vector),             allocatable   :: Uwrk1(:)
+      real(kind=wp),                      allocatable   :: Swrk0(:,:)
+      integer                                           :: rk
 
       info = 0
 
       rk = size(X%U)
-      m  = size(LTI%B)
-      if (.not. allocated(Uwrk0)) allocate(Uwrk0(1:rk), source=X%U(1)); call mat_zero(Uwrk0)
-      if (.not. allocated(Uwrk1)) allocate(Uwrk1(1:rk), source=X%U(1)); call mat_zero(Uwrk1)
-      if (.not. allocated(BTU))   allocate(BTU(  1:m, 1:rk)); BTU   = 0.0_wp
-      if (.not. allocated(UTB))   allocate(UTB(  1:rk,1:m )); UTB   = 0.0_wp
-      if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk)); Swrk0 = 0.0_wp
+      if (.not. allocated(Uwrk0)) allocate(Uwrk0(1:rk), source=X%U(1))
+      if (.not. allocated(Uwrk1)) allocate(Uwrk1(1:rk), source=X%U(1))
+      if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk)) 
+      call mat_zero(Uwrk0); call mat_zero(Uwrk1); Swrk0 = 0.0_wp
 
-      call mat_mult(Uwrk1, X%U, transpose(X%S)) ! L0.T = U0 @ S.T
+      call mat_mult(Uwrk1, X%U, transpose(X%S))                   ! L0.T                                    U0 @ S.T
 
       ! Constant part --> Uwrk0
-      call mat_zero(Uwrk0)
-      call apply_CTQcC(Uwrk0, U1, LTI, Qc)
+      call apply_outerproduct_w(Uwrk0, U1, LTI%CT, Qc)
 
       ! non-linear part --> U
-      call mat_mult(UTB, U1, LTI%B)          !               U1.T @ B
-      call mat_mult(BTU, LTI%B, Uwrk1)       !                                      B.T @ U0 @ S.T
-      Swrk0 = matmul(UTB, matmul(Rinv, BTU)) !              (U1.T @ B) @ (R^(-1) @ (B.T @ U0 @ S.T))
-      call mat_mult(X%U, Uwrk1, Swrk0)         ! (U0 @ S.T) @ (U1.T @ B  @  R^(-1) @  B.T @ U0 @ S.T)
+      call apply_p_outerproduct_w(Swrk0, U1, Uwrk1, LTI%B, Rinv)  !               U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T
+      call mat_mult(X%U, Uwrk1, Swrk0)                            ! (U0 @ S.T) @ (U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T)
 
       ! combine to form U1.T @ G( U1.T@L.T )
       call mat_axpby(Uwrk0, 1.0_wp, X%U, -1.0_wp)
 
       !> Construct solution U1
-      call mat_axpby(Uwrk1, 1.0_wp, Uwrk0, tau)       ! L0 + tau*Ldot
+      call mat_axpby(Uwrk1, 1.0_wp, Uwrk0, tau)                   ! L0 + tau*Ldot
 
       !> Update S
       call mat_mult(X%S, Uwrk1, U1)
 
       return
    end subroutine L_step_riccati
-
-   subroutine apply_CTQcC(basis_out, basis_in, LTI, Qc)
-      class(abstract_vector),     intent(in)   :: basis_in(:)
-      class(abstract_vector),     intent(out)  :: basis_out(:)
-      class(abstract_lti_system), intent(in)   :: LTI
-      real(kind=wp),              intent(in)   :: Qc(:,:)
-      ! internals
-      integer                                  :: sc, sb
-      real(kind=wp),               allocatable :: wrk(:,:), wrk2(:,:)
-
-      sc = size(LTI%CT)
-      sb = size(basis_in)
-      allocate(wrk( 1:sc,1:sb)); wrk = 0.0_wp
-
-      call mat_mult(wrk, LTI%CT, basis_in)
-      call mat_mult(basis_out, LTI%CT, matmul(Qc, wrk))
-   
-      return   
-   end subroutine apply_CTQcC
 
 end module lightROM_RiccatiSolvers
