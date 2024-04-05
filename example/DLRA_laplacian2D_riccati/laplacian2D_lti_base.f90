@@ -46,6 +46,9 @@ module Laplacian2D_LTI_Base
    !-------------------------------------------------------
 
    type, extends(abstract_sym_low_rank_state), public :: LR_state
+   contains
+      private
+      procedure, pass(self), public :: set_LR_state
    end type LR_state
 
 
@@ -304,5 +307,22 @@ contains
       end select
       return
    end subroutine init_rand
+
+   !------------------------------------------------------------
+   !-----     UTILITIES FOR SYM LOW RANK REPRESENTATION    -----
+   !------------------------------------------------------------
+
+   subroutine set_LR_state(self, U, S)
+      class(LR_state), intent(inout) :: self
+      real(kind=wp),   intent(in)    :: U(:,:)
+      real(kind=wp),   intent(in)    :: S(:,:)
+      ! internals
+      integer :: rk
+      rk = size(U,2)
+      call assert_shape(S, (/ rk, rk /), 'set_LR_state', 'S')
+      call set_state(self%U, U)
+      self%S = S
+      return
+   end subroutine set_LR_state
 
 end module Laplacian2D_LTI_Base

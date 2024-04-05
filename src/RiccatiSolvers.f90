@@ -226,8 +226,8 @@ module LightROM_RiccatiSolvers
 
       select case (integrator)
       case (1) ! Lie-Trotter splitting
-         call M_forward_map        (X, LTI,              tau, info, exptA, iftrans=.true.)
-         call G_forward_map_riccati(X, LTI, Qc, Rinv,    tau, info)
+         call M_forward_map        (X, LTI,               tau, info, exptA, iftrans=.true.)
+         call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info)
       case (2) ! Strang splitting
          call M_forward_map        (X, LTI,           0.5*tau, info, exptA, iftrans=.true.)
          ! Predictor step

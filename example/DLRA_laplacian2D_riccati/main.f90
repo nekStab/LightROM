@@ -201,7 +201,7 @@ program demo
    X0 = matmul( U0(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U0(:,1:rk_X0))))
 
    write(*,*)
-   write(*,*) ' II. Compute approximate solution of the differential Riccati equation using RKlib:'
+   write(*,*) 'II.  Compute approximate solution of the differential Riccati equation using RKlib:'
    write(*,*)
 
    ! initialize exponential propagator
@@ -249,7 +249,7 @@ program demo
    X = LR_state()
 
    do torder = 1, 1 !2
-      do i = 1, 1 !nrk
+      do i = 1, nrk
          rk = rkv(i)
 
          allocate(U(1:rk)); call mat_zero(U)
@@ -263,8 +263,7 @@ program demo
             if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
 
             ! Reset input
-            call set_state(X%U, U0(:,1:rk))
-            X%S = S0(1:rk,1:rk)
+            call X%set_LR_state(U0(:,1:rk), S0(1:rk,1:rk))
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
@@ -296,7 +295,7 @@ program demo
    deallocate(rkv); deallocate(dtv);
 
    ! Set up problem with non-zero R
-   call initialize_problem(1.0_wp, 1e-1_wp)
+   call initialize_problem(1.0_wp, 1.0_wp)
 
    ! Reset LTI system
    call mat_copy(LTI%B, B)
@@ -388,7 +387,7 @@ program demo
    X0 = matmul( U0(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U0(:,1:rk_X0))))
 
    write(*,*)
-   write(*,*) ' II. Compute approximate solution of the differential Riccati equation using RKlib:'
+   write(*,*) 'II.  Compute approximate solution of the differential Riccati equation using RKlib:'
    write(*,*)
 
    ! initialize exponential propagator
@@ -431,8 +430,8 @@ program demo
 
    X = LR_state()
 
-   do torder = 1, 1!, 2
-      do i = 1, 1 !nrk
+   do torder = 1, 2
+      do i = 1, nrk
          rk = rkv(i)
 
          allocate(U(1:rk)); call mat_zero(U)
@@ -446,8 +445,7 @@ program demo
             if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
 
             ! Reset input
-            call set_state(X%U, U0(:,1:rk))
-            X%S = S0(1:rk,1:rk)
+            call X%set_LR_state(U0(:,1:rk), S0(1:rk,1:rk))
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
