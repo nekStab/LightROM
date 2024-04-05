@@ -23,7 +23,7 @@ program demo
    integer, parameter :: rkmax = 14
    integer, parameter :: rk_X0 = 10
    logical, parameter :: verb  = .false.
-   logical, parameter :: save  = .true.
+   logical, parameter :: save  = .false.
    character*128      :: oname
    ! rk_B is set in laplacian2D.f90
 
@@ -39,7 +39,6 @@ program demo
 
    ! LTI system
    type(lti_system)                :: LTI
-   type(state_vector), allocatable :: CT(:)
    real(kind=wp), allocatable      :: D(:,:)
    integer                         :: p
 

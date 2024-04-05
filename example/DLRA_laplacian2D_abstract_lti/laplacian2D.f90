@@ -1,4 +1,4 @@
-module laplacian2D_LTI
+module Laplacian2D_LTI
    !> RKLIB module for time integration.
    use rklib_module
    !> exmplib module for exponential propagator
@@ -267,4 +267,4 @@ contains
       return
    end subroutine direct_solver_vec
 
-end module laplacian2D_LTI
+end module Laplacian2D_LTI
