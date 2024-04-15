@@ -231,6 +231,8 @@ program demo
 
          allocate(U(1:rk)); call mat_zero(U)
          allocate(S(1:rk,1:rk)); S = 0.0_wp
+         allocate(X%U(1:rk), source=U(1:rk))
+         allocate(X%S(1:rk,1:rk))
          write(*,'(A10,I1)') ' torder = ', torder
 
          do j = ndt, 1, -1
@@ -239,9 +241,8 @@ program demo
 
             ! Reset input
             call set_state(U(1:rk), U0(:,1:rk))
-            ! populate LR state
-            allocate(X%U(1:rk), source=U(1:rk))
-            allocate(X%S(1:rk,1:rk)); X%S = S0(1:rk,1:rk)
+            call mat_copy(X%U, U(1:rk))
+            X%S = S0(1:rk,1:rk)
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
@@ -265,6 +266,8 @@ program demo
 
          deallocate(X%U);
          deallocate(X%S);
+         deallocate(U);
+         deallocate(S);
 
       end do
    end do
