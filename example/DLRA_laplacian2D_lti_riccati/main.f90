@@ -426,7 +426,6 @@ program demo
          rk = rkv(i)
 
          allocate(U(1:rk)); call mat_zero(U)
-         allocate(S(1:rk,1:rk)); S = 0.0_wp
          allocate(X%U(1:rk), source=U(1:rk))
          allocate(X%S(1:rk,1:rk)); 
          write(*,'(A10,I1)') ' torder = ', torder
@@ -461,7 +460,6 @@ program demo
          deallocate(X%U);
          deallocate(X%S);
          deallocate(U);
-         deallocate(S);
 
       end do
    end do
