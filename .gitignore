@@ -31,11 +31,6 @@
 *.out
 *.app
 
-# testing folders
-example/laplacian1D
-example/DLRA_laplacian2D
-example/DLRA_cartpole
-
 # auxiliary files
 example/DLRA_laplacian2D_lti_lyapunov/output.txt
 example/DLRA_laplacian2D_lti_lyapunov/laplacian.gpp
