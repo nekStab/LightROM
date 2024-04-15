@@ -4,15 +4,15 @@ program demo
    use LightKrylov_utils
 
    use LightROM_AbstractLTIsystems
+   use LightROM_utils
+   
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
    use LightROM_RiccatiSolvers
-   use LightROM_utils
 
-   use Laplacian2D_LTI_Base
-   use Laplacian2D_LTI_Operators
-   use Laplacian2D_LTI_RKlib
-   use Laplacian2D_LTI_Riccati
+   use Laplacian2D_LTI_Riccati_Base
+   use Laplacian2D_LTI_Riccati_Operators
+   use Laplacian2D_LTI_Riccati_RKlib
 
    use stdlib_optval, only : optval 
    use stdlib_linalg, only : eye
@@ -20,17 +20,13 @@ program demo
    use stdlib_io_npy, only : save_npy
    implicit none
 
-   !----------------------------------------------------------
-   !-----     LYAPUNOV EQUATION FOR LAPLACE OPERATOR     -----
-   !----------------------------------------------------------
-
    ! DLRA
    integer, parameter :: rkmax = 14
    integer, parameter :: rk_X0 = 10
    logical, parameter :: verb  = .false.
    logical, parameter :: save  = .false.
    character*128      :: oname
-   ! rk_B is set in laplacian2D.f90
+   ! rk_B is set in laplacian2D_lti_base.f90
 
    integer  :: nrk, ndt, rk,  torder
    real(wp) :: dt, Tend
@@ -276,7 +272,7 @@ program demo
          end do
 
          if (save) then
-            write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
+            write(oname,'("example/DLRA_laplacian2D_riccati/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
             call save_npy(oname, X_out)
          end if
 
@@ -458,7 +454,7 @@ program demo
          end do
 
          if (save) then
-            write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
+            write(oname,'("example/DLRA_laplacian2D_riccati/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
             call save_npy(oname, X_out)
          end if
 

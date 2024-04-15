@@ -1,4 +1,4 @@
-module Laplacian2D_LTI_Base
+module Laplacian2D_LTI_Riccati_Base
    !> LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov_utils, only : assert_shape
@@ -325,4 +325,4 @@ contains
       return
    end subroutine set_LR_state
 
-end module Laplacian2D_LTI_Base
+end module Laplacian2D_LTI_Riccati_Base

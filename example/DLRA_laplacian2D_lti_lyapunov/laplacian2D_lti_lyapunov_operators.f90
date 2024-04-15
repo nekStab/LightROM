@@ -1,5 +1,5 @@
-module Laplacian2D_LTI_Riccati_Operators
-   use Laplacian2D_LTI_Riccati_Base
+module Laplacian2D_LTI_Lyapunov_Operators
+   use Laplacian2D_LTI_Lyapunov_Base
    !> LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov_utils
@@ -9,8 +9,7 @@ module Laplacian2D_LTI_Riccati_Operators
    use stdlib_linalg, only : eye
    implicit none
 
-   ! operator
-   public :: CARE, build_operator, laplacian, laplacian_mat
+   public :: CALE, laplacian, laplacian_mat
 
    !-----------------------------------
    !-----     LAPLACE OPERATOR    -----
@@ -25,10 +24,10 @@ module Laplacian2D_LTI_Riccati_Operators
 
 contains
 
-   function CARE(X,A,Q,BRinvBT) result(Y)
-      real(kind=wp), dimension(n,n) :: X, A, Q, BRinvBT, Y
-      Y = matmul(transpose(A), X) + matmul(X, A) + Q - matmul(X, matmul(BRinvBT, X))
-   end function CARE
+   function CALE(X,A,Q) result(Y)
+      real(kind=wp), dimension(n,n) :: X, A, Q, Y
+      Y = matmul(transpose(A), X) + matmul(X, A) + Q
+   end function CALE
 
    !-----     TYPE-BOUND PROCEDURE FOR LAPLACE OPERATOR    -----
 
@@ -52,26 +51,6 @@ contains
    !---------------------------
    !-----    Laplacian    -----
    !---------------------------
-
-   subroutine build_operator(A)
-      !! Build the two-dimensional Laplace operator explicitly
-      real(kind=wp), intent(out) :: A(N,N)
-      integer i, j, k
-
-      A = -4.0_wp/dx2*eye(N)
-      do i = 1, nx
-         do j = 1, nx - 1
-            k = (i-1)*nx + j
-            A(k + 1, k) = 1.0_wp/dx2
-            A(k, k + 1) = 1.0_wp/dx2
-         end do 
-      end do
-      do i = 1, N-nx
-         A(i, i + nx) = 1.0_wp/dx2
-         A(i + nx, i) = 1.0_wp/dx2
-      end do
-      return
-   end subroutine build_operator
 
    subroutine laplacian(vec_out, vec_in)
       
@@ -150,4 +129,4 @@ contains
       return
    end subroutine laplacian_mat
 
-end module Laplacian2D_LTI_Riccati_Operators
+end module Laplacian2D_LTI_Lyapunov_Operators

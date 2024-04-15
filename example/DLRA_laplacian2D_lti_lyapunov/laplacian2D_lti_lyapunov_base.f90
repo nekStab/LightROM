@@ -1,10 +1,7 @@
-module laplacian2D_LTI
-   !> RKLIB module for time integration.
-   use rklib_module
-   !> exmplib module for exponential propagator
-   use LightKrylov_expmlib
+module laplacian2D_LTI_Lyapunov_Base
    !> LightKrylov for linear algebra.
    use LightKrylov
+   use LightKrylov_utils, only : assert_shape
    use LightROM_AbstractLTIsystems
    !> Standard Library.
    use stdlib_math, only : linspace
@@ -15,7 +12,7 @@ module laplacian2D_LTI
    ! problem parameters
    public :: N, nx, dx, dx2, L, rk_b, B, BBT
    ! mesh and operator
-   public :: initialize_mesh, laplacian
+   public :: initialize_mesh
 
    !------------------------------
    !-----     PARAMETERS     -----
@@ -37,26 +34,30 @@ module laplacian2D_LTI
       real(kind=wp) :: state(N) = 0.0_wp
       contains
       private
-      procedure, pass(self), public :: zero
-      procedure, pass(self), public :: dot
-      procedure, pass(self), public :: scal
-      procedure, pass(self), public :: axpby
-      procedure, pass(self), public :: rand
+      procedure, pass(self), public :: zero => vector_zero
+      procedure, pass(self), public :: dot => vector_dot
+      procedure, pass(self), public :: scal => vector_scal
+      procedure, pass(self), public :: axpby => vector_axpby
+      procedure, pass(self), public :: rand => vector_rand
    end type state_vector
+
+   !-------------------------------------------
+   !-----     LIGHTKRYLOV VECTOR TYPE     -----
+   !-------------------------------------------
+
+   type, extends(abstract_vector), public :: state_matrix
+      real(kind=wp) :: state(N**2) = 0.0_wp
+   contains
+      private
+      procedure, pass(self), public :: zero => matrix_zero
+      procedure, pass(self), public :: dot => matrix_dot
+      procedure, pass(self), public :: scal => matrix_scal
+      procedure, pass(self), public :: axpby => matrix_axpby
+      procedure, pass(self), public :: rand => matrix_rand
+   end type state_matrix
 
    type(state_vector)       :: B(rk_b)
    real(kind=wp)            :: BBT(N**2)
-
-   !-----------------------------------
-   !-----     LAPLACE OPERATOR    -----
-   !-----------------------------------
-
-   type, extends(abstract_linop), public :: laplace_operator
-   contains
-      private
-      procedure, pass(self), public :: matvec  => direct_matvec_laplace
-      procedure, pass(self), public :: rmatvec => direct_matvec_laplace     ! dummy since Lyapunov equation for Laplacian is symmetric
-   end type laplace_operator
 
    !-----------------------------------------------
    !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
@@ -72,29 +73,17 @@ module laplacian2D_LTI
    type, extends(abstract_sym_low_rank_state), public :: LR_state
    end type LR_state
 
-   !------------------------------------------
-   !-----     EXPONENTIAL PROPAGATOR     -----
-   !------------------------------------------
-
-   type, extends(abstract_linop), public :: rklib_exptA_laplacian
-      real(kind=wp) :: tau ! Integration time.
-   contains
-      private
-      procedure, pass(self), public :: matvec  => direct_solver_vec
-      procedure, pass(self), public :: rmatvec => direct_solver_vec                  ! dummy
-   end type rklib_exptA_laplacian
-
 contains
 
    !-----     TYPE-BOUND PROCEDURE FOR VECTORS     -----
 
-   subroutine zero(self)
+   subroutine vector_zero(self)
       class(state_vector), intent(inout) :: self
       self%state = 0.0_wp
       return
-   end subroutine zero
+   end subroutine vector_zero
 
-   real(kind=wp) function dot(self, vec) result(alpha)
+   real(kind=wp) function vector_dot(self, vec) result(alpha)
       class(state_vector)   , intent(in) :: self
       class(abstract_vector), intent(in) :: vec
       select type(vec)
@@ -102,16 +91,16 @@ contains
          alpha = dot_product(self%state, vec%state)
       end select
       return
-   end function dot
+   end function vector_dot
 
-   subroutine scal(self, alpha)
+   subroutine vector_scal(self, alpha)
       class(state_vector), intent(inout) :: self
       real(kind=wp)      , intent(in)    :: alpha
       self%state = self%state * alpha
       return
-   end subroutine scal
+   end subroutine vector_scal
 
-   subroutine axpby(self, alpha, vec, beta)
+   subroutine vector_axpby(self, alpha, vec, beta)
       class(state_vector)   , intent(inout) :: self
       class(abstract_vector), intent(in)    :: vec
       real(kind=wp)         , intent(in)    :: alpha, beta
@@ -120,9 +109,9 @@ contains
          self%state = alpha*self%state + beta*vec%state
       end select
       return
-   end subroutine axpby
+   end subroutine vector_axpby
 
-   subroutine rand(self, ifnorm)
+   subroutine vector_rand(self, ifnorm)
       class(state_vector), intent(inout) :: self
       logical, optional,   intent(in)    :: ifnorm
       ! internals
@@ -135,26 +124,58 @@ contains
          call self%scal(1.0/alpha)
       endif
       return
-   end subroutine rand
+   end subroutine vector_rand
 
-   !-----     TYPE-BOUND PROCEDURE FOR LAPLACE OPERATOR    -----
+   !-----     TYPE-BOUND PROCEDURE FOR MATRICES     -----
 
-   subroutine direct_matvec_laplace(self, vec_in, vec_out)
-      !> Linear Operator.
-      class(laplace_operator),intent(in)  :: self
-      !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
-      !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
-      select type(vec_in)
-      type is (state_vector)
-         select type(vec_out)
-         type is (state_vector)
-            call laplacian(vec_out%state, vec_in%state)
-         end select
+   subroutine matrix_zero(self)
+      class(state_matrix), intent(inout) :: self
+      self%state = 0.0_wp
+      return
+   end subroutine matrix_zero
+
+   real(kind=wp) function matrix_dot(self, vec) result(alpha)
+      class(state_matrix)   , intent(in) :: self
+      class(abstract_vector), intent(in) :: vec
+      select type(vec)
+      type is(state_matrix)
+          alpha = dot_product(self%state, vec%state)
       end select
       return
-   end subroutine direct_matvec_laplace
+   end function matrix_dot
+
+   subroutine matrix_scal(self, alpha)
+      class(state_matrix), intent(inout) :: self
+      real(kind=wp)      , intent(in)    :: alpha
+      self%state = self%state * alpha
+      return
+   end subroutine matrix_scal  
+
+   subroutine matrix_axpby(self, alpha, vec, beta)
+      class(state_matrix)   , intent(inout) :: self
+      class(abstract_vector), intent(in)    :: vec
+      real(kind=wp)         , intent(in)    :: alpha, beta
+      select type(vec)
+      type is(state_matrix)
+          self%state = alpha*self%state + beta*vec%state
+      end select
+      return
+   end subroutine matrix_axpby
+
+   subroutine matrix_rand(self, ifnorm)
+      class(state_matrix), intent(inout) :: self
+      logical, optional,   intent(in)    :: ifnorm
+      ! internals
+      logical :: normalize
+      real(kind=wp) :: alpha
+      normalize = optval(ifnorm, .true.)
+      call random_number(self%state)
+      if (normalize) then
+         alpha = self%norm()
+         call self%scal(1.0/alpha)
+      endif
+      return
+   end subroutine matrix_rand
 
    !---------------------------------------
    !-----     CONSTRUCT THE MESH      -----
@@ -172,99 +193,4 @@ contains
       return
    end subroutine initialize_mesh
 
-   !---------------------------
-   !-----    Laplacian    -----
-   !---------------------------
-
-   subroutine laplacian(vec_out, vec_in)
-      
-      !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: vec_in
-      !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: vec_out
-
-      !> Internal variables.
-      integer             :: i, j, in
-      
-      in = 1
-      vec_out(in)       = (                                  - 4*vec_in(in) + vec_in(in + 1) + vec_in(in + nx)) / dx2
-      do in = 2, nx - 1
-         vec_out(in)    = (                   vec_in(in - 1) - 4*vec_in(in) + vec_in(in + 1) + vec_in(in + nx)) / dx2
-      end do
-      in = nx
-      vec_out(in)       = (                   vec_in(in - 1) - 4*vec_in(in)                  + vec_in(in + nx)) / dx2
-      !
-      do i = 2, nx-1
-         in = (i-1)*nx + 1
-         vec_out(in)    = ( vec_in(in - nx)                  - 4*vec_in(in) + vec_in(in + 1) + vec_in(in + nx)) / dx2
-         do j = 2, nx - 1
-            in = (i-1)*nx + j
-            vec_out(in) = ( vec_in(in - nx) + vec_in(in - 1) - 4*vec_in(in) + vec_in(in + 1) + vec_in(in + nx)) / dx2 
-         end do
-         in = (i-1)*nx + nx
-         vec_out(in)    = ( vec_in(in - nx) + vec_in(in - 1) - 4*vec_in(in)                  + vec_in(in + nx)) / dx2
-      end do
-      !
-      in = N - nx + 1
-      vec_out(in)       = ( vec_in(in - nx)                  - 4*vec_in(in) + vec_in(in + 1)                  ) / dx2
-      do in = N - nx + 2, N - 1
-         vec_out(in)    = ( vec_in(in - nx) + vec_in(in - 1) - 4*vec_in(in) + vec_in(in + 1)                  ) / dx2
-      end do
-      in = N
-      vec_out(in)       = ( vec_in(in - nx) + vec_in(in - 1) - 4*vec_in(in)                                   ) / dx2
-         
-      return
-   end subroutine laplacian
-
-   !-------------------------------------
-   !-----    Laplacian for RKlib    -----
-   !-------------------------------------
-
-   subroutine rhs(me, t, x, f)
-      !> Time-integrator.
-      class(rk_class), intent(inout)             :: me
-      !> Current time.
-      real(kind=wp)  , intent(in)                :: t
-      !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: x
-      !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: f
-
-      f = 0.0_wp
-      call laplacian(f(1:N), x(1:N))
-      
-      return
-   end subroutine rhs
-
-   !-----------------------------------------------------------------------------
-   !-----     TYPE-BOUND PROCEDURES FOR THE EXPONENTIAL PROPAGATOR RKLIB    -----
-   !-----------------------------------------------------------------------------
-
-   subroutine direct_solver_vec(self, vec_in, vec_out)
-      !> Linear Operator.
-      class(rklib_exptA_laplacian), intent(in)  :: self
-      !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
-      !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
-
-      !> Time-integrator.
-      type(rks54_class) :: prop
-      real(kind=wp)     :: dt = 1.0_wp
-
-      select type(vec_in)
-      type is (state_vector)
-         select type(vec_out)
-         type is (state_vector)
-
-             !> Initialize propagator.
-             call prop%initialize(n=N, f=rhs)
-             !> Integrate forward in time.
-             call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
-
-         end select
-      end select
-      return
-   end subroutine direct_solver_vec
-
-end module laplacian2D_LTI
+end module laplacian2D_LTI_Lyapunov_Base

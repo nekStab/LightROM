@@ -1,6 +1,6 @@
-module Laplacian2D_LTI_Riccati_RKlib
-   use Laplacian2D_LTI_Riccati_Base
-   use laplacian2D_LTI_Riccati_Operators
+module Laplacian2D_LTI_Lyapunov_RKlib
+   use Laplacian2D_LTI_Lyapunov_Base
+   use laplacian2D_LTI_Lyapunov_Operators
    !> RKLIB module for time integration.
    use rklib_module
    !> LightKrylov for linear algebra.
@@ -25,13 +25,13 @@ module Laplacian2D_LTI_Riccati_RKlib
       procedure, pass(self), public :: rmatvec => direct_solver_vec                  ! dummy
    end type rklib_exptA_laplacian
 
-   type, extends(abstract_linop), public :: rklib_riccati_mat
+   type, extends(abstract_linop), public :: rklib_lyapunov_mat
       real(kind=wp) :: tau ! Integration time.
    contains
       private
-      procedure, pass(self), public :: matvec  => direct_solver_riccati_mat
-      procedure, pass(self), public :: rmatvec => direct_solver_riccati_mat  ! dummy, not used
-   end type rklib_riccati_mat
+      procedure, pass(self), public :: matvec  => direct_solver_mat
+      procedure, pass(self), public :: rmatvec => direct_solver_mat                ! dummy
+   end type rklib_lyapunov_mat
 
 contains
 
@@ -84,9 +84,9 @@ contains
       return
    end subroutine direct_solver_vec
 
-    !-----    Laplacian Riccati RHS for RKlib    -----
+   !-----    Lyapunov RHS for RKlib    -----
 
-   subroutine rhs_riccati(me, t, x, f)
+   subroutine rhs_lyap(me, t, x, f)
       !> Time-integrator.
       class(rk_class), intent(inout)             :: me
       !> Current time.
@@ -98,25 +98,27 @@ contains
 
       !> Internal variables.
       integer :: i, j, k
-      real(kind=wp), dimension(N,N) :: xm
       real(kind=wp), dimension(N**2) :: dv, dvT
 
       !> Sets the internal variables.
       dv  = 0.0_wp
       dvT = 0.0_wp
 
+      !> We compute the action of the Lyapunov operator without using the transpose of A
+      !           L(X) = A @ X +   X @ A.T     + Q
+      !                = A @ X + ( A @ X.T ).T + Q
       call laplacian_mat(dv,  x, .false.)       ! A @ X
       call laplacian_mat(dvT, x, .true.)        ! ( A @ X.T ).T
 
-      xm = reshape(x, shape(xm))
-      f(1:N**2) = dv + dvT + CTQcC - reshape(matmul(xm, matmul(BRinvBTdata,xm)), shape(CTQcC))
-
+      !> Combine the parts and copy result to the output array.
+      f(1:N**2) = dv + dvT + BBT
+      
       return
-   end subroutine rhs_riccati
+   end subroutine rhs_lyap
 
-   subroutine direct_solver_riccati_mat(self, vec_in, vec_out)
+   subroutine direct_solver_mat(self, vec_in, vec_out)
       !> Linear Operator.
-      class(rklib_riccati_mat), intent(in)  :: self
+      class(rklib_lyapunov_mat), intent(in)  :: self
       !> Input vector.
       class(abstract_vector) , intent(in)  :: vec_in
       !> Output vector.
@@ -130,13 +132,14 @@ contains
          select type(vec_out)
          type is(state_matrix)
             !> Initialize propagator.
-            call prop%initialize(n=N**2, f=rhs_riccati)
+            call prop%initialize(n=N**2, f=rhs_lyap)
             !> Integrate forward in time.
             call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
          end select
       end select
 
       return
-   end subroutine direct_solver_riccati_mat
+   end subroutine direct_solver_mat
 
-end module Laplacian2D_LTI_Riccati_RKlib
+
+end module Laplacian2D_LTI_Lyapunov_RKlib

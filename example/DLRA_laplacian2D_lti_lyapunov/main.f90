@@ -1,13 +1,17 @@
 program demo
    use LightKrylov
    use LightKrylov_expmlib
-   use lightKrylov_utils
-   use Laplacian2D_LTI
-   use Laplacian2D_LTI_Lyapunov
+   use LightKrylov_utils
+
    use LightROM_AbstractLTIsystems
+   use LightROM_utils
+
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
-   use LightROM_utils
+
+   use Laplacian2D_LTI_Lyapunov_Base
+   use Laplacian2D_LTI_Lyapunov_Operators
+   use Laplacian2D_LTI_Lyapunov_RKlib
 
    use stdlib_optval, only : optval 
    use stdlib_linalg, only : eye
