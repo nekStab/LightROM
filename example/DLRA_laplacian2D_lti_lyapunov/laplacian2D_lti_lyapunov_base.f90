@@ -13,6 +13,8 @@ module laplacian2D_LTI_Lyapunov_Base
    public :: N, nx, dx, dx2, L, rk_b, B, BBT
    ! mesh and operator
    public :: initialize_mesh
+   ! utils
+   public :: get_state, set_state, init_rand
 
    !------------------------------
    !-----     PARAMETERS     -----
@@ -71,6 +73,9 @@ module laplacian2D_LTI_Lyapunov_Base
    !-------------------------------------------------------
 
    type, extends(abstract_sym_low_rank_state), public :: LR_state
+   contains
+      private
+      procedure, pass(self), public :: set_LR_state
    end type LR_state
 
 contains
@@ -192,5 +197,92 @@ contains
 
       return
    end subroutine initialize_mesh
+
+   !--------------------------------------------------------------------
+   !-----     UTILITIES FOR STATE_VECTOR AND STATE MATRIX TYPES    -----
+   !--------------------------------------------------------------------
+
+   subroutine get_state(mat_out, state_in)
+      !! Utility function to transfer data from a state vector to a real array
+      real(kind=wp),          intent(out) :: mat_out(:,:)
+      class(abstract_vector), intent(in)  :: state_in(:)
+      ! internal variables
+      integer :: k, kdim
+      mat_out = 0.0_wp
+      select type (state_in)
+      type is (state_vector)
+         kdim = size(state_in)
+         call assert_shape(mat_out, (/ N, kdim /), 'get_state -> state_vector', 'mat_out')
+         do k = 1, kdim
+            mat_out(:,k) = state_in(k)%state
+         end do
+      type is (state_matrix)
+         call assert_shape(mat_out, (/ N, N /), 'get_state -> state_matrix', 'mat_out')
+         mat_out = reshape(state_in(1)%state, (/ N, N /))
+      end select
+      return
+   end subroutine get_state
+
+   subroutine set_state(state_out, mat_in)
+      !! Utility function to transfer data from a real array to a state vector
+      class(abstract_vector), intent(out) :: state_out(:)
+      real(kind=wp),          intent(in)  :: mat_in(:,:)
+      ! internal variables
+      integer       :: k, kdim
+      select type (state_out)
+      type is (state_vector)
+         kdim = size(state_out)
+         call assert_shape(mat_in, (/ N, kdim /), 'set_state -> state_vector', 'mat_in')
+         call mat_zero(state_out)
+         do k = 1, kdim
+            state_out(k)%state = mat_in(:,k)
+         end do
+      type is (state_matrix)
+         call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
+         call mat_zero(state_out)
+         state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
+      end select
+      return
+   end subroutine set_state
+
+   subroutine init_rand(state, ifnorm)
+      !! Utility function to initialize a state vector with random data
+      class(abstract_vector), intent(inout)  :: state(:)
+      logical, optional,      intent(in)     :: ifnorm
+      ! internal variables
+      integer :: k, kdim
+      logical :: normalize
+      normalize = optval(ifnorm,.true.)
+      select type (state)
+      type is (state_vector)
+         kdim = size(state)
+         do k = 1, kdim
+            call state(k)%rand(ifnorm = normalize)
+         end do
+      type is (state_matrix)
+         kdim = size(state)
+         do k = 1, kdim
+            call state(k)%rand(ifnorm = normalize)
+         end do
+      end select
+      return
+   end subroutine init_rand
+
+   !------------------------------------------------------------
+   !-----     UTILITIES FOR SYM LOW RANK REPRESENTATION    -----
+   !------------------------------------------------------------
+
+   subroutine set_LR_state(self, U, S)
+      class(LR_state), intent(inout) :: self
+      real(kind=wp),   intent(in)    :: U(:,:)
+      real(kind=wp),   intent(in)    :: S(:,:)
+      ! internals
+      integer :: rk
+      rk = size(U,2)
+      call assert_shape(S, (/ rk, rk /), 'set_LR_state', 'S')
+      call set_state(self%U, U)
+      self%S = S
+      return
+   end subroutine set_LR_state
 
 end module laplacian2D_LTI_Lyapunov_Base

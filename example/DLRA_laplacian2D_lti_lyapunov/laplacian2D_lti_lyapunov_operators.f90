@@ -10,6 +10,7 @@ module Laplacian2D_LTI_Lyapunov_Operators
    implicit none
 
    public :: CALE, laplacian, laplacian_mat
+   public :: build_operator, reconstruct_TQ
 
    !-----------------------------------
    !-----     LAPLACE OPERATOR    -----
@@ -128,5 +129,61 @@ contains
        
       return
    end subroutine laplacian_mat
+
+   subroutine build_operator(A)
+      !! Build the two-dimensional Laplace operator explicitly
+      real(kind=wp), intent(out) :: A(N,N)
+      integer :: i, j, k
+
+      A = -4.0_wp/dx2*eye(N)
+      do i = 1, nx
+         do j = 1, nx - 1
+            k = (i-1)*nx + j
+            A(k + 1, k) = 1.0_wp/dx2
+            A(k, k + 1) = 1.0_wp/dx2
+         end do 
+      end do
+      do i = 1, N-nx
+         A(i, i + nx) = 1.0_wp/dx2
+         A(i + nx, i) = 1.0_wp/dx2
+      end do
+      return
+   end subroutine build_operator
+
+   subroutine reconstruct_TQ(T, Q, A, D, E, tw)
+      !! Reconstruct tridiagonal matrix T and orthogonal projector Q from dsytd2 output (A, D, E)
+      real(kind=wp), intent(out) :: T(N,N)
+      real(kind=wp), intent(out) :: Q(N,N)
+      real(kind=wp), intent(in)  :: A(N,N)
+      real(kind=wp), intent(in)  :: D(N)
+      real(kind=wp), intent(in)  :: E(N-1)
+      real(kind=wp), intent(in)  :: tw(N-1)
+
+      ! internal variables
+      real(wp)  :: Hi(N,N)
+      real(wp)  :: vec(N,1)
+      integer :: i
+
+      ! Build orthogonal Q = H(1) @  H(2) @ ... @ H(n-1)
+      Q = eye(N)
+      do i = 1, N - 1
+         vec          = 0.0_wp
+         vec(i+1,1)   = 1.0_wp
+         vec(i+2:N,1) = A(i+2:N,i)
+         Hi           = eye(N) - tw(i) * matmul( vec, transpose(vec) )
+         Q            = matmul( Q, Hi )
+      end do
+
+      ! Build tridiagonal T
+      T = 0.0_wp
+      do i = 1, N
+         T(i,i) = D(i)
+      end do
+      do i = 1, N - 1
+         T(i,i+1) = E(i)
+         T(i+1,i) = E(i)
+      end do
+
+   end subroutine reconstruct_TQ
 
 end module Laplacian2D_LTI_Lyapunov_Operators
