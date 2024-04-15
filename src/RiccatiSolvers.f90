@@ -15,13 +15,16 @@ module LightROM_RiccatiSolvers
    !> work arrays
    class(abstract_vector),  allocatable   :: Uwrk0(:)
    class(abstract_vector),  allocatable   :: Uwrk1(:)
+   class(abstract_vector),  allocatable   :: U1(:)
    class(abstract_vector),  allocatable   :: QU(:)
    real(kind=wp),           allocatable   :: Swrk0(:,:)
    real(kind=wp),           allocatable   :: Swrk1(:,:)
    ! prediction step
-   class(abstract_vector),  allocatable   :: Utmp0(:)
-   class(abstract_vector),  allocatable   :: Utmp1(:)
-   real(kind=wp),           allocatable   :: Stmp0(:,:)
+   class(abstract_vector),  allocatable   :: U0(:)
+   class(abstract_vector),  allocatable   :: T0(:)
+   class(abstract_vector),  allocatable   :: Ut(:)
+   class(abstract_vector),  allocatable   :: Tt(:)
+   real(kind=wp),           allocatable   :: S0(:,:)
 
    private
    public :: numerical_low_rank_splitting_integrator_riccati
@@ -141,10 +144,10 @@ module LightROM_RiccatiSolvers
       procedure(abstract_exptA), optional                :: exptA
 
       !> Local variables   
-      integer                                :: istep, nsteps, iostep
-      real(kind=wp)                          :: T
-      logical, parameter                     :: verbose = .false.
-      procedure(abstract_exptA), pointer     :: p_exptA => null()
+      integer                                            :: istep, nsteps, iostep
+      real(kind=wp)                                      :: T
+      logical, parameter                                 :: verbose = .false.
+      procedure(abstract_exptA), pointer                 :: p_exptA => null()
 
       T = 0.0_wp
 
@@ -177,6 +180,18 @@ module LightROM_RiccatiSolvers
          endif
       enddo dlra
 
+      if (allocated(Uwrk0)) deallocate(Uwrk0)
+      if (allocated(Uwrk1)) deallocate(Uwrk1)
+      if (allocated(Swrk0)) deallocate(Swrk0)
+      if (allocated(Swrk1)) deallocate(Swrk1)
+      if (allocated(QU)) deallocate(QU)
+      if (allocated(U1)) deallocate(U1)
+      if (allocated(U0)) deallocate(U0)
+      if (allocated(T0)) deallocate(T0)
+      if (allocated(Ut)) deallocate(Ut)
+      if (allocated(Tt)) deallocate(Tt)
+      if (allocated(S0)) deallocate(S0)
+
       return
 
    end subroutine numerical_low_rank_splitting_integrator_riccati
@@ -202,15 +217,10 @@ module LightROM_RiccatiSolvers
 
       !> Local variables
       integer                                            :: istep, nsteps, integrator, rk
-      class(abstract_vector), allocatable                :: Utmp0(:)
-      class(abstract_vector), allocatable                :: Utmp1(:)
-      real(kind=wp),          allocatable                :: Stmp0(:,:)
 
       if ( torder .eq. 1 ) then 
          integrator = 1
       else if ( torder .eq. 2 ) then
-         write(*,*) 'Second order not yet implemented'
-         STOP 1
          integrator = 2
       else if ( torder .gt. 2 ) then
          write(*,*) "INFO : Time-integration order for the operator splitting of d > 2 &
@@ -229,24 +239,39 @@ module LightROM_RiccatiSolvers
          call M_forward_map        (X, LTI,               tau, info, exptA, iftrans=.true.)
          call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info)
       case (2) ! Strang splitting
-         call M_forward_map        (X, LTI,           0.5*tau, info, exptA, iftrans=.true.)
-         ! Predictor step
+         ! Prepare arrays for predictor step
          rk = size(X%U)
-         if (.not. allocated(Utmp0)) allocate(Utmp0(1:rk), source=X%U(1:rk))
-         if (.not. allocated(Utmp1)) allocate(Utmp1(1:rk), source=X%U(1:rk))
-         if (.not. allocated(Stmp0)) allocate(Stmp0(1:rk,1:rk))
+         ! precomputation arrays
+         if (.not. allocated(U0)) allocate(U0(1:rk), source=X%U(1:rk))
+         if (.not. allocated(T0)) allocate(T0(1:rk), source=X%U(1:rk))
+         if (.not. allocated(Ut)) allocate(Ut(1:rk), source=X%U(1:rk))
+         if (.not. allocated(Tt)) allocate(Tt(1:rk), source=X%U(1:rk))
+         if (.not. allocated(S0)) allocate(S0(1:rk,1:rk))
+         call mat_zero(U0); call mat_zero(T0); call mat_zero(Ut); call mat_zero(Tt); S0 = 0.0_wp
+         ! scratch arrays
+         if (.not. allocated(Uwrk0)) allocate(Uwrk0(1:rk), source=X%U(1:rk))
+         if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk))
+         call mat_zero(Uwrk0); Swrk0 = 0.0_wp
+         ! second order step
+         call M_forward_map        (X, LTI,           0.5*tau, info, exptA, iftrans=.true.)
          ! Save current state
-         call mat_copy(Utmp0, X%U); Stmp0 = X%S
+         call mat_copy(U0, X%U); S0 = X%S                             ! --> save      
+         ! Precompute T0
+         call mat_mult(Uwrk0, U0, S0)                                 ! K0 = U0 @ S0
+         call apply_p_outerproduct_w(Swrk0, U0, Uwrk0, LTI%B, Rinv)   ! (U0.T) @ B @ R^(-1) @ B.T @ K0
+         call mat_mult(T0, Uwrk0, Swrk0)                              ! K0 @ Swrk0
          ! First order integration
-         call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info)
-         call mat_copy(Utmp1, X%U)
-         ! Compute the intermediate state at t = t0 + dt/2 as the 
-         ! average of states at t0 (U,S) and t0 + dt (Utmp0,Stmp0)
-         call mat_axpby(Utmp1, 0.5_wp, Utmp0, 0.5_wp)
+         call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info, ifpred=.true., T0=T0)
+         ! Precompute Tt
+         call mat_copy(Ut, X%U)                                       ! --> save
+         call mat_mult(Uwrk0, X%U, X%S)                               ! Kt = Ut @ St
+         call apply_p_outerproduct_w(Swrk0, X%U, Uwrk0, LTI%B, Rinv)  ! (Ut.T) @ B @ R^(-1) @ B.T @ Kt
+         call mat_mult(Tt, Uwrk0, Swrk0)                              ! Kt @ Swrk0
          ! Reset state
-         call mat_copy(X%U, Utmp0); X%S = Stmp0
+         call mat_copy(X%U, U0); X%S = S0
          ! Second order integration
-         call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info, Utmp1)
+         call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info, ifpred=.false., T0=T0, Tt=Tt, U0=U0, Ut=Ut)
+   !      call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info)
          call M_forward_map        (X, LTI,           0.5*tau, info, exptA, iftrans=.true.)
       end select
 
@@ -254,7 +279,7 @@ module LightROM_RiccatiSolvers
 
    end subroutine numerical_low_rank_splitting_riccati_step
 
-   subroutine G_forward_map_riccati(X, LTI, Qc, Rinv, tau, info, Upred)
+   subroutine G_forward_map_riccati(X, LTI, Qc, Rinv, tau, info, ifpred, T0, Tt, U0, Ut)
       !> Low-rank state
       class(abstract_sym_low_rank_state),  intent(inout) :: X      ! current state
       ! LTI system
@@ -265,38 +290,50 @@ module LightROM_RiccatiSolvers
       real(kind=wp),                       intent(in)    :: tau
       !> Information flag
       integer,                             intent(out)   :: info
+      !> for second order: predictor or corrector step?
+      logical,                optional,    intent(in)    :: ifpred
       !> Intermediate values
-      class(abstract_vector), optional,    intent(in)    :: Upred(:)
-      class(abstract_vector),              allocatable   :: Up(:)  
+      class(abstract_vector), optional,    intent(inout) :: T0(:)  ! will be reused as Gamma
+      class(abstract_vector), optional,    intent(in)    :: Tt(:)
+      class(abstract_vector), optional,    intent(in)    :: U0(:)
+      class(abstract_vector), optional,    intent(in)    :: Ut(:)
       
       !> Local variables
-      class(abstract_vector),              allocatable   :: U1(:)
-      class(abstract_vector),              allocatable   :: QU(:)
       integer                                            :: rk
 
       rk = size(X%U)
       if (.not. allocated(U1))  allocate(U1( 1:rk), source=X%U(1)); 
-      if (.not. allocated(QU))  allocate(QU( 1:rk), source=X%U(1)); 
+      if (.not. allocated(QU))  allocate(QU( 1:rk), source=X%U(1));
+      if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk))
       call mat_zero(U1); call mat_zero(QU)
 
-      !if ( present(Upred) .and. present(Spred) ) then
-      if (present(Upred)) then
-         write(*,*) 'Second order not implemented yet.'
-         STOP 1
+      if (present(ifpred)) then
          ! second order in time
-         allocate(Up(1:rk), source=Upred(1:rk))
-         ! first steps based on previous state (U,S)
-         call K_step_riccati(X, U1, QU, LTI, Qc, Rinv, 0.5*tau, info)
-         call S_step_riccati(X, U1, QU, LTI, Qc, Rinv, 0.5*tau, info)
-         call L_step_riccati(X, U1,     LTI, Qc, Rinv,     tau, info)
-         ! second set in reverse order based on intermediate state (Up,Sp)
-         call S_step_riccati(X, Up, QU, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true.)
-         call K_step_riccati(X, Up, QU, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true.)
+         if (ifpred) then ! predictor step with precomputed T0
+            call K_step_riccati(X, U1, QU, LTI, Qc, Rinv,     tau, info, reverse=.false., NL=T0)
+            call S_step_riccati(X, U1, QU, LTI, Qc, Rinv,     tau, info, reverse=.false.)
+            call L_step_riccati(X, U1,     LTI, Qc, Rinv,     tau, info)
+         else             ! corrector step with precomputed T0, Tt and U0, Ut
+            ! forward steps based on T0, U0 (within X)
+            call K_step_riccati(X, U1, QU, LTI, Qc, Rinv, 0.5*tau, info, reverse=.false., NL=T0)
+            call S_step_riccati(X, U1, QU, LTI, Qc, Rinv, 0.5*tau, info, reverse=.false.)
+            call L_step_riccati(X, U1,     LTI, Qc, Rinv,     tau, info)
+            ! Compute Gamma = 0.5*(T0 @ (U1.T @ U0) + Tt @ (U1.T @ Ut))
+            call mat_zero(QU); Swrk0 = 0.0_wp                           ! we use QU as a scratch array
+            call mat_mult(Swrk0, X%U, U0); call mat_mult(QU, T0, Swrk0)
+            call mat_mult(Swrk0, X%U, Ut); call mat_mult(T0, Tt, Swrk0) ! overwrite T0 with Gamma
+            call mat_axpby(T0, 0.5_wp, QU, 0.5_wp)
+            ! Update X to most recent value
+            call mat_copy(X%U, U1)
+            ! reverse steps based on Gamma
+            call S_step_riccati(X, U1, QU, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true., NL=T0)
+            call K_step_riccati(X, U1, QU, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true., NL=T0)
+         end if
       else
          ! first order in time
-         call K_step_riccati(X, U1, QU, LTI, Qc, Rinv,     tau, info)
-         call S_step_riccati(X, U1, QU, LTI, Qc, Rinv,     tau, info)
-         call L_step_riccati(X, U1,     LTI, Qc, Rinv,     tau, info)
+         call K_step_riccati(   X, U1, QU, LTI, Qc, Rinv,     tau, info)
+         call S_step_riccati(   X, U1, QU, LTI, Qc, Rinv,     tau, info)
+         call L_step_riccati(   X, U1,     LTI, Qc, Rinv,     tau, info)
       end if
       
       !> Copy data to output
@@ -305,7 +342,7 @@ module LightROM_RiccatiSolvers
       return
    end subroutine G_forward_map_riccati
 
-   subroutine K_step_riccati(X, U1, QU, LTI, Qc, Rinv, tau, info, reverse)
+   subroutine K_step_riccati(X, U1, QU, LTI, Qc, Rinv, tau, info, reverse, NL)
       !> Low-rank state
       class(abstract_sym_low_rank_state), intent(inout) :: X         ! current state
       class(abstract_vector),             intent(out)   :: U1(:)     ! updated basis
@@ -321,10 +358,10 @@ module LightROM_RiccatiSolvers
       !> in second order scheme, are we in the forward or reverse branch?
       logical, optional,                  intent(in)    :: reverse
       logical                                           :: reverse_order
+      !> precomputed non-linear term
+      class(abstract_vector), optional,   intent(in)    :: NL(:)
 
       !> Local variables
-      class(abstract_vector),             allocatable   :: Uwrk0(:)
-      real(kind=wp),                      allocatable   :: Swrk0(:,:)
       integer,                            allocatable   :: perm(:)   ! Permutation vector
       integer                                           :: rk
 
@@ -339,7 +376,6 @@ module LightROM_RiccatiSolvers
       allocate(perm(1:rk)); perm = 0
       call mat_zero(Uwrk0); Swrk0 = 0.0_wp
 
-      call mat_mult(U1, X%U, X%S)                               ! K0 = U0 @ S0
       ! Constant part --> QU
       if (.not. reverse_order) then
          ! compute QU and pass to S step
@@ -347,14 +383,19 @@ module LightROM_RiccatiSolvers
       end if
 
       ! non-linear part --> Uwrk0
-      call apply_p_outerproduct_w(Swrk0, X%U, U1, LTI%B, Rinv)  ! (U0.T) @ B @ R^(-1) @ B.T @ (U0 @ S0)
-      call mat_mult(Uwrk0, U1, Swrk0)                           ! (U0 @ S0) @ Swrk0
+      call mat_mult(U1, X%U, X%S)                                  ! K0 = U0 @ S0
+      if (.not.present(NL)) then
+         call apply_p_outerproduct_w(Swrk0, X%U, U1, LTI%B, Rinv)  ! (U0.T) @ B @ R^(-1) @ B.T @ K0
+         call mat_mult(Uwrk0, U1, Swrk0)                           ! K0 @ Swrk0
+      else  ! non-linear term precomputed
+         call mat_copy(Uwrk0, NL)
+      end if
       
       ! combine to form G( K @ U.T ) @ U --> Uwrk0
       call mat_axpby(Uwrk0, -1.0_wp, QU, 1.0_wp)
 
       !> Construct solution U1
-      call mat_axpby(U1, 1.0_wp, Uwrk0, tau)                   ! K0 + tau*Kdot
+      call mat_axpby(U1, 1.0_wp, Uwrk0, tau)                       ! K0 + tau*Kdot
 
       !> Orthonormalize in-place
       call qr_factorization(U1, Swrk0, perm, info, ifpivot = .true.)
@@ -364,7 +405,7 @@ module LightROM_RiccatiSolvers
       return
    end subroutine K_step_riccati
 
-   subroutine S_step_riccati(X, U1, QU, LTI, Qc, Rinv, tau, info, reverse)
+   subroutine S_step_riccati(X, U1, QU, LTI, Qc, Rinv, tau, info, reverse, NL)
       !> Low-rank state
       class(abstract_sym_low_rank_state), intent(inout) :: X      ! current state
       class(abstract_vector),             intent(in)    :: U1(:)  ! updated basis
@@ -380,10 +421,10 @@ module LightROM_RiccatiSolvers
       !> in second order scheme, are we in the forward or reverse branch?
       logical, optional,                  intent(in)    :: reverse
       logical                                           :: reverse_order
+      !> precomputed data
+      class(abstract_vector), optional,   intent(in)    :: NL(:)
 
       !> Local variables
-      real(kind=wp),                      allocatable   :: Swrk0(:,:)
-      real(kind=wp),                      allocatable   :: Swrk1(:,:)
       integer                                           :: rk
 
       info = 0
@@ -404,8 +445,12 @@ module LightROM_RiccatiSolvers
       call mat_mult(Swrk0, U1, QU)
 
       ! non-linear part --> Swrk1
-      call apply_p_outerproduct_w(Swrk1, X%U, U1, LTI%B, Rinv)    !       U0.T @ B @ R^(-1) @ B.T @ U1
-      Swrk1 = matmul(X%S, matmul(Swrk1, X%S))                     ! S0 @ (U0.T @ B @ R^(-1) @ B.T @ U1) @ S0
+      if (.not.present(NL)) then
+         call apply_p_outerproduct_w(Swrk1, X%U, U1, LTI%B, Rinv)    !       U0.T @ B @ R^(-1) @ B.T @ U1
+         Swrk1 = matmul(X%S, matmul(Swrk1, X%S))                     ! S0 @ (U0.T @ B @ R^(-1) @ B.T @ U1) @ S0
+      else ! non-linear term precomputed
+         call mat_mult(Swrk1, U1, NL)
+      end if
 
       ! combine to form -U1.T @ G( U1 @ S @ U0.T ) @ U0
       call mat_axpby(Swrk0, -1.0_wp, Swrk1, 1.0_wp)
@@ -430,9 +475,6 @@ module LightROM_RiccatiSolvers
       integer,                            intent(out)   :: info
 
       !> Local variables
-      class(abstract_vector),             allocatable   :: Uwrk0(:)
-      class(abstract_vector),             allocatable   :: Uwrk1(:)
-      real(kind=wp),                      allocatable   :: Swrk0(:,:)
       integer                                           :: rk
 
       info = 0

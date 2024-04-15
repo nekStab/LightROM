@@ -39,8 +39,6 @@ program demo
 
    ! LTI system
    type(lti_system)                :: LTI
-   type(state_vector), allocatable :: CT(:)
-   real(kind=wp), allocatable      :: D(:,:)
    integer                         :: p
 
    ! Laplacian
@@ -257,7 +255,7 @@ program demo
          end do
 
          if (save) then
-            write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")'), torder, rk
+            write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
             call save_npy(oname, X_out)
          end if
 

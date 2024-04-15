@@ -44,8 +44,6 @@ program demo
 
    ! LTI system
    type(lti_system)                :: LTI
-   real(kind=wp), allocatable      :: D(:,:)
-   integer                         :: p
 
    ! Laplacian
    type(laplace_operator),   allocatable :: A
@@ -71,7 +69,7 @@ program demo
 
    !> Information flag.
    integer                         :: info
-   integer                         :: i, j, k, irep, nrep
+   integer                         :: i, j, irep, nrep
 
    ! PROBLEM DEFINITION
    real(wp)  :: Adata(N,N)
@@ -94,9 +92,6 @@ program demo
    real(kind=wp)      :: Ginv(N,N)
    real(kind=wp)      :: Xref(N,N)
    integer :: icnt
-
-   real(kind=wp)      :: test(N**2)
-   real(kind=wp)      :: test2(N**2)
 
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
@@ -248,7 +243,7 @@ program demo
 
    X = LR_state()
 
-   do torder = 1, 1 !2
+   do torder = 1, 2
       do i = 1, nrk
          rk = rkv(i)
 
@@ -281,7 +276,7 @@ program demo
          end do
 
          if (save) then
-            write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")'), torder, rk
+            write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
             call save_npy(oname, X_out)
          end if
 
@@ -463,7 +458,7 @@ program demo
          end do
 
          if (save) then
-            write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")'), torder, rk
+            write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
             call save_npy(oname, X_out)
          end if
 
