@@ -31,11 +31,14 @@
 *.out
 *.app
 
-# testing folder
+# testing folders
 example/laplacian1D
 example/DLRA_laplacian2D
-example/DLRA_laplacian2D_abstract_lti/output.txt
-example/DLRA_laplacian2D_abstract_lti/laplacian.gpp
+example/DLRA_cartpole
+
+# auxiliary files
+example/DLRA_laplacian2D_lti_lyapunov/output.txt
+example/DLRA_laplacian2D_lti_lyapunov/laplacian.gpp
 
 # data files
 *.npy
