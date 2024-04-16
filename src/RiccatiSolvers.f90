@@ -1,25 +1,29 @@
 module LightROM_RiccatiSolvers
+   !! This module provides the implementation of the Krylov-based solvers for the Differential Riccati
+   !! equation based on the dynamic low-rank approximation and operator splitting.
+
+   ! LightKrylov modules
    use LightKrylov
-   use LightKrylov_utils, only : print_mat
    use LightKrylov_expmlib
    use lightkrylov_BaseKrylov
+   ! LightROM modules
    use LightROM_LyapunovUtils
    use LightROM_LyapunovSolvers
    use LightROM_RiccatiUtils
-   !use LightROM_Utils
-   use lightrom_AbstractLTIsystems
+   use lightROM_AbstractLTIsystems
+   ! Standard Library
    use stdlib_optval, only : optval
    use stdlib_linalg, only : eye
    implicit none
 
-   !> work arrays
+   ! global scratch arrays
    class(abstract_vector),  allocatable   :: Uwrk0(:)
    class(abstract_vector),  allocatable   :: Uwrk1(:)
    class(abstract_vector),  allocatable   :: U1(:)
    class(abstract_vector),  allocatable   :: QU(:)
    real(kind=wp),           allocatable   :: Swrk0(:,:)
    real(kind=wp),           allocatable   :: Swrk1(:,:)
-   ! prediction step
+   ! global scratch arrays for the predictor step
    class(abstract_vector),  allocatable   :: U0(:)
    class(abstract_vector),  allocatable   :: T0(:)
    class(abstract_vector),  allocatable   :: Ut(:)
@@ -32,139 +36,114 @@ module LightROM_RiccatiSolvers
 
    contains
 
-   !------------------------------------------------
-   !-----                                      -----
-   !-----     Low-rank splitting integrator    -----
-   !-----                                      -----
-   !------------------------------------------------
-   
-   !=======================================================================================
-   ! Numerical Low-Rank Splitting Integrator Subroutine
-   !=======================================================================================
-   !
-   ! Purpose:
-   ! --------
-   ! Implementation of a Numerical Low-Rank Splitting Integrator as in Mena et al. (2018).
-   !
-   ! The algorithm constitutes a numerical integrator for the matrix-valued differential Riccati
-   ! equation of the form
-   !
-   !          dX/dt = A @ X + X @ A.T + C.T @ Q @ C - X @ B @ R^{-1} @ B.T @ X .
-   !
-   ! where A is a nxn Hurwitz matrix, X is SPD and B and C.T are low-rank matrices.
-   !
-   ! Since A is Hurwitz, the equations converges to steady state for t -> infty, which corresponds
-   ! to the associated algebrait Riccati equation of the form
-   !
-   !              0 = A @ X + X @ A.T + C.T @ Q @ C - X @ B @ R^{-1} @ B.T @ X .
-   !
-   ! The algorithm is based on three ideas:
-   ! a) The operator splitting scheme proposed by Lubich & Oseledets (2014) that splits the 
-   !    right-hand side of the differential equation into a linear stiff part that is solved
-   !    explicitly and a possibly non-linear non-stiff part which is solved numerically. The
-   !    two operators are then composed to obtain the integrator for the full Riccati equation.
-   ! b) The Dynamic Low-Rank Approximation for the solution of general matrix differential 
-   !    equations proposed by Nonnenmacher & Lubich (2007) which seeks to integrate only the
-   !    leading low-rank factors of the solution to a large system by updating the matrix 
-   !    factorization. The dynamical low-rank approximation scheme for the low-rank factors 
-   !    of the solution is itself solved using a projector-splitting technique to cheaply 
-   !    maintain orthonormality or the low-rank basis without explicit SVDs. 
-   ! c) This algorithm has been applied to a large scale system by Mena et al. (2018) and we
-   !    follow the algorithm proposed there.
-   !
-   ! Algorithmic Features:
-   ! ----------------------
-   ! - Separate integration of the stiff inhomogeneous part of the Riccati equation and the
-   !   non-stiff inhomogeneity
-   ! - Rank preserving time-integration that maintains orthonormality of the factorization
-   !   basis
-   ! - The stiff part of the problem is solved using a time-stepper approach to approximate 
-   !   the action of the exponential propagator
-   !
-   ! Advantages:
-   ! -----------
-   ! - Rank of the approximate solution is user defined
-   ! - The timesteps of the stiff and non-stiff parts of the code are independent
-   ! - The integrator is adjoint-free
-   ! - The operator of the homogeneous part and the inhomogeneity are not needed explicitly
-   !   i.e. the algorithm is amenable to solution using Krylov methods (in particular for 
-   !   the solution of the stiff part of the problem).
-   ! - No SVDs are necessary for this alogorithm.
-   !
-   ! Limitations:
-   ! ------------
-   ! - Rank of the approximate solution is user defined. The appropriateness of this 
-   !   approximation is not considered
-   ! - The current implementation does not require an adjoint integrator. This means that
-   !   the temporal order of the basic operator splitting scheme is limited to 1 (Lie-Trotter
-   !   splitting) or at most 2 (Strang splitting). Higher order integrators are possible, but 
-   !   require at least some backward integration (via the adjoint) in BOTH parts of the splitting. 
-   !   (see Sheng-Suzuki and Goldman-Kaper theorems)
-   !
-   ! Input/Output Parameters:
-   ! ------------------------
-   ! - U      : Low-Rank factor of the solution           [Input/Output]
-   ! - S      : Coefficients of the solution              [Input/Output]
-   ! - A      : Linear Operator (SPD)                     [Input]
-   ! - B      : Low-rank input for the Riccati equation   [Input]
-   ! - CT : Low-rank input for the Riccati equation   [Input]
-   ! - Tend   : Time horizon for integration              [Input]
-   ! - tau    : Integration time-step                     [Input]
-   ! - torder : Order of the time integration (1/2)       [Input]
-   ! - info   : Iteration Information flag                [Output]
-   ! - tol    : Tolerance for convergence                 [Optional, Input]
-   ! - exptA  : Procedure for exponential propagator      [Optiomal, Input}
-   !
-   ! References:
-   ! -----------
-   ! Koch, O.,Lubich, C. (2007). "Dynamical Low‐Rank Approximation", SIAM Journal on Matrix Analysis 
-   !     and Applications 29(2), 434-454
-   ! Lubich, C., Oseledets, I.V. (2014). "A projector-splitting integrator for dynamical low-rank 
-   !     approximation", BIT Numerical Mathematics 54, 171–188
-   ! Mena, H., Ostermann, A., Pfurtscheller, L.-M., Piazzola, C. (2018). "Numerical low-rank 
-   !     approximation of matrix differential equations", Journal of Computational and Applied Mathematics,
-   !     340, 602-614
-   !
-   !=======================================================================================
    subroutine numerical_low_rank_splitting_riccati_integrator(X,LTI,Qc,Rinv,Tend,tau,torder,info,exptA,iftrans)
-      !> Low-rank state
+      !! Numerical integrator for the matrix-valued differential Riccati equation of the form
+      !!
+      !!    $$\dot{X} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
+      !!
+      !! where \( \mathbf{A} \) is a (n x n) Hurwitz matrix, \( \mathbf{X} \) is SPD and 
+      !! \( \mathbf{B} \) and \( \mathbf{C}^T \) are low-rank matrices.
+      !!
+      !! Since \( \mathbf{A} \) is Hurwitz, the equations converges to steady state for  \( t \to \infty \), 
+      !! which corresponds to the associated algebrait Riccati equation of the form
+      !!
+      !!    $$0 = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
+      !!
+      !! The algorithm is based on three main ideas:
+      !!
+      !! - The operator splitting scheme proposed by Lubich & Oseledets (2014) that splits the 
+      !!   right-hand side of the differential equation into a linear stiff part that is solved
+      !!   explicitly and a possibly non-linear non-stiff part which is solved numerically. The
+      !!   two operators are then composed to obtain the integrator for the full Lyapunov equation.
+      !! - The Dynamic Low-Rank Approximation for the solution of general matrix differential 
+      !!   equations proposed by Nonnenmacher & Lubich (2007) which seeks to integrate only the
+      !!   leading low-rank factors of the solution to a large system by updating the matrix 
+      !!   factorization. The dynamical low-rank approximation scheme for the low-rank factors 
+      !!   of the solution is itself solved using a projector-splitting technique to cheaply 
+      !!   maintain orthonormality or the low-rank basis without explicit SVDs. 
+      !! - This algorithm has been applied to the Lyapunov and Riccati equations by Mena et al. 
+      !!   (2018) with improvements taking advantage of the symmetry of the problem/solution.
+      !!
+      !! **Algorithmic Features**
+      !! 
+      !! - Separate integration of the stiff inhomogeneous part of the Lyapunov equation and the
+      !!   non-stiff inhomogeneity
+      !! - Rank preserving time-integration that maintains orthonormality of the factorization
+      !!   basis
+      !! - The stiff part of the problem is solved using a time-stepper approach to approximate 
+      !!   the action of the exponential propagator
+      !!
+      !! **Advantages**
+      !!
+      !! - Rank of the approximate solution is user defined
+      !! - The timesteps of the stiff and non-stiff parts of the code are independent
+      !! - The integrator is adjoint-free
+      !! - The operator of the homogeneous part and the inhomogeneity are not needed explicitly
+      !!   i.e. the algorithm is amenable to solution using Krylov methods (in particular for 
+      !!   the solution of the stiff part of the problem)
+      !! - No SVDs are necessary for this alogorithm
+      !! - Lie and Strang splitting implemented allowing for first and second order integration
+      !!   in time
+      !!
+      !! ** Limitations**
+      !!
+      !! - Rank of the approximate solution is user defined. The appropriateness of this 
+      !!   approximation is not considered
+      !! - The current implementation does not require an adjoint integrator. This means that
+      !!   the temporal order of the basic operator splitting scheme is limited to 1 (Lie-Trotter
+      !!   splitting) or at most 2 (Strang splitting). Higher order integrators are possible, but 
+      !!   require at least some backward integration (via the adjoint) in BOTH parts of the splitting. 
+      !!   (see Sheng-Suzuki and Goldman-Kaper theorems)
+      !!
+      !! **References**
+      !! 
+      !! - Koch, O.,Lubich, C. (2007). "Dynamical Low‐Rank Approximation", SIAM Journal on Matrix Analysis 
+      !!   and Applications 29(2), 434-454
+      !! - Lubich, C., Oseledets, I.V. (2014). "A projector-splitting integrator for dynamical low-rank 
+      !!   approximation", BIT Numerical Mathematics 54, 171–188
+      !! - Mena, H., Ostermann, A., Pfurtscheller, L.-M., Piazzola, C. (2018). "Numerical low-rank 
+      !!   approximation of matrix differential equations", Journal of Computational and Applied Mathematics,
+      !!   340, 602-614
       class(abstract_sym_low_rank_state),  intent(inout) :: X
-      ! LTI system
+      !! Low-Rank factors of the solution.
       class(abstract_lti_system),          intent(in)    :: LTI
+      !! LTI dynamical system defining the problem.
       real(kind=wp),                       intent(in)    :: Qc(:,:)
+      !! Measurement weights.
       real(kind=wp),                       intent(in)    :: Rinv(:,:)
-      !> Integration time and step size
+      !! Inverse of the actuation weights.
       real(kind=wp),                       intent(in)    :: Tend
-      real(kind=wp),                       intent(inout) :: tau  ! desired/effective time step
-      !> Order of time integration
+      !! Integration time horizon. 
+      real(kind=wp),                       intent(inout) :: tau
+      !! Desired time step. The avtual time-step will be computed such as to reach Tend in an integer number
+      !! of steps.
       integer,                             intent(in)    :: torder
-      !> Information flag
+      !! Order of time integration. Only 1st (Lie splitting) and 2nd (Strang splitting) orders are implemented.
       integer,                             intent(out)   :: info
-      !> Routine for computation of the exponential propagator
+      !! Information flag.
       procedure(abstract_exptA), optional                :: exptA
-      !> use transpose
+      !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
       logical,                   optional, intent(in)    :: iftrans
-      logical                                            :: trans
+      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
 
-      !> Local variables   
+      ! Internal variables   
       integer                                            :: istep, nsteps, iostep
       real(kind=wp)                                      :: T
       logical, parameter                                 :: verbose = .false.
+      logical                                            :: trans
       procedure(abstract_exptA), pointer                 :: p_exptA => null()
 
-      ! Optional argument
-      trans = optval(iftrans, .false.)
-
-      T = 0.0_wp
-
       ! Optional arguments
+      trans = optval(iftrans, .false.)
       if (present(exptA)) then
          p_exptA => exptA
       else
          p_exptA => k_exptA
       endif
 
-      ! --> Compute number of steps
+      T = 0.0_wp
+
+      ! Compute number of steps
       nsteps = floor(Tend/tau)
 
       iostep = nsteps/10
@@ -173,12 +152,11 @@ module LightROM_RiccatiSolvers
       endif
 
       dlra : do istep = 1, nsteps
-         
-         !> dynamical low-rank approximation step
+         ! dynamical low-rank approximation solver
          call numerical_low_rank_splitting_riccati_step(X, LTI, Qc, Rinv, tau, torder, info, p_exptA, trans)
 
          T = T + tau
-         !> here we should do some checks such as whether we have reached steady state
+         !> here we can do some checks such as whether we have reached steady state
          if ( mod(istep,iostep) .eq. 0 ) then
             if (verbose) then
                write(*, *) "INFO : ", ISTEP, " steps of DLRA computed. T = ",T
@@ -199,33 +177,35 @@ module LightROM_RiccatiSolvers
       if (allocated(S0)) deallocate(S0)
 
       return
-
    end subroutine numerical_low_rank_splitting_riccati_integrator
 
    !-----------------------------
    !-----     UTILITIES     -----
    !-----------------------------
-   subroutine numerical_low_rank_splitting_riccati_step(X, LTI, Qc, Rinv, tau, torder, info, exptA, iftrans)
-      !> Low-rank state
-      class(abstract_sym_low_rank_state),  intent(inout) :: X
-      ! LTI system
-      class(abstract_lti_system),          intent(in)    :: LTI
-      real(kind=wp),                       intent(in)    :: Qc(:,:)
-      real(kind=wp),                       intent(in)    :: Rinv(:,:)
-      !> Integration step size
-      real(kind=wp),                       intent(in)    :: tau
-      !> Order of time integration
-      integer,                             intent(in)    :: torder
-      !> Information flag
-      integer,                             intent(out)   :: info
-      !> Routine for computation of the exponential propagator
-      procedure(abstract_exptA)                          :: exptA
-      !> use transpose
-      logical,                   optional, intent(in)    :: iftrans
-      logical                                            :: trans
 
-      !> Local variables
+   subroutine numerical_low_rank_splitting_riccati_step(X, LTI, Qc, Rinv, tau, torder, info, exptA, iftrans)
+      class(abstract_sym_low_rank_state),  intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_lti_system),          intent(in)    :: LTI
+      !! LTI dynamical system defining the problem.
+      real(kind=wp),                       intent(in)    :: Qc(:,:)
+      !! Measurement weights.
+      real(kind=wp),                       intent(in)    :: Rinv(:,:)
+      !! Inverse of the actuation weights.
+      real(kind=wp),                       intent(inout) :: tau
+      !! Time step.
+      integer,                             intent(in)    :: torder
+      !! Order of time integration. Only 1st (Lie splitting) and 2nd (Strang splitting) orders are implemented.
+      integer,                             intent(out)   :: info
+      !! Information flag.
+      procedure(abstract_exptA), optional                :: exptA
+      !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
+      logical,                   optional, intent(in)    :: iftrans
+      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+
+      ! Internal variables
       integer                                            :: istep, nsteps, integrator, rk
+      logical                                            :: trans
 
       ! Optional argument
       trans = optval(iftrans, .false.)
@@ -247,10 +227,12 @@ module LightROM_RiccatiSolvers
       endif
 
       select case (integrator)
-      case (1) ! Lie-Trotter splitting
+      case (1) 
+         ! Lie-Trotter splitting
          call M_forward_map        (X, LTI,               tau, info, exptA, trans)
          call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info)
-      case (2) ! Strang splitting
+      case (2) 
+         ! Strang splitting
          ! Prepare arrays for predictor step
          rk = size(X%U)
          ! precomputation arrays
@@ -283,7 +265,6 @@ module LightROM_RiccatiSolvers
          call mat_copy(X%U, U0); X%S = S0
          ! Second order integration
          call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info, ifpred=.false., T0=T0, Tt=Tt, U0=U0, Ut=Ut)
-   !      call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info)
          call M_forward_map        (X, LTI,           0.5*tau, info, exptA, trans)
       end select
 
@@ -292,25 +273,27 @@ module LightROM_RiccatiSolvers
    end subroutine numerical_low_rank_splitting_riccati_step
 
    subroutine G_forward_map_riccati(X, LTI, Qc, Rinv, tau, info, ifpred, T0, Tt, U0, Ut)
-      !> Low-rank state
-      class(abstract_sym_low_rank_state),  intent(inout) :: X      ! current state
-      ! LTI system
+      class(abstract_sym_low_rank_state),  intent(inout) :: X
+      !! Low-Rank factors of the solution.
       class(abstract_lti_system),          intent(in)    :: LTI
+      !! LTI dynamical system defining the problem.
       real(kind=wp),                       intent(in)    :: Qc(:,:)
+      !! Measurement weights.
       real(kind=wp),                       intent(in)    :: Rinv(:,:)
-      !> Integration step size         
+      !! Inverse of the actuation weights.
       real(kind=wp),                       intent(in)    :: tau
-      !> Information flag
+      !! Time step.
       integer,                             intent(out)   :: info
-      !> for second order: predictor or corrector step?
+      !! Information flag.
       logical,                optional,    intent(in)    :: ifpred
-      !> Intermediate values
+      !! For Strang splitting: Determine whether we are in the predictor or corrector step
       class(abstract_vector), optional,    intent(inout) :: T0(:)  ! will be reused as Gamma
       class(abstract_vector), optional,    intent(in)    :: Tt(:)
       class(abstract_vector), optional,    intent(in)    :: U0(:)
       class(abstract_vector), optional,    intent(in)    :: Ut(:)
+      !! Intermediate values
       
-      !> Local variables
+      ! Internal variables
       integer                                            :: rk
 
       rk = size(X%U)
@@ -348,34 +331,38 @@ module LightROM_RiccatiSolvers
          call L_step_riccati(   X, U1,     LTI, Qc, Rinv,     tau, info)
       end if
       
-      !> Copy data to output
+      ! Copy updated low-rank factors to output
       call mat_copy(X%U, U1)
                
       return
    end subroutine G_forward_map_riccati
 
    subroutine K_step_riccati(X, U1, QU, LTI, Qc, Rinv, tau, info, reverse, NL)
-      !> Low-rank state
-      class(abstract_sym_low_rank_state), intent(inout) :: X         ! current state
-      class(abstract_vector),             intent(out)   :: U1(:)     ! updated basis
-      class(abstract_vector),             intent(inout) :: QU(:)     ! tmp
-      ! LTI system
-      class(abstract_lti_system),         intent(in)    :: LTI
-      real(kind=wp),                      intent(in)    :: Qc(:,:)
-      real(kind=wp),                      intent(in)    :: Rinv(:,:)
-      !> Integration step size
-      real(kind=wp),                      intent(in)    :: tau
-      !> Information flag
-      integer,                            intent(out)   :: info
-      !> in second order scheme, are we in the forward or reverse branch?
-      logical, optional,                  intent(in)    :: reverse
-      logical                                           :: reverse_order
-      !> precomputed non-linear term
-      class(abstract_vector), optional,   intent(in)    :: NL(:)
+      class(abstract_sym_low_rank_state),  intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_vector),             intent(out)    :: U1(:)
+      !! Intermediate low-rank factor.
+      class(abstract_vector),             intent(inout)  :: QU(:)
+      !! Precomputed application of the inhomogeneity.
+      class(abstract_lti_system),         intent(in)     :: LTI
+      !! LTI dynamical system defining the problem.
+      real(kind=wp),                      intent(in)     :: Qc(:,:)
+      !! Measurement weights.
+      real(kind=wp),                      intent(in)     :: Rinv(:,:)
+      !! Inverse of the actuation weights.
+      real(kind=wp),                      intent(in)     :: tau
+      !! Time step.
+      integer,                            intent(out)    :: info
+      !! Information flag.
+      logical, optional,                  intent(in)     :: reverse
+      !! For Strang splitting: Determine if we are in forward or reverse branch
+      class(abstract_vector), optional,   intent(in)     :: NL(:)
+      !! Precomputed non-linear term.
 
-      !> Local variables
-      integer,                            allocatable   :: perm(:)   ! Permutation vector
-      integer                                           :: rk
+      ! Internal variables
+      integer,                            allocatable    :: perm(:)   ! Permutation vector
+      integer                                            :: rk
+      logical                                            :: reverse_order
 
       ! Optional arguments
       reverse_order = optval(reverse, .false.)
@@ -394,7 +381,7 @@ module LightROM_RiccatiSolvers
          call apply_outerproduct_w(QU, X%U, LTI%CT, Qc)
       end if
 
-      ! non-linear part --> Uwrk0
+      ! Non-linear part --> Uwrk0
       call mat_mult(U1, X%U, X%S)                                  ! K0 = U0 @ S0
       if (.not.present(NL)) then
          call apply_p_outerproduct_w(Swrk0, X%U, U1, LTI%B, Rinv)  ! (U0.T) @ B @ R^(-1) @ B.T @ K0
@@ -403,13 +390,13 @@ module LightROM_RiccatiSolvers
          call mat_copy(Uwrk0, NL)
       end if
       
-      ! combine to form G( K @ U.T ) @ U --> Uwrk0
+      ! Combine to form G( K @ U.T ) @ U --> Uwrk0
       call mat_axpby(Uwrk0, -1.0_wp, QU, 1.0_wp)
 
-      !> Construct solution U1
+      ! Construct intermediate solution U1
       call mat_axpby(U1, 1.0_wp, Uwrk0, tau)                       ! K0 + tau*Kdot
 
-      !> Orthonormalize in-place
+      ! Orthonormalize in-place
       call qr_factorization(U1, Swrk0, perm, info, ifpivot = .true.)
       call apply_permutation(Swrk0, perm, trans = .true.)
       X%S = Swrk0
@@ -418,26 +405,30 @@ module LightROM_RiccatiSolvers
    end subroutine K_step_riccati
 
    subroutine S_step_riccati(X, U1, QU, LTI, Qc, Rinv, tau, info, reverse, NL)
-      !> Low-rank state
-      class(abstract_sym_low_rank_state), intent(inout) :: X      ! current state
-      class(abstract_vector),             intent(in)    :: U1(:)  ! updated basis
-      class(abstract_vector),             intent(inout) :: QU(:)  ! basis
-      ! LTI system
+      class(abstract_sym_low_rank_state), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_vector),             intent(in)    :: U1(:)
+      !! Intermediate low-rank factor.
+      class(abstract_vector),             intent(inout) :: QU(:)
+      !! Precomputed application of the inhomogeneity.
       class(abstract_lti_system),         intent(in)    :: LTI
+      !! LTI dynamical system defining the problem.
       real(kind=wp),                      intent(in)    :: Qc(:,:)
+      !! Measurement weights.
       real(kind=wp),                      intent(in)    :: Rinv(:,:)
-      !> Integration step size
+      !! Inverse of the actuation weights.
       real(kind=wp),                      intent(in)    :: tau
-      !> Information flag
+      !! Time step.
       integer,                            intent(out)   :: info
-      !> in second order scheme, are we in the forward or reverse branch?
+      !! Information flag.
       logical, optional,                  intent(in)    :: reverse
-      logical                                           :: reverse_order
-      !> precomputed data
+      !! For Strang splitting: Determine if we are in forward or reverse branch
       class(abstract_vector), optional,   intent(in)    :: NL(:)
+      !! Precomputed non-linear term.
 
-      !> Local variables
+      ! Internal variables
       integer                                           :: rk
+      logical                                           :: reverse_order
 
       info = 0
 
@@ -451,42 +442,45 @@ module LightROM_RiccatiSolvers
 
       ! Constant part --> Swrk0
       if (reverse_order) then
-         ! compute QU and pass to K step
+         ! Compute QU and pass to K step
          call apply_outerproduct_w(QU, X%U, LTI%CT, Qc)
       endif
       call mat_mult(Swrk0, U1, QU)
 
-      ! non-linear part --> Swrk1
+      ! Non-linear part --> Swrk1
       if (.not.present(NL)) then
          call apply_p_outerproduct_w(Swrk1, X%U, U1, LTI%B, Rinv)    !       U0.T @ B @ R^(-1) @ B.T @ U1
          Swrk1 = matmul(X%S, matmul(Swrk1, X%S))                     ! S0 @ (U0.T @ B @ R^(-1) @ B.T @ U1) @ S0
-      else ! non-linear term precomputed
+      else ! Non-linear term precomputed
          call mat_mult(Swrk1, U1, NL)
       end if
 
-      ! combine to form -U1.T @ G( U1 @ S @ U0.T ) @ U0
+      ! Combine to form -U1.T @ G( U1 @ S @ U0.T ) @ U0
       call mat_axpby(Swrk0, -1.0_wp, Swrk1, 1.0_wp)
 
-      !> Construct solution S1
+      ! Construct intermediate coefficient matrix
       call mat_axpby(X%S, 1.0_wp, Swrk0, tau)
 
       return
    end subroutine S_step_riccati
 
    subroutine L_step_riccati(X, U1, LTI, Qc, Rinv, tau, info)
-      !> Low-rank state
       class(abstract_sym_low_rank_state), intent(inout) :: X
-      class(abstract_vector),             intent(in)    :: U1(:)   ! basis after Kstep
-      ! LTI system
+      !! Low-Rank factors of the solution.
+      class(abstract_vector),             intent(in)    :: U1(:)
+      !! Intermediate low-rank factor.
       class(abstract_lti_system),         intent(in)    :: LTI
+      !! LTI dynamical system defining the problem.
       real(kind=wp),                      intent(in)    :: Qc(:,:)
+      !! Measurement weights.
       real(kind=wp),                      intent(in)    :: Rinv(:,:)
-      !> Integration step size
+      !! Inverse of the actuation weights.
       real(kind=wp),                      intent(in)    :: tau
-      !> Information flag
+      !! Time step.
       integer,                            intent(out)   :: info
+      !! Information flag.
 
-      !> Local variables
+      ! Internal variables
       integer                                           :: rk
 
       info = 0
@@ -502,17 +496,17 @@ module LightROM_RiccatiSolvers
       ! Constant part --> Uwrk0
       call apply_outerproduct_w(Uwrk0, U1, LTI%CT, Qc)
 
-      ! non-linear part --> U
+      ! Non-linear part --> U
       call apply_p_outerproduct_w(Swrk0, U1, Uwrk1, LTI%B, Rinv)  !               U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T
       call mat_mult(X%U, Uwrk1, Swrk0)                            ! (U0 @ S.T) @ (U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T)
 
-      ! combine to form U1.T @ G( U1.T@L.T )
+      ! Combine to form U1.T @ G( U1.T@L.T )
       call mat_axpby(Uwrk0, 1.0_wp, X%U, -1.0_wp)
 
-      !> Construct solution U1
-      call mat_axpby(Uwrk1, 1.0_wp, Uwrk0, tau)                   ! L0 + tau*Ldot
+      ! Construct solution L1.T
+      call mat_axpby(Uwrk1, 1.0_wp, Uwrk0, tau)                   ! L0.T + tau*Ldot.T
 
-      !> Update S
+      ! Update coefficient matrix
       call mat_mult(X%S, Uwrk1, U1)
 
       return
