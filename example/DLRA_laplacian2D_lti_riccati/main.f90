@@ -258,7 +258,7 @@ program demo
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_integrator_riccati(X, LTI, Qc, Rinv, Tend, dt, torder, info)
+            call numerical_low_rank_splitting_riccati_integrator(X, LTI, Qc, Rinv, Tend, dt, torder, info)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution
@@ -439,7 +439,7 @@ program demo
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_integrator_riccati(X, LTI, Qc, Rinv, Tend, dt, torder, info)
+            call numerical_low_rank_splitting_riccati_integrator(X, LTI, Qc, Rinv, Tend, dt, torder, info)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution

@@ -27,7 +27,7 @@ module LightROM_RiccatiSolvers
    real(kind=wp),           allocatable   :: S0(:,:)
 
    private
-   public :: numerical_low_rank_splitting_integrator_riccati
+   public :: numerical_low_rank_splitting_riccati_integrator
    public :: G_forward_map_riccati, K_step_riccati, S_step_riccati, L_step_riccati
 
    contains
@@ -126,7 +126,7 @@ module LightROM_RiccatiSolvers
    !     340, 602-614
    !
    !=======================================================================================
-   subroutine numerical_low_rank_splitting_integrator_riccati(X,LTI,Qc,Rinv,Tend,tau,torder,info,exptA)
+   subroutine numerical_low_rank_splitting_riccati_integrator(X,LTI,Qc,Rinv,Tend,tau,torder,info,exptA,iftrans)
       !> Low-rank state
       class(abstract_sym_low_rank_state),  intent(inout) :: X
       ! LTI system
@@ -142,12 +142,18 @@ module LightROM_RiccatiSolvers
       integer,                             intent(out)   :: info
       !> Routine for computation of the exponential propagator
       procedure(abstract_exptA), optional                :: exptA
+      !> use transpose
+      logical,                   optional, intent(in)    :: iftrans
+      logical                                            :: trans
 
       !> Local variables   
       integer                                            :: istep, nsteps, iostep
       real(kind=wp)                                      :: T
       logical, parameter                                 :: verbose = .false.
       procedure(abstract_exptA), pointer                 :: p_exptA => null()
+
+      ! Optional argument
+      trans = optval(iftrans, .false.)
 
       T = 0.0_wp
 
@@ -169,7 +175,7 @@ module LightROM_RiccatiSolvers
       dlra : do istep = 1, nsteps
          
          !> dynamical low-rank approximation step
-         call numerical_low_rank_splitting_riccati_step(X, LTI, Qc, Rinv, tau, torder, info, p_exptA)
+         call numerical_low_rank_splitting_riccati_step(X, LTI, Qc, Rinv, tau, torder, info, p_exptA, trans)
 
          T = T + tau
          !> here we should do some checks such as whether we have reached steady state
@@ -194,12 +200,12 @@ module LightROM_RiccatiSolvers
 
       return
 
-   end subroutine numerical_low_rank_splitting_integrator_riccati
+   end subroutine numerical_low_rank_splitting_riccati_integrator
 
    !-----------------------------
    !-----     UTILITIES     -----
    !-----------------------------
-   subroutine numerical_low_rank_splitting_riccati_step(X, LTI, Qc, Rinv, tau, torder, info, exptA)
+   subroutine numerical_low_rank_splitting_riccati_step(X, LTI, Qc, Rinv, tau, torder, info, exptA, iftrans)
       !> Low-rank state
       class(abstract_sym_low_rank_state),  intent(inout) :: X
       ! LTI system
@@ -214,9 +220,15 @@ module LightROM_RiccatiSolvers
       integer,                             intent(out)   :: info
       !> Routine for computation of the exponential propagator
       procedure(abstract_exptA)                          :: exptA
+      !> use transpose
+      logical,                   optional, intent(in)    :: iftrans
+      logical                                            :: trans
 
       !> Local variables
       integer                                            :: istep, nsteps, integrator, rk
+
+      ! Optional argument
+      trans = optval(iftrans, .false.)
 
       if ( torder .eq. 1 ) then 
          integrator = 1
@@ -236,7 +248,7 @@ module LightROM_RiccatiSolvers
 
       select case (integrator)
       case (1) ! Lie-Trotter splitting
-         call M_forward_map        (X, LTI,               tau, info, exptA, iftrans=.true.)
+         call M_forward_map        (X, LTI,               tau, info, exptA, trans)
          call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info)
       case (2) ! Strang splitting
          ! Prepare arrays for predictor step
@@ -253,7 +265,7 @@ module LightROM_RiccatiSolvers
          if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk))
          call mat_zero(Uwrk0); Swrk0 = 0.0_wp
          ! second order step
-         call M_forward_map        (X, LTI,           0.5*tau, info, exptA, iftrans=.true.)
+         call M_forward_map        (X, LTI,           0.5*tau, info, exptA, trans)
          ! Save current state
          call mat_copy(U0, X%U); S0 = X%S                             ! --> save      
          ! Precompute T0
@@ -272,7 +284,7 @@ module LightROM_RiccatiSolvers
          ! Second order integration
          call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info, ifpred=.false., T0=T0, Tt=Tt, U0=U0, Ut=Ut)
    !      call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info)
-         call M_forward_map        (X, LTI,           0.5*tau, info, exptA, iftrans=.true.)
+         call M_forward_map        (X, LTI,           0.5*tau, info, exptA, trans)
       end select
 
       return

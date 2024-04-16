@@ -1,14 +1,23 @@
 module LightROM_RiccatiUtils
    use LightKrylov
+   use LightROM_AbstractLTIsystems
    use LightKrylov_utils, only : assert_shape
    implicit none
 
+   !> work arrays
+   real(kind=wp)         ,  allocatable   :: Swrk(:,:)
+
    private
-   public :: apply_outerproduct_w, apply_p_outerproduct_w
+   public :: apply_outerproduct_w, apply_p_outerproduct_w, precompute_NL
 
    !------------------------------
    !-----     INTERFACES     -----
    !------------------------------
+
+   interface precompute_NL
+      module procedure precompute_NL_K
+      module procedure precompute_NL_S
+   end interface
 
 contains
 
@@ -54,5 +63,45 @@ contains
    
       return   
    end subroutine apply_p_outerproduct_w
+
+   subroutine precompute_NL_K(NL_out, X, K, B, W)
+      class(abstract_vector),             intent(out)  :: NL_out(:)
+      class(abstract_sym_low_rank_state), intent(in)   :: X
+      class(abstract_vector),             intent(in)   :: K(:)
+      class(abstract_vector),             intent(in)   :: B(:)
+      real(kind=wp),                      intent(in)   :: W(:,:)
+
+      ! internals
+      integer :: rk
+      
+      rk = size(K)
+      if (.not.allocated(Swrk)) allocate(Swrk(1:rk,1:rk))
+      Swrk = 0.0_wp
+
+      call apply_p_outerproduct_w(Swrk, X%U, K, B, W)  ! (U.T) @ B @ R^(-1) @ B.T @ K
+      call mat_mult(NL_out, K, Swrk)                   ! K @ Swrk
+
+      return
+   end subroutine precompute_NL_K
+
+   subroutine precompute_NL_S(NL_out, X, U, B, W)
+      real(kind=wp),                      intent(out)  :: NL_out(:,:)
+      class(abstract_sym_low_rank_state), intent(in)   :: X
+      class(abstract_vector),             intent(in)   :: U(:)
+      class(abstract_vector),             intent(in)   :: B(:)
+      real(kind=wp),                      intent(in)   :: W(:,:)
+
+      ! internals
+      integer :: rk
+      
+      rk = size(U)
+      if (.not.allocated(Swrk)) allocate(Swrk(1:rk,1:rk))
+      Swrk = 0.0_wp
+
+      call apply_p_outerproduct_w(Swrk, U, X%U, B, W)  !        U.T @ B @ R^(-1) @ B.T @ X%U
+      NL_out = matmul(X%S, matmul(Swrk, X%S))          ! X%S @ (U.T @ B @ R^(-1) @ B.T @ X%U) @ X%S
+
+      return
+   end subroutine precompute_NL_S
 
 end module LightROM_RiccatiUtils

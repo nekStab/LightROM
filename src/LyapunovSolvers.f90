@@ -16,8 +16,8 @@ module LightROM_LyapunovSolvers
    real(kind=wp),           allocatable   :: Swrk(:,:)
 
    private
-   public :: numerical_low_rank_splitting_integrator
-   public :: M_forward_map, G_forward_map, K_step, S_step, L_step
+   public :: numerical_low_rank_splitting_lyapunov_integrator
+   public :: M_forward_map, G_forward_map_lyapunov, K_step_lyapunov, S_step_lyapunov, L_step_lyapunov
 
    contains
 
@@ -117,7 +117,7 @@ module LightROM_LyapunovSolvers
    !     340, 602-614
    !
    !=======================================================================================
-   subroutine numerical_low_rank_splitting_integrator(X,LTI,Tend,tau,torder,info,exptA,iftrans)
+   subroutine numerical_low_rank_splitting_lyapunov_integrator(X,LTI,Tend,tau,torder,info,exptA,iftrans)
       !> Low-rank state
       class(abstract_sym_low_rank_state),  intent(inout) :: X
       ! LTI system
@@ -132,7 +132,7 @@ module LightROM_LyapunovSolvers
       !> Routine for computation of the exponential propagator
       procedure(abstract_exptA), optional                :: exptA
       !> use transpose
-      logical, optional,                   intent(in)    :: iftrans
+      logical,                   optional, intent(in)    :: iftrans
       logical                                            :: trans
 
       !> Local variables   
@@ -164,7 +164,7 @@ module LightROM_LyapunovSolvers
       dlra : do istep = 1, nsteps
          
          !> dynamical low-rank approximation step
-         call numerical_low_rank_splitting_step(X, LTI, tau, torder, info, p_exptA)
+         call numerical_low_rank_splitting_lyapunov_step(X, LTI, tau, torder, info, p_exptA, trans)
 
          T = T + tau
          !> here we should do some checks such as whether we have reached steady state
@@ -176,12 +176,12 @@ module LightROM_LyapunovSolvers
       enddo dlra
       return
 
-   end subroutine numerical_low_rank_splitting_integrator
+   end subroutine numerical_low_rank_splitting_lyapunov_integrator
 
    !-----------------------------
    !-----     UTILITIES     -----
    !-----------------------------
-   subroutine numerical_low_rank_splitting_step(X, LTI, tau, torder, info, exptA)
+   subroutine numerical_low_rank_splitting_lyapunov_step(X, LTI, tau, torder, info, exptA, iftrans)
       !> Low-rank state
       class(abstract_sym_low_rank_state), intent(inout) :: X
       ! LTI system
@@ -194,9 +194,15 @@ module LightROM_LyapunovSolvers
       integer,                            intent(out)   :: info
       !> Routine for computation of the exponential propagator
       procedure(abstract_exptA)                         :: exptA
+      !> use transpose
+      logical,                  optional, intent(in)    :: iftrans
+      logical                                           :: trans
 
       !> Local variables
       integer        ::   istep, nsteps, integrator
+
+      ! Optional argument
+      trans = optval(iftrans, .false.)
 
       if ( torder .eq. 1 ) then 
          integrator = 1
@@ -216,17 +222,17 @@ module LightROM_LyapunovSolvers
 
       select case (integrator)
       case (1) ! Lie-Trotter splitting
-         call M_forward_map(X, LTI, tau, info, exptA)
-         call G_forward_map(X, LTI, tau, info)
+         call M_forward_map(         X, LTI, tau, info, exptA, trans)
+         call G_forward_map_lyapunov(X, LTI, tau, info)
       case (2) ! Strang splitting
-         call M_forward_map(X, LTI, 0.5*tau, info, exptA)
-         call G_forward_map(X, LTI,     tau, info)
-         call M_forward_map(X, LTI, 0.5*tau, info, exptA)
+         call M_forward_map(         X, LTI, 0.5*tau, info, exptA, trans)
+         call G_forward_map_lyapunov(X, LTI,     tau, info)
+         call M_forward_map(         X, LTI, 0.5*tau, info, exptA, trans)
       end select
 
       return
 
-   end subroutine numerical_low_rank_splitting_step
+   end subroutine numerical_low_rank_splitting_lyapunov_step
 
    subroutine M_forward_map(X, LTI, tau, info, exptA, iftrans)
       !> Low-rank state
@@ -276,7 +282,7 @@ module LightROM_LyapunovSolvers
       return
    end subroutine M_forward_map
 
-   subroutine G_forward_map(X, LTI, tau, info)
+   subroutine G_forward_map_lyapunov(X, LTI, tau, info)
       !> Low-rank state
       class(abstract_sym_low_rank_state), intent(inout) :: X
       ! LTI system
@@ -296,19 +302,19 @@ module LightROM_LyapunovSolvers
       if (.not. allocated(BBTU)) allocate(BBTU(1:rk), source=X%U(1))
       call mat_zero(U1); call mat_zero(BBTU)
 
-      call K_step(X, U1, BBTU, LTI%B, tau, info)
+      call K_step_lyapunov(X, U1, BBTU, LTI%B, tau, info)
 
-      call S_step(X, U1, BBTU,        tau, info)
+      call S_step_lyapunov(X, U1, BBTU,        tau, info)
 
-      call L_step(X, U1,       LTI%B, tau, info)
+      call L_step_lyapunov(X, U1,       LTI%B, tau, info)
       
       !> Copy data to output
       call mat_copy(X%U, U1)
                
       return
-   end subroutine G_forward_map
+   end subroutine G_forward_map_lyapunov
 
-   subroutine K_step(X, U1, BBTU, B, tau, info)
+   subroutine K_step_lyapunov(X, U1, BBTU, B, tau, info)
       !> Low-rank state
       class(abstract_sym_low_rank_state), intent(inout) :: X
       class(abstract_vector),             intent(out)   :: U1(:)  ! basis
@@ -342,9 +348,9 @@ module LightROM_LyapunovSolvers
       X%S = Swrk
 
       return
-   end subroutine K_step
+   end subroutine K_step_lyapunov
 
-   subroutine S_step(X, U1, BBTU, tau, info)
+   subroutine S_step_lyapunov(X, U1, BBTU, tau, info)
       !> Low-rank state
       class(abstract_sym_low_rank_state), intent(inout) :: X
       class(abstract_vector),             intent(in)    :: U1(:)    ! updated basis
@@ -368,9 +374,9 @@ module LightROM_LyapunovSolvers
       call mat_axpby(X%S, 1.0_wp, Swrk, -tau)
 
       return
-   end subroutine S_step
+   end subroutine S_step_lyapunov
 
-   subroutine L_step(X, U1, B, tau, info)
+   subroutine L_step_lyapunov(X, U1, B, tau, info)
       !> Low-rank state
       class(abstract_sym_low_rank_state), intent(inout) :: X
       class(abstract_vector),             intent(in)    :: U1(:)   ! basis after Kstep
@@ -399,6 +405,6 @@ module LightROM_LyapunovSolvers
       call mat_mult(X%S, Uwrk, U1)
 
       return
-   end subroutine L_step
+   end subroutine L_step_lyapunov
 
 end module lightROM_LyapunovSolvers

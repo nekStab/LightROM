@@ -243,7 +243,7 @@ program demo
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_integrator(X, LTI, Tend, dt, torder, info)
+            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI, Tend, dt, torder, info)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution
