@@ -1,11 +1,11 @@
 module LightROM_utils
+   use LightKrylov
    use LightKrylov_utils
    use LightROM_AbstractLTIsystems
 
    use stdlib_linalg, only : eye
    use stdlib_optval, only : optval
-   implicit none
-   include "dtypes.h"   
+   implicit none 
 
    private
    public Approximate_Balanced_Truncation, ROM_Petrov_Galerkin_Projection, ROM_Galerkin_Projection
@@ -30,15 +30,15 @@ contains
       !!            \mathbf{S}^T &= \mathbf{Y}_c \mathbf{S}_c^{1/2} \mathbf{U} \mathbf{S}^{-1/2} 
       !! \end{align} \]
       !! Note: In the current implementation, the numerical rank of the SVD is not considered.
-      class(abstract_vector),              intent(out) :: T(:)
+      class(abstract_vector),              intent(out)   :: T(:)
       !! Balancing transformation
-      real(kind=wp),                       intent(out) :: S(:)
+      real(kind=wp),                       intent(out)   :: S(:)
       !! Singular values of the BT
-      class(abstract_vector),              intent(out) :: ST(:)
+      class(abstract_vector),              intent(out)   :: ST(:)
       !! Inverse balancing transformation
-      class(abstract_sym_low_rank_state),  intent(in)  :: X
+      class(abstract_sym_low_rank_state),  intent(inout) :: X
       !! Low-rank representation of the Controllability Gramian
-      class(abstract_sym_low_rank_state),  intent(in)  :: Y
+      class(abstract_sym_low_rank_state),  intent(inout) :: Y
       !! Low-rank representation of the Observability Gramian
 
       ! internal variables
@@ -71,7 +71,7 @@ contains
       call mat_mult(Uwrk(1:rkc), Y%U, Dwrk(1:rkc,1:rkc))
       call mat_copy(Y%U, Uwrk(1:rkc))
       ! Update data matrix
-      S_svd = matmul(matmul(Swrk(1:rkc,1:rkc), matmul(D(1:rkc,1:rkc), transpose(Swrk(1:rkc,1:rkc)))), S_svd)
+      S_svd = matmul(matmul(Swrk(1:rkc,1:rkc), matmul(Dwrk(1:rkc,1:rkc), transpose(Swrk(1:rkc,1:rkc)))), S_svd)
 
       ! and X
       Swrk = 0.0_wp; Dwrk = 0.0_wp; Lambda = 0.0_wp
@@ -85,7 +85,7 @@ contains
       call mat_mult(Uwrk(1:rko), X%U, Dwrk(1:rko,1:rko))
       call mat_copy(X%U, Uwrk(1:rko))
       ! Update data matrix
-      S_svd = matmul(S_svd, matmul(Swrk(1:rko,1:rko), matmul(D(1:rko,1:rko), transpose(Swrk(1:rko,1:rko)))))
+      S_svd = matmul(S_svd, matmul(Swrk(1:rko,1:rko), matmul(Dwrk(1:rko,1:rko), transpose(Swrk(1:rko,1:rko)))))
 
       ! Compute BT
       allocate(V(rkc,rkc)); allocate(W(rko,rko)); allocate(G(rkmin))
@@ -116,13 +116,13 @@ contains
       !!     \hat{\mathbf{C}} = \mathbf{C} \mathbf{V}, \qquad
       !!     \hat{\mathbf{D}} = \mathbf{D} .
       !! \]
-      class(abstract_ROM_lti_system),   intent(out) :: romLTI
+      class(abstract_ROM_lti_system),   intent(out)    :: romLTI
       !! Reduced-order LTI
-      class(abstract_lti_system),       intent(in)  :: LTI
+      class(abstract_lti_system),       intent(in)     :: LTI
       !! Large-scale LTI to project
-      class(abstract_vector),           intent(in)  :: T(:)
+      class(abstract_vector),           intent(inout)  :: T(:)
       !! Balancing transformation
-      class(abstract_vector),           intent(in)  :: ST(:)
+      class(abstract_vector),           intent(in)     :: ST(:)
       !! Inverse balancing transformation
 
       ! internal variables
@@ -154,11 +154,11 @@ contains
       !!     \hat{\mathbf{C}} = \mathbf{C} \mathbf{V}, \qquad
       !!     \hat{\mathbf{D}} = \mathbf{D} .
       !! \]
-      class(abstract_ROM_lti_system),   intent(out) :: romLTI
+      class(abstract_ROM_lti_system),   intent(out)    :: romLTI
       !! Reduced-order LTI
-      class(abstract_lti_system),       intent(in)  :: LTI
+      class(abstract_lti_system),       intent(in)     :: LTI
       !! Large-scale LTI to project
-      class(abstract_vector),           intent(in)  :: T(:)
+      class(abstract_vector),           intent(inout)  :: T(:)
       !! Balancing transformation
 
       call ROM_Petrov_Galerkin_Projection(romLTI, LTI, T, T)
