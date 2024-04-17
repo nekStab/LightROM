@@ -30,7 +30,7 @@ module LightROM_LyapunovSolvers
    subroutine numerical_low_rank_splitting_lyapunov_integrator(X,LTI,Tend,tau,torder,info,exptA,iftrans)
       !! Numerical integrator for the matrix-valued differential Lyapunov equation of the form
       !!
-      !!    $$ \dot{X} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{B} \mathbf{B}^T $$
+      !!    $$ \dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{B} \mathbf{B}^T $$
       !!
       !! where \( \mathbf{A} \) is a (n x n) Hurwitz matrix, \( \mathbf{X} \) is SPD and 
       !! \( \mathbf{B} \mathbf{B}^T \) is a rank-m rhs (m<<n).
@@ -38,7 +38,7 @@ module LightROM_LyapunovSolvers
       !! Since \( \mathbf{A} \) is Hurwitz, the equations converges to steady state for \( t \to \infty \), 
       !! which corresponds to the associated algebraic Lyapunov equation of the form
       !!
-      !!    $$ 0 = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{B} \mathbf{B}^T $$
+      !!    $$ \mathbf{0} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{B} \mathbf{B}^T $$
       !!
       !! The algorithm is based on three main ideas:
       !!

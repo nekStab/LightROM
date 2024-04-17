@@ -39,7 +39,7 @@ module LightROM_RiccatiSolvers
    subroutine numerical_low_rank_splitting_riccati_integrator(X,LTI,Qc,Rinv,Tend,tau,torder,info,exptA,iftrans)
       !! Numerical integrator for the matrix-valued differential Riccati equation of the form
       !!
-      !!    $$\dot{X} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
+      !!    $$\dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
       !!
       !! where \( \mathbf{A} \) is a (n x n) Hurwitz matrix, \( \mathbf{X} \) is SPD and 
       !! \( \mathbf{B} \) and \( \mathbf{C}^T \) are low-rank matrices.
@@ -47,7 +47,7 @@ module LightROM_RiccatiSolvers
       !! Since \( \mathbf{A} \) is Hurwitz, the equations converges to steady state for  \( t \to \infty \), 
       !! which corresponds to the associated algebrait Riccati equation of the form
       !!
-      !!    $$0 = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
+      !!    $$\mathbf{0} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
       !!
       !! The algorithm is based on three main ideas:
       !!
