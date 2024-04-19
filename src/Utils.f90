@@ -3,7 +3,7 @@ module LightROM_utils
    use LightKrylov_utils
    use LightROM_AbstractLTIsystems
 
-   use stdlib_linalg, only : eye
+   use stdlib_linalg, only : eye, diag
    use stdlib_optval, only : optval
    implicit none 
 
@@ -44,8 +44,8 @@ contains
       ! internal variables
       integer                                :: i, rkc, rko, rk, rkmin
       real(kind=wp),             allocatable :: S_svd(:,:)
-      real(kind=wp),             allocatable :: Swrk(:,:), Dwrk(:,:)
-      real(kind=wp),             allocatable :: Lambda(:), G(:)
+      real(kind=wp),             allocatable :: Swrk(:,:)
+      real(kind=wp),             allocatable :: Sigma(:)
       real(kind=wp),             allocatable :: V(:,:), W(:,:)
       class(abstract_vector),    allocatable :: Uwrk(:)
 
@@ -55,49 +55,45 @@ contains
       ! scratch arrays
       rk = max(rkc, rko)
       rkmin = min(rkc, rko)
-      allocate(Swrk(rk,rk)); allocate(Dwrk(rk,rk)); allocate(Lambda(rk))
+      allocate(Swrk(rk,rk))
       allocate(Uwrk(rk), source=T(1))
 
+      ! compute inner product with Gramian bases
       call mat_mult(S_svd, Y%U, X%U)
 
-      ! compute Cholesky factors of Y
-      Swrk = 0.0_wp; Dwrk = 0.0_wp; Lambda = 0.0_wp
-      call deigh(Y%S, Swrk(1:rkc, 1:rkc), Lambda(1:rkc))
-      do i = 1, rkc
-         Dwrk(i,i) = sqrt(Lambda(i))
-      enddo
-      ! update LR factor with Cholesky factor
+      ! compute Cholesky factors of Y update LR factor with Cholesky factor
+      Swrk = 0.0_wp
+      call sqrtm(Swrk(1:rkc,1:rkc), Y%S)
       call mat_zero(Uwrk)
-      call mat_mult(Uwrk(1:rkc), Y%U, Dwrk(1:rkc,1:rkc))
+      call mat_mult(Uwrk(1:rkc), Y%U, Swrk(1:rkc,1:rkc))
       call mat_copy(Y%U, Uwrk(1:rkc))
       ! Update data matrix
-      S_svd = matmul(matmul(Swrk(1:rkc,1:rkc), matmul(Dwrk(1:rkc,1:rkc), transpose(Swrk(1:rkc,1:rkc)))), S_svd)
+      S_svd = matmul(Swrk(1:rkc,1:rkc), S_svd)
 
-      ! and X
-      Swrk = 0.0_wp; Dwrk = 0.0_wp; Lambda = 0.0_wp
-      call deigh(X%S, Swrk(1:rko, 1:rko), Lambda(1:rko))
-      Dwrk = 0.0_wp
-      do i = 1, rko
-         Dwrk(i,i) = sqrt(Lambda(i))
-      enddo
-      ! update LR factor with Cholesky factor
+      ! compute Cholesky factors of X update LR factor with Cholesky factor
+      Swrk = 0.0_wp
+      call sqrtm(Swrk(1:rko,1:rko), X%S)
       call mat_zero(Uwrk)
-      call mat_mult(Uwrk(1:rko), X%U, Dwrk(1:rko,1:rko))
-      call mat_copy(X%U, Uwrk(1:rko))
+      call mat_mult(Uwrk(1:rkc), X%U, Swrk(1:rkc,1:rkc))
+      call mat_copy(X%U, Uwrk(1:rkc))
       ! Update data matrix
-      S_svd = matmul(S_svd, matmul(Swrk(1:rko,1:rko), matmul(Dwrk(1:rko,1:rko), transpose(Swrk(1:rko,1:rko)))))
+      S_svd = matmul(S_svd, Swrk(1:rko,1:rko))
 
       ! Compute BT
-      allocate(V(rkc,rkc)); allocate(W(rko,rko)); allocate(G(rkmin))
-      call dsvd(S_svd, V, G, W)
+      allocate(V(rkc,rkc)); allocate(W(rko,rko)); allocate(Sigma(rkmin))
+      call svd(S_svd, V, Sigma, W)
 
-      ! We don't cut truncate in case come singular values are very small
-      Dwrk = 0.0_wp
-      do i = 1, rkmin
-         Dwrk(i,i) = 1/sqrt(G(i))
-      enddo
-      call mat_mult( T, X%U, matmul(          W,  Dwrk))
-      call mat_mult(ST, Y%U, matmul(transpose(V), Dwrk))
+      ! We truncate in case come singular values are very small
+      s_inv: do i = 1, rkmin
+         if (Sigma(i) < atol) then
+            exit s_inv
+            rk = i-1
+         end if 
+         Sigma(i) = 1/sqrt(Sigma(i))
+      enddo s_inv
+      
+      call mat_mult( T, X%U, matmul(          W(:, 1:rk),  diag(sigma(1:rk))))
+      call mat_mult(ST, Y%U, matmul(transpose(V(1:rk, :)), diag(sigma(1:rk))))
 
       return
    end subroutine
