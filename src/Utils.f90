@@ -61,6 +61,9 @@ contains
       ! compute inner product with Gramian bases
       call mat_mult(S_svd, Y%U, X%U)
 
+      ! The Cholesky factorization is not strictly necessary. If we omit it, the transformation will be 
+      ! correct up to a diagonal scaling factor
+      
       ! compute Cholesky factors of Y update LR factor with Cholesky factor
       Swrk = 0.0_wp
       call sqrtm(Swrk(1:rkc,1:rkc), Y%S)
@@ -91,7 +94,7 @@ contains
          end if 
          Sigma(i) = 1/sqrt(Sigma(i))
       enddo s_inv
-      
+
       call mat_mult( T, X%U, matmul(          W(:, 1:rk),  diag(sigma(1:rk))))
       call mat_mult(ST, Y%U, matmul(transpose(V(1:rk, :)), diag(sigma(1:rk))))
 
