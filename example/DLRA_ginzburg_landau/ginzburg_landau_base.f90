@@ -16,22 +16,14 @@ module Ginzburg_Landau_Base
    public :: initialize_parameters
    public :: set_state, get_state, init_rand
 
-   !------------------------------
-   !-----     PARAMETERS     -----
-   !------------------------------
+   !-------------------------------
+   !-----     PARAMETERS 1    -----
+   !-------------------------------
 
    ! Mesh related parameters.
    real(kind=wp), parameter :: L  = 200.0_wp ! Domain length
    integer      , parameter :: nx = 512      ! Number of grid points (excluding boundaries).
    real(kind=wp), parameter :: dx = L/nx     ! Grid size.
-
-   ! Physical parameters.
-   complex(kind=wp), parameter :: nu    = cmplx(2.0_wp, 0.2_wp, kind=wp)
-   complex(kind=wp), parameter :: gamma = cmplx(1.0_wp, -1.0_wp, kind=wp)
-   real(kind=wp)   , parameter :: mu_0  = 0.38_wp
-   real(kind=wp)   , parameter :: c_mu  = 0.2_wp
-   real(kind=wp)   , parameter :: mu_2  = -0.01_wp
-   real(kind=wp)               :: mu(1:nx)
 
    !-------------------------------------------
    !-----     LIGHTKRYLOV VECTOR TYPE     -----
@@ -48,13 +40,6 @@ module Ginzburg_Landau_Base
       procedure, pass(self), public :: rand
    end type state_vector
 
-   !-----------------------------------------------
-   !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
-   !-----------------------------------------------
-
-   type, extends(abstract_lti_system), public :: lti_system
-   end type lti_system
-
    !-------------------------------------------------------
    !-----     LIGHTKRYLOV SYM LOW RANK STATE TYPE     -----
    !-------------------------------------------------------
@@ -64,6 +49,18 @@ module Ginzburg_Landau_Base
       private
       procedure, pass(self), public :: initialize_LR_state
    end type LR_state
+
+   !-------------------------------
+   !-----     PARAMETERS 2    -----
+   !-------------------------------
+
+   ! Physical parameters.
+   complex(kind=wp), parameter :: nu    = cmplx(2.0_wp, 0.2_wp, kind=wp)
+   complex(kind=wp), parameter :: gamma = cmplx(1.0_wp, -1.0_wp, kind=wp)
+   real(kind=wp)   , parameter :: mu_0  = 0.38_wp
+   real(kind=wp)   , parameter :: c_mu  = 0.2_wp
+   real(kind=wp)   , parameter :: mu_2  = -0.01_wp
+   real(kind=wp)               :: mu(1:nx)
 
    ! Input-Output system parameters
    real(kind=wp)               :: w(2*nx)            ! integration weights
@@ -232,9 +229,9 @@ contains
       return
    end subroutine init_rand
 
-   !------------------------------------------
-   !-----     UTILITIES FOR LR STATES    -----
-   !------------------------------------------
+   !------------------------------------------------------
+   !-----     TYPE BOUND PROCEDURES FOR LR STATES    -----
+   !------------------------------------------------------
 
    subroutine initialize_LR_state(self, U, S, rk)
       class(LR_state),        intent(inout) :: self
