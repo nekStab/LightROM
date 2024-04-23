@@ -36,7 +36,7 @@ module LightROM_RiccatiSolvers
 
    contains
 
-   subroutine numerical_low_rank_splitting_riccati_integrator(X,LTI,Qc,Rinv,Tend,tau,torder,info,exptA,iftrans)
+   subroutine numerical_low_rank_splitting_riccati_integrator(X, A, B, CT, Qc, Rinv, Tend, tau, torder, info, exptA, iftrans)
       !! Numerical integrator for the matrix-valued differential Riccati equation of the form
       !!
       !!    $$\dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
@@ -106,8 +106,12 @@ module LightROM_RiccatiSolvers
       !!   340, 602-614
       class(abstract_sym_low_rank_state),  intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_lti_system),          intent(in)    :: LTI
-      !! LTI dynamical system defining the problem.
+      class(abstract_linop),               intent(inout) :: A
+      !! Linear operator.
+      class(abstract_vector),              intent(in)    :: B(:)
+      !! System input.
+      class(abstract_vector),              intent(in)    :: CT(:)
+      !! System output.
       real(kind=wp),                       intent(in)    :: Qc(:,:)
       !! Measurement weights.
       real(kind=wp),                       intent(in)    :: Rinv(:,:)
@@ -153,7 +157,7 @@ module LightROM_RiccatiSolvers
 
       dlra : do istep = 1, nsteps
          ! dynamical low-rank approximation solver
-         call numerical_low_rank_splitting_riccati_step(X, LTI, Qc, Rinv, tau, torder, info, p_exptA, trans)
+         call numerical_low_rank_splitting_riccati_step(X, A, B, CT, Qc, Rinv, tau, torder, info, p_exptA, trans)
 
          T = T + tau
          !> here we can do some checks such as whether we have reached steady state
@@ -183,11 +187,15 @@ module LightROM_RiccatiSolvers
    !-----     UTILITIES     -----
    !-----------------------------
 
-   subroutine numerical_low_rank_splitting_riccati_step(X, LTI, Qc, Rinv, tau, torder, info, exptA, iftrans)
+   subroutine numerical_low_rank_splitting_riccati_step(X, A, B, CT, Qc, Rinv, tau, torder, info, exptA, iftrans)
       class(abstract_sym_low_rank_state),  intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_lti_system),          intent(in)    :: LTI
-      !! LTI dynamical system defining the problem.
+      class(abstract_linop),               intent(inout) :: A
+      !! Linear operator.
+      class(abstract_vector),              intent(in)    :: B(:)
+      !! System input.
+      class(abstract_vector),              intent(in)    :: CT(:)
+      !! System output.
       real(kind=wp),                       intent(in)    :: Qc(:,:)
       !! Measurement weights.
       real(kind=wp),                       intent(in)    :: Rinv(:,:)
@@ -229,8 +237,8 @@ module LightROM_RiccatiSolvers
       select case (integrator)
       case (1) 
          ! Lie-Trotter splitting
-         call M_forward_map        (X, LTI,               tau, info, exptA, trans)
-         call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info)
+         call M_forward_map        (X, A,                      tau, info, exptA, trans)
+         call G_forward_map_riccati(X,    B, CT, Qc, Rinv,     tau, info)
       case (2) 
          ! Strang splitting
          ! Prepare arrays for predictor step
@@ -247,36 +255,38 @@ module LightROM_RiccatiSolvers
          if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk))
          call mat_zero(Uwrk0); Swrk0 = 0.0_wp
          ! second order step
-         call M_forward_map        (X, LTI,           0.5*tau, info, exptA, trans)
+         call M_forward_map        (X, A,                  0.5*tau, info, exptA, trans)
          ! Save current state
-         call mat_copy(U0, X%U); S0 = X%S                             ! --> save      
+         call mat_copy(U0, X%U); S0 = X%S                         ! --> save      
          ! Precompute T0
-         call mat_mult(Uwrk0, U0, S0)                                 ! K0 = U0 @ S0
-         call apply_p_outerproduct_w(Swrk0, U0, Uwrk0, LTI%B, Rinv)   ! (U0.T) @ B @ R^(-1) @ B.T @ K0
-         call mat_mult(T0, Uwrk0, Swrk0)                              ! K0 @ Swrk0
+         call mat_mult(Uwrk0, U0, S0)                             ! K0 = U0 @ S0
+         call apply_p_outerproduct_w(Swrk0, U0, Uwrk0, B, Rinv)   ! (U0.T) @ B @ R^(-1) @ B.T @ K0
+         call mat_mult(T0, Uwrk0, Swrk0)                          ! K0 @ Swrk0
          ! First order integration
-         call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info, ifpred=.true., T0=T0)
+         call G_forward_map_riccati(X,    B, CT, Qc, Rinv,     tau, info, ifpred=.true., T0=T0)
          ! Precompute Tt
-         call mat_copy(Ut, X%U)                                       ! --> save
-         call mat_mult(Uwrk0, X%U, X%S)                               ! Kt = Ut @ St
-         call apply_p_outerproduct_w(Swrk0, X%U, Uwrk0, LTI%B, Rinv)  ! (Ut.T) @ B @ R^(-1) @ B.T @ Kt
-         call mat_mult(Tt, Uwrk0, Swrk0)                              ! Kt @ Swrk0
+         call mat_copy(Ut, X%U)                                   ! --> save
+         call mat_mult(Uwrk0, X%U, X%S)                           ! Kt = Ut @ St
+         call apply_p_outerproduct_w(Swrk0, X%U, Uwrk0, B, Rinv)  ! (Ut.T) @ B @ R^(-1) @ B.T @ Kt
+         call mat_mult(Tt, Uwrk0, Swrk0)                          ! Kt @ Swrk0
          ! Reset state
          call mat_copy(X%U, U0); X%S = S0
          ! Second order integration
-         call G_forward_map_riccati(X, LTI, Qc, Rinv,     tau, info, ifpred=.false., T0=T0, Tt=Tt, U0=U0, Ut=Ut)
-         call M_forward_map        (X, LTI,           0.5*tau, info, exptA, trans)
+         call G_forward_map_riccati(X,    B, CT, Qc, Rinv,     tau, info, ifpred=.false., T0=T0, Tt=Tt, U0=U0, Ut=Ut)
+         call M_forward_map        (X, A,                  0.5*tau, info, exptA, trans)
       end select
 
       return
 
    end subroutine numerical_low_rank_splitting_riccati_step
 
-   subroutine G_forward_map_riccati(X, LTI, Qc, Rinv, tau, info, ifpred, T0, Tt, U0, Ut)
+   subroutine G_forward_map_riccati(X, B, CT, Qc, Rinv, tau, info, ifpred, T0, Tt, U0, Ut)
       class(abstract_sym_low_rank_state),  intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_lti_system),          intent(in)    :: LTI
-      !! LTI dynamical system defining the problem.
+      class(abstract_vector),              intent(in)    :: B(:)
+      !! System input.
+      class(abstract_vector),              intent(in)    :: CT(:)
+      !! System output.
       real(kind=wp),                       intent(in)    :: Qc(:,:)
       !! Measurement weights.
       real(kind=wp),                       intent(in)    :: Rinv(:,:)
@@ -305,14 +315,14 @@ module LightROM_RiccatiSolvers
       if (present(ifpred)) then
          ! second order in time
          if (ifpred) then ! predictor step with precomputed T0
-            call K_step_riccati(X, U1, QU, LTI, Qc, Rinv,     tau, info, reverse=.false., NL=T0)
-            call S_step_riccati(X, U1, QU, LTI, Qc, Rinv,     tau, info, reverse=.false.)
-            call L_step_riccati(X, U1,     LTI, Qc, Rinv,     tau, info)
+            call K_step_riccati(X, U1, QU, B, CT, Qc, Rinv,     tau, info, reverse=.false., NL=T0)
+            call S_step_riccati(X, U1, QU, B, CT, Qc, Rinv,     tau, info, reverse=.false.)
+            call L_step_riccati(X, U1,     B, CT, Qc, Rinv,     tau, info)
          else             ! corrector step with precomputed T0, Tt and U0, Ut
             ! forward steps based on T0, U0 (within X)
-            call K_step_riccati(X, U1, QU, LTI, Qc, Rinv, 0.5*tau, info, reverse=.false., NL=T0)
-            call S_step_riccati(X, U1, QU, LTI, Qc, Rinv, 0.5*tau, info, reverse=.false.)
-            call L_step_riccati(X, U1,     LTI, Qc, Rinv,     tau, info)
+            call K_step_riccati(X, U1, QU, B, CT, Qc, Rinv, 0.5*tau, info, reverse=.false., NL=T0)
+            call S_step_riccati(X, U1, QU, B, CT, Qc, Rinv, 0.5*tau, info, reverse=.false.)
+            call L_step_riccati(X, U1,     B, CT, Qc, Rinv,     tau, info)
             ! Compute Gamma = 0.5*(T0 @ (U1.T @ U0) + Tt @ (U1.T @ Ut))
             call mat_zero(QU); Swrk0 = 0.0_wp                           ! we use QU as a scratch array
             call mat_mult(Swrk0, X%U, U0); call mat_mult(QU, T0, Swrk0)
@@ -321,14 +331,14 @@ module LightROM_RiccatiSolvers
             ! Update X to most recent value
             call mat_copy(X%U, U1)
             ! reverse steps based on Gamma
-            call S_step_riccati(X, U1, QU, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true., NL=T0)
-            call K_step_riccati(X, U1, QU, LTI, Qc, Rinv, 0.5*tau, info, reverse=.true., NL=T0)
+            call S_step_riccati(X, U1, QU, B, CT, Qc, Rinv, 0.5*tau, info, reverse=.true., NL=T0)
+            call K_step_riccati(X, U1, QU, B, CT, Qc, Rinv, 0.5*tau, info, reverse=.true., NL=T0)
          end if
       else
          ! first order in time
-         call K_step_riccati(   X, U1, QU, LTI, Qc, Rinv,     tau, info)
-         call S_step_riccati(   X, U1, QU, LTI, Qc, Rinv,     tau, info)
-         call L_step_riccati(   X, U1,     LTI, Qc, Rinv,     tau, info)
+         call K_step_riccati(   X, U1, QU, B, CT, Qc, Rinv,     tau, info)
+         call S_step_riccati(   X, U1, QU, B, CT, Qc, Rinv,     tau, info)
+         call L_step_riccati(   X, U1,     B, CT, Qc, Rinv,     tau, info)
       end if
       
       ! Copy updated low-rank factors to output
@@ -337,15 +347,17 @@ module LightROM_RiccatiSolvers
       return
    end subroutine G_forward_map_riccati
 
-   subroutine K_step_riccati(X, U1, QU, LTI, Qc, Rinv, tau, info, reverse, NL)
+   subroutine K_step_riccati(X, U1, QU, B, CT, Qc, Rinv, tau, info, reverse, NL)
       class(abstract_sym_low_rank_state),  intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_vector),             intent(out)    :: U1(:)
       !! Intermediate low-rank factor.
       class(abstract_vector),             intent(inout)  :: QU(:)
       !! Precomputed application of the inhomogeneity.
-      class(abstract_lti_system),         intent(in)     :: LTI
-      !! LTI dynamical system defining the problem.
+      class(abstract_vector),              intent(in)    :: B(:)
+      !! System input.
+      class(abstract_vector),              intent(in)    :: CT(:)
+      !! System output.
       real(kind=wp),                      intent(in)     :: Qc(:,:)
       !! Measurement weights.
       real(kind=wp),                      intent(in)     :: Rinv(:,:)
@@ -378,14 +390,14 @@ module LightROM_RiccatiSolvers
       ! Constant part --> QU
       if (.not. reverse_order) then
          ! compute QU and pass to S step
-         call apply_outerproduct_w(QU, X%U, LTI%CT, Qc)
+         call apply_outerproduct_w(QU, X%U, CT, Qc)
       end if
 
       ! Non-linear part --> Uwrk0
-      call mat_mult(U1, X%U, X%S)                                  ! K0 = U0 @ S0
+      call mat_mult(U1, X%U, X%S)                              ! K0 = U0 @ S0
       if (.not.present(NL)) then
-         call apply_p_outerproduct_w(Swrk0, X%U, U1, LTI%B, Rinv)  ! (U0.T) @ B @ R^(-1) @ B.T @ K0
-         call mat_mult(Uwrk0, U1, Swrk0)                           ! K0 @ Swrk0
+         call apply_p_outerproduct_w(Swrk0, X%U, U1, B, Rinv)  ! (U0.T) @ B @ R^(-1) @ B.T @ K0
+         call mat_mult(Uwrk0, U1, Swrk0)                       ! K0 @ Swrk0
       else  ! non-linear term precomputed
          call mat_copy(Uwrk0, NL)
       end if
@@ -394,7 +406,7 @@ module LightROM_RiccatiSolvers
       call mat_axpby(Uwrk0, -1.0_wp, QU, 1.0_wp)
 
       ! Construct intermediate solution U1
-      call mat_axpby(U1, 1.0_wp, Uwrk0, tau)                       ! K0 + tau*Kdot
+      call mat_axpby(U1, 1.0_wp, Uwrk0, tau)                   ! K0 + tau*Kdot
 
       ! Orthonormalize in-place
       call qr_factorization(U1, Swrk0, perm, info, ifpivot = .true.)
@@ -404,15 +416,17 @@ module LightROM_RiccatiSolvers
       return
    end subroutine K_step_riccati
 
-   subroutine S_step_riccati(X, U1, QU, LTI, Qc, Rinv, tau, info, reverse, NL)
+   subroutine S_step_riccati(X, U1, QU, B, CT, Qc, Rinv, tau, info, reverse, NL)
       class(abstract_sym_low_rank_state), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_vector),             intent(in)    :: U1(:)
       !! Intermediate low-rank factor.
       class(abstract_vector),             intent(inout) :: QU(:)
       !! Precomputed application of the inhomogeneity.
-      class(abstract_lti_system),         intent(in)    :: LTI
-      !! LTI dynamical system defining the problem.
+      class(abstract_vector),              intent(in)    :: B(:)
+      !! System input.
+      class(abstract_vector),              intent(in)    :: CT(:)
+      !! System output.
       real(kind=wp),                      intent(in)    :: Qc(:,:)
       !! Measurement weights.
       real(kind=wp),                      intent(in)    :: Rinv(:,:)
@@ -443,14 +457,14 @@ module LightROM_RiccatiSolvers
       ! Constant part --> Swrk0
       if (reverse_order) then
          ! Compute QU and pass to K step
-         call apply_outerproduct_w(QU, X%U, LTI%CT, Qc)
+         call apply_outerproduct_w(QU, X%U, CT, Qc)
       endif
       call mat_mult(Swrk0, U1, QU)
 
       ! Non-linear part --> Swrk1
       if (.not.present(NL)) then
-         call apply_p_outerproduct_w(Swrk1, X%U, U1, LTI%B, Rinv)    !       U0.T @ B @ R^(-1) @ B.T @ U1
-         Swrk1 = matmul(X%S, matmul(Swrk1, X%S))                     ! S0 @ (U0.T @ B @ R^(-1) @ B.T @ U1) @ S0
+         call apply_p_outerproduct_w(Swrk1, X%U, U1, B, Rinv)    !       U0.T @ B @ R^(-1) @ B.T @ U1
+         Swrk1 = matmul(X%S, matmul(Swrk1, X%S))                 ! S0 @ (U0.T @ B @ R^(-1) @ B.T @ U1) @ S0
       else ! Non-linear term precomputed
          call mat_mult(Swrk1, U1, NL)
       end if
@@ -464,13 +478,15 @@ module LightROM_RiccatiSolvers
       return
    end subroutine S_step_riccati
 
-   subroutine L_step_riccati(X, U1, LTI, Qc, Rinv, tau, info)
+   subroutine L_step_riccati(X, U1, B, CT, Qc, Rinv, tau, info)
       class(abstract_sym_low_rank_state), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_vector),             intent(in)    :: U1(:)
       !! Intermediate low-rank factor.
-      class(abstract_lti_system),         intent(in)    :: LTI
-      !! LTI dynamical system defining the problem.
+      class(abstract_vector),             intent(in)    :: B(:)
+      !! System input.
+      class(abstract_vector),             intent(in)    :: CT(:)
+      !! System output.
       real(kind=wp),                      intent(in)    :: Qc(:,:)
       !! Measurement weights.
       real(kind=wp),                      intent(in)    :: Rinv(:,:)
@@ -491,20 +507,20 @@ module LightROM_RiccatiSolvers
       if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk)) 
       call mat_zero(Uwrk0); call mat_zero(Uwrk1); Swrk0 = 0.0_wp
 
-      call mat_mult(Uwrk1, X%U, transpose(X%S))                   ! L0.T                                    U0 @ S.T
+      call mat_mult(Uwrk1, X%U, transpose(X%S))               ! L0.T                                    U0 @ S.T
 
       ! Constant part --> Uwrk0
-      call apply_outerproduct_w(Uwrk0, U1, LTI%CT, Qc)
+      call apply_outerproduct_w(Uwrk0, U1, CT, Qc)
 
       ! Non-linear part --> U
-      call apply_p_outerproduct_w(Swrk0, U1, Uwrk1, LTI%B, Rinv)  !               U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T
-      call mat_mult(X%U, Uwrk1, Swrk0)                            ! (U0 @ S.T) @ (U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T)
+      call apply_p_outerproduct_w(Swrk0, U1, Uwrk1, B, Rinv)  !               U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T
+      call mat_mult(X%U, Uwrk1, Swrk0)                        ! (U0 @ S.T) @ (U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T)
 
       ! Combine to form U1.T @ G( U1.T@L.T )
       call mat_axpby(Uwrk0, 1.0_wp, X%U, -1.0_wp)
 
       ! Construct solution L1.T
-      call mat_axpby(Uwrk1, 1.0_wp, Uwrk0, tau)                   ! L0.T + tau*Ldot.T
+      call mat_axpby(Uwrk1, 1.0_wp, Uwrk0, tau)               ! L0.T + tau*Ldot.T
 
       ! Update coefficient matrix
       call mat_mult(X%S, Uwrk1, U1)

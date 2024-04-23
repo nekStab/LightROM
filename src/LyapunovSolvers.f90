@@ -27,7 +27,7 @@ module LightROM_LyapunovSolvers
 
    contains
 
-   subroutine numerical_low_rank_splitting_lyapunov_integrator(X,LTI,Tend,tau,torder,info,exptA,iftrans)
+   subroutine numerical_low_rank_splitting_lyapunov_integrator(X,A,B,Tend,tau,torder,info,exptA,iftrans,ifverb)
       !! Numerical integrator for the matrix-valued differential Lyapunov equation of the form
       !!
       !!    $$ \dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{B} \mathbf{B}^T $$
@@ -97,8 +97,10 @@ module LightROM_LyapunovSolvers
       !!   340, 602-614
       class(abstract_sym_low_rank_state),  intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_lti_system),          intent(in)    :: LTI
-      !! LTI dynamical system defining the problem.
+      class(abstract_linop),               intent(inout) :: A
+      !! Linear operator
+      class(abstract_vector),              intent(in)    :: B(:)
+      !! Low-Rank inhomogeneity.
       real(kind=wp),                       intent(in)    :: Tend
       !! Integration time horizon.
       real(kind=wp),                       intent(inout) :: tau
@@ -112,16 +114,19 @@ module LightROM_LyapunovSolvers
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
       logical,                   optional, intent(in)    :: iftrans
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      logical,                   optional, intent(in)    :: ifverb
+      !! Toggle verbosity
 
       ! Internal variables   
       integer                                :: istep, nsteps, iostep
       real(kind=wp)                          :: T
-      logical, parameter                     :: verbose = .false.
+      logical                                :: verbose
       logical                                :: trans
       procedure(abstract_exptA), pointer     :: p_exptA => null()
 
       ! Optional argument
-      trans = optval(iftrans, .false.)
+      trans   = optval(iftrans, .false.)
+      verbose = optval(ifverb, .false.)
       if (present(exptA)) then
          p_exptA => exptA
       else
@@ -132,6 +137,7 @@ module LightROM_LyapunovSolvers
 
       ! Compute number of steps
       nsteps = floor(Tend/tau)
+      if (verbose) write(*,*) 'DLRA integration: nsteps', nsteps
 
       iostep = nsteps/10
       if ( iostep .eq. 0 ) then
@@ -140,7 +146,7 @@ module LightROM_LyapunovSolvers
 
       dlra : do istep = 1, nsteps
          ! dynamical low-rank approximation solver
-         call numerical_low_rank_splitting_lyapunov_step(X, LTI, tau, torder, info, p_exptA, trans)
+         call numerical_low_rank_splitting_lyapunov_step(X, A, B, tau, torder, info, p_exptA, trans)
 
          T = T + tau
          ! here we can do some checks such as whether we have reached steady state
@@ -158,11 +164,13 @@ module LightROM_LyapunovSolvers
    !-----     UTILITIES     -----
    !-----------------------------
 
-   subroutine numerical_low_rank_splitting_lyapunov_step(X, LTI, tau, torder, info, exptA, iftrans)
+   subroutine numerical_low_rank_splitting_lyapunov_step(X, A, B, tau, torder, info, exptA, iftrans)
       class(abstract_sym_low_rank_state), intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_lti_system),         intent(in)    :: LTI
-      !! LTI dynamical system defining the problem.
+      class(abstract_linop),              intent(inout) :: A
+      !! Linear operator
+      class(abstract_vector),             intent(in)    :: B(:)
+      !! Low-Rank inhomogeneity.
       real(kind=wp),                      intent(in)    :: tau
       !! Time step.
       integer,                            intent(in)    :: torder
@@ -175,7 +183,7 @@ module LightROM_LyapunovSolvers
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
       
       ! Internal variables
-      integer        ::   istep, nsteps, integrator
+      integer                                           :: istep, nsteps, integrator
       logical                                           :: trans
 
       ! Optional argument
@@ -200,23 +208,23 @@ module LightROM_LyapunovSolvers
       select case (integrator)
       case (1)
          ! Lie-Trotter splitting
-         call M_forward_map(         X, LTI, tau, info, exptA, trans)
-         call G_forward_map_lyapunov(X, LTI, tau, info)
+         call M_forward_map(         X, A, tau, info, exptA, trans)
+         call G_forward_map_lyapunov(X, B, tau, info)
       case (2) 
          ! Strang splitting
-         call M_forward_map(         X, LTI, 0.5*tau, info, exptA, trans)
-         call G_forward_map_lyapunov(X, LTI,     tau, info)
-         call M_forward_map(         X, LTI, 0.5*tau, info, exptA, trans)
+         call M_forward_map(         X, A, 0.5*tau, info, exptA, trans)
+         call G_forward_map_lyapunov(X, B,     tau, info)
+         call M_forward_map(         X, A, 0.5*tau, info, exptA, trans)
       end select
 
       return
    end subroutine numerical_low_rank_splitting_lyapunov_step
 
-   subroutine M_forward_map(X, LTI, tau, info, exptA, iftrans)
+   subroutine M_forward_map(X, A, tau, info, exptA, iftrans)
       class(abstract_sym_low_rank_state), intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_lti_system),         intent(in)    :: LTI
-      !! LTI dynamical system defining the problem.
+      class(abstract_linop),              intent(inout) :: A
+      !! Linear operator.
       real(kind=wp),                      intent(in)    :: tau
       !! Time step.
       integer,                            intent(out)   :: info
@@ -246,7 +254,7 @@ module LightROM_LyapunovSolvers
       if (.not. allocated(Uwrk)) allocate(Uwrk, source=X%U(1))
       call Uwrk%zero()
       do i = 1, rk
-         call exptA(Uwrk, LTI%A, X%U(i), tau, info, trans)
+         call exptA(Uwrk, A, X%U(i), tau, info, trans)
          call X%U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
       enddo
       ! Reorthonormalize in-place
@@ -260,11 +268,11 @@ module LightROM_LyapunovSolvers
       return
    end subroutine M_forward_map
 
-   subroutine G_forward_map_lyapunov(X, LTI, tau, info)
+   subroutine G_forward_map_lyapunov(X, B, tau, info)
       class(abstract_sym_low_rank_state), intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_lti_system),         intent(in)    :: LTI
-      !! LTI dynamical system defining the problem.
+      class(abstract_vector),             intent(in)    :: B(:)
+      !! Low-Rank inhomogeneity.
       real(kind=wp),                      intent(in)    :: tau
       !! Time step.
       integer,                            intent(out)   :: info
@@ -280,9 +288,9 @@ module LightROM_LyapunovSolvers
       if (.not. allocated(BBTU)) allocate(BBTU(1:rk), source=X%U(1))
       call mat_zero(U1); call mat_zero(BBTU)
 
-      call K_step_lyapunov(X, U1, BBTU, LTI%B, tau, info)
-      call S_step_lyapunov(X, U1, BBTU,        tau, info)
-      call L_step_lyapunov(X, U1,       LTI%B, tau, info)
+      call K_step_lyapunov(X, U1, BBTU, B, tau, info)
+      call S_step_lyapunov(X, U1, BBTU,    tau, info)
+      call L_step_lyapunov(X, U1,       B, tau, info)
       
       ! Copy updated low-rank factors to output
       call mat_copy(X%U, U1)
