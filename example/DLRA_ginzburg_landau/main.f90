@@ -13,7 +13,7 @@ program demo
    use Ginzburg_Landau_RKlib
 
    use stdlib_optval, only : optval 
-   use stdlib_linalg, only : eye
+   use stdlib_linalg, only : eye, diag
    use stdlib_math, only : all_close, logspace
    use stdlib_io_npy, only : save_npy
    implicit none
@@ -62,6 +62,7 @@ program demo
 !
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
+   real(kind=wp) :: out(1,1)
 
    call system_clock(count_rate=clock_rate)
 
@@ -97,10 +98,10 @@ program demo
 
    tau  = 0.1_wp
    Tend = 1.0_wp
-   nrep = 2
+   nrep = 60
 
    nrk  = 4; allocate(rkv(1:nrk));   rkv  = (/ 2, 6, 10, 14 /)
-   ntau = 3; allocate(tauv(1:ntau)); tauv = (/ 0.1, 0.05, 0.01 /)
+   ntau = 2; allocate(tauv(1:ntau)); tauv = (/ 0.1, 0.01/)
 
    write(*,*) '---------------------'
    write(*,*) '   CONTROLABILITY'
@@ -116,7 +117,7 @@ program demo
             call X%initialize_LR_state(U0, S0, rk)
             ! Reset time
             Ttot = 0.0_wp
-            write(*,'(A11,A4,A4,A10,A6,A8,A16,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend','|| X_DLRA ||_2', 'Elapsed time'
+            write(*,'(A16,A4,A4,A10,A6,A8,A16,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend','|| X_DLRA ||_2', 'Elapsed time'
             nsteps = nint(Tend/tau)
             do irep = 1, nrep
                ! run integrator
@@ -130,7 +131,7 @@ program demo
                X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
 
                Ttot = Ttot + Tend
-               write(*,'(I4," ",A8,I4," TO",I1,F10.6,I6,F8.4,E16.8,F18.4," s")') irep, 'X OUTPUT', &
+               write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E16.8,F18.4," s")') irep, 'Xctl OUTPUT', &
                                  & rk, torder, tau, nsteps, Ttot, &
                                  & norm2(X_out), real(clock_stop-clock_start)/real(clock_rate)
             end do
@@ -160,7 +161,7 @@ program demo
             call X%initialize_LR_state(U0, S0, rk)
             ! Reset time
             Ttot = 0.0_wp
-            write(*,'(A11,A4,A4,A10,A6,A8,A16,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend','|| X_DLRA ||_2', 'Elapsed time'
+            write(*,'(A16,A4,A4,A10,A6,A8,A16,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend','|| X_DLRA ||_2', 'Elapsed time'
             nsteps = nint(Tend/tau)
             do irep = 1, nrep
                ! run integrator
@@ -174,7 +175,7 @@ program demo
                X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
 
                Ttot = Ttot + Tend
-               write(*,'(I4," ",A8,I4," TO",I1,F10.6,I6,F8.4,E16.8,F18.4," s")') irep, 'Y OUTPUT', &
+               write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E16.8,F18.4," s")') irep, 'Yobs OUTPUT', &
                                  & rk, torder, tau, nsteps, Ttot, &
                                  & norm2(X_out), real(clock_stop-clock_start)/real(clock_rate)
             end do

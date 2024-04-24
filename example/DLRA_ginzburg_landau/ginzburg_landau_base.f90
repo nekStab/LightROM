@@ -12,7 +12,7 @@ module Ginzburg_Landau_Base
    private
    public :: nx, dx
    public :: nu, gamma, mu_0, c_mu, mu_2, mu
-   public :: B, CT
+   public :: B, CT, weight
    public :: initialize_parameters
    public :: set_state, get_state, init_rand
 
@@ -21,9 +21,9 @@ module Ginzburg_Landau_Base
    !-------------------------------
 
    ! Mesh related parameters.
-   real(kind=wp), parameter :: L  = 200.0_wp ! Domain length
-   integer      , parameter :: nx = 512      ! Number of grid points (excluding boundaries).
-   real(kind=wp), parameter :: dx = L/nx     ! Grid size.
+   real(kind=wp), parameter :: L  = 50.0_wp ! Domain length
+   integer      , parameter :: nx = 128     ! Number of grid points (excluding boundaries).
+   real(kind=wp)            :: dx           ! Grid size.
 
    !-------------------------------------------
    !-----     LIGHTKRYLOV VECTOR TYPE     -----
@@ -63,13 +63,13 @@ module Ginzburg_Landau_Base
    real(kind=wp)               :: mu(1:nx)
 
    ! Input-Output system parameters
-   real(kind=wp)               :: w(2*nx)            ! integration weights
+   real(kind=wp)               :: weight(2*nx)       ! integration weights
    integer,       parameter    :: rk_b = 1           ! number of inputs to the system
    real(kind=wp), parameter    :: x_b = -11.0_wp     ! location of input Gaussian
-   real(kind=wp), parameter    :: s_b = 0.5_wp       ! variance of input Gaussian
+   real(kind=wp), parameter    :: s_b = 1.0_wp       ! variance of input Gaussian
    type(state_vector)          :: B(rk_b)
    real(kind=wp), parameter    :: x_c = sqrt(-2.0_wp*(mu_0 - c_mu**2)/mu_2) ! location of input Gaussian
-   real(kind=wp), parameter    :: s_c = 0.5_wp       ! variance of input Gaussian
+   real(kind=wp), parameter    :: s_c = 1.0_wp       ! variance of input Gaussian
    integer,       parameter    :: rk_c = 1           ! number of outputs to the system
    type(state_vector)          :: CT(rk_c)
 
@@ -87,16 +87,17 @@ contains
 
       ! Construct mesh.
       x = linspace(-L/2, L/2, nx+2)
+      dx = x(2)-x(1)
 
       ! Construct mu(x)
       mu(:) = (mu_0 - c_mu**2) + (mu_2 / 2.0_wp) * x(2:nx+1)**2
 
       ! Define integration weights
-      w       = 2.0_wp*dx
-      w(1)    = 1.0_wp*dx
-      w(nx)   = 1.0_wp*dx
-      w(nx+1) = 1.0_wp*dx
-      w(2*nx) = 1.0_wp*dx
+      weight       = dx
+      weight(1)    = 0.5_wp*dx
+      weight(nx)   = 0.5_wp*dx
+      weight(nx+1) = 0.5_wp*dx
+      weight(2*nx) = 0.5_wp*dx
 
       ! Construct B & C
       x2(1:nx)      = x(2:nx+1)
@@ -133,7 +134,7 @@ contains
       class(abstract_vector), intent(in) :: vec
       select type(vec)
       type is(state_vector)
-         alpha = dot_product(self%state, w*vec%state)
+         alpha = dot_product(self%state, weight*vec%state)
       end select
       return
    end function dot
