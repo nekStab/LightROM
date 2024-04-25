@@ -8,11 +8,11 @@ module LightROM_utils
    implicit none 
 
    private
-   public Approximate_Balanced_Truncation, ROM_Petrov_Galerkin_Projection, ROM_Galerkin_Projection
+   public Balanced_Transformation, ROM_Petrov_Galerkin_Projection, ROM_Galerkin_Projection
 
 contains
 
-   subroutine approximate_Balanced_Truncation(T,S,ST,X,Y)
+   subroutine Balanced_Transformation(T,S,Tinv,X,Y)
       !! Computes the the biorthogonal balancing transformation \( \mathbf{T}, \mathbf{S}^T \) from the
       !! low-rank approximations of the obervability and controlability Gramians, \( \mathbf{W}_o \) and 
       !! \( \mathbf{W}_c \) respectively, given as:
@@ -27,14 +27,14 @@ contains
       !! the balancing transformation and its inverse are given by:
       !! \[ \begin{align}
       !!            \mathbf{T}   &= \mathbf{X}_o \mathbf{S}_o^{1/2} \mathbf{V} \mathbf{S}^{-1/2} \\
-      !!            \mathbf{S}^T &= \mathbf{Y}_c \mathbf{S}_c^{1/2} \mathbf{U} \mathbf{S}^{-1/2} 
+      !!            \mathbf{Tinv}^T &= \mathbf{Y}_c \mathbf{S}_c^{1/2} \mathbf{U} \mathbf{S}^{-1/2} 
       !! \end{align} \]
       !! Note: In the current implementation, the numerical rank of the SVD is not considered.
       class(abstract_vector),              intent(out)   :: T(:)
       !! Balancing transformation
       real(kind=wp),                       intent(out)   :: S(:)
       !! Singular values of the BT
-      class(abstract_vector),              intent(out)   :: ST(:)
+      class(abstract_vector),              intent(out)   :: Tinv(:)
       !! Inverse balancing transformation
       class(abstract_sym_low_rank_state),  intent(inout) :: X
       !! Low-rank representation of the Controllability Gramian
@@ -84,24 +84,24 @@ contains
 
       ! Compute BT
       allocate(V(rkc,rkc)); allocate(W(rko,rko)); allocate(Sigma(rkmin))
-      call svd(S_svd, V, Sigma, W)
+      call svd(S_svd, V, S, W)
 
       ! We truncate in case come singular values are very small
       s_inv: do i = 1, rkmin
-         if (Sigma(i) < atol) then
+         if (S(i) < atol) then
             exit s_inv
             rk = i-1
          end if 
-         Sigma(i) = 1/sqrt(Sigma(i))
+         Sigma(i) = 1/sqrt(S(i))
       enddo s_inv
 
-      call mat_mult( T, X%U, matmul(          W(:, 1:rk),  diag(sigma(1:rk))))
-      call mat_mult(ST, Y%U, matmul(transpose(V(1:rk, :)), diag(sigma(1:rk))))
+      call mat_mult(T,    Y%U(1:rkmin), matmul(transpose(W(1:rkmin, :)), diag(Sigma(1:rkmin))))
+      call mat_mult(Tinv, X%U(1:rkmin), matmul(          V(:, 1:rkmin) , diag(Sigma(1:rkmin))))
 
       return
-   end subroutine
+   end subroutine Balanced_Transformation
 
-   subroutine ROM_Petrov_Galerkin_Projection(romLTI, LTI, T, ST)
+   subroutine ROM_Petrov_Galerkin_Projection(Ahat, Bhat, Chat, D, LTI, T, Tinv)
       !! Computes the Reduced-Order of the input LTI dynamical system via Petrov-Galerkin projection using 
       !! the biorthogonal projection bases \( \mathbf{V} \) and \( \mathbf{W} \) with 
       !! \( \mathbf{W}^T \mathbf{V} = \mathbf{I} \).
@@ -115,33 +115,46 @@ contains
       !!     \hat{\mathbf{C}} = \mathbf{C} \mathbf{V}, \qquad
       !!     \hat{\mathbf{D}} = \mathbf{D} .
       !! \]
-      class(abstract_ROM_lti_system),   intent(out)    :: romLTI
-      !! Reduced-order LTI
+      real(kind=wp),       allocatable, intent(out)    :: Ahat(:, :)
+      !! Reduced-order dynamics matrix.
+      real(kind=wp),       allocatable, intent(out)    :: Bhat(:, :)
+      !! Reduced-order input-to-state matrix.
+      real(kind=wp),       allocatable, intent(out)    :: Chat(:, :)
+      !! Reduced-order state-to-output matrix.
+      real(kind=wp),       allocatable, intent(out)    :: D(:, :)
+      !! Feed-through matrix
       class(abstract_lti_system),       intent(in)     :: LTI
       !! Large-scale LTI to project
       class(abstract_vector),           intent(inout)  :: T(:)
       !! Balancing transformation
-      class(abstract_vector),           intent(in)     :: ST(:)
+      class(abstract_vector),           intent(in)     :: Tinv(:)
       !! Inverse balancing transformation
 
       ! internal variables
       integer                                       :: i, rk
       class(abstract_vector),           allocatable :: Uwrk(:)
+      real(kind=wp),                    allocatable :: Cwrk(:, :)
 
       rk = size(T)
       allocate(Uwrk(rk), source=T(1)); call mat_zero(Uwrk)
+      allocate(Chat(1:rk,1:size(LTI%CT)))         ; Cwrk = 0.0_wp
+      allocate(Ahat(1:rk,          1:rk))         ; Ahat = 0.0_wp
+      allocate(Bhat(1:rk,          1:size(LTI%B))); Bhat = 0.0_wp
+      allocate(Chat(1:size(LTI%CT),1:rk))         ; Chat = 0.0_wp
+      allocate(D(1:size(LTI%D,1),1:size(LTI%D,2))); D    = 0.0_wp
 
       do i = 1, rk
          call LTI%A%matvec(Uwrk(i), T(i))
       end do
-      call mat_mult(romLTI%A, ST, Uwrk)
-      call mat_mult(romLTI%B, ST, LTI%B)
-      call mat_mult(romLTI%C, LTI%CT, T)
-      romLTI%D = LTI%D
+      call mat_mult(Ahat, Tinv, Uwrk)
+      call mat_mult(Bhat, Tinv, LTI%B)
+      call mat_mult(Cwrk, LTI%CT, T)
+      Chat = transpose(Cwrk)
+      D = LTI%D
 
    end subroutine ROM_Petrov_Galerkin_Projection
 
-   subroutine ROM_Galerkin_Projection(romLTI, LTI, T)
+   subroutine ROM_Galerkin_Projection(Ahat, Bhat, Chat, D, LTI, T)
       !! Computes the Reduced-Order of the input LTI dynamical system via Galerkin projection using 
       !! the orthogonal projection basis \( \mathbf{V} \) with \( \mathbf{V}^T \mathbf{V} = \mathbf{I} \).
       !! 
@@ -153,14 +166,20 @@ contains
       !!     \hat{\mathbf{C}} = \mathbf{C} \mathbf{V}, \qquad
       !!     \hat{\mathbf{D}} = \mathbf{D} .
       !! \]
-      class(abstract_ROM_lti_system),   intent(out)    :: romLTI
-      !! Reduced-order LTI
+      real(kind=wp),       allocatable, intent(out)    :: Ahat(:, :)
+      !! Reduced-order dynamics matrix.
+      real(kind=wp),       allocatable, intent(out)    :: Bhat(:, :)
+      !! Reduced-order input-to-state matrix.
+      real(kind=wp),       allocatable, intent(out)    :: Chat(:, :)
+      !! Reduced-order state-to-output matrix.
+      real(kind=wp),       allocatable, intent(out)    :: D(:, :)
+      !! Feed-through matrix
       class(abstract_lti_system),       intent(in)     :: LTI
       !! Large-scale LTI to project
       class(abstract_vector),           intent(inout)  :: T(:)
       !! Balancing transformation
 
-      call ROM_Petrov_Galerkin_Projection(romLTI, LTI, T, T)
+      call ROM_Petrov_Galerkin_Projection(Ahat, Bhat, Chat, D, LTI, T, T)
 
       return
    end subroutine ROM_Galerkin_Projection

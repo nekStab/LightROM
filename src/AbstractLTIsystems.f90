@@ -43,19 +43,6 @@ module LightROM_AbstractLTIsystems
      private
    end type abstract_dlti_system
 
-   !> Abstract reduced-order continuous LTI system.
-   type, extends(abstract_dynamical_system), abstract, public :: abstract_ROM_lti_system
-      !> Dynamics matrix.
-      real(kind=wp)        ,  allocatable :: A(:, :)
-      !> Input-to-state matrix.
-      real(kind=wp)        ,  allocatable :: B(:, :)
-      !> State-to-output matrix.
-      real(kind=wp)        ,  allocatable :: C(:, :)
-      !> Feedthrough matrix.
-      real(kind=wp)        ,  allocatable :: D(:, :)
-   contains
-   end type abstract_ROM_lti_system
-
    !--------------------------------------------------------------------
    !-----     ABSTRACT LOW RANK REPRESENTATION TYPE DEFINITION     -----
    !--------------------------------------------------------------------
