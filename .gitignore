@@ -40,6 +40,9 @@ example/DLRA_laplacian2D_lti_lyapunov/*.gpp
 example/DLRA_ginzburg_landau/*.txt
 example/DLRA_ginzburg_landau/*.gpp
 
+# local data
+local/
+
 # data files
 *.npy
 
