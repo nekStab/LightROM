@@ -233,8 +233,8 @@ program demo
 
       X = LR_state()
       if (load) then
-         inquire(file=trim(onameU), exist=existU)
-         inquire(file=trim(onameS), exist=existS)
+         inquire(file=trim(basepath)//trim(onameU), exist=existU)
+         inquire(file=trim(basepath)//trim(onameS), exist=existS)
          if (existU .and. existS) then
             write(*,*) 'Load data from file:'
             write(*,*) '    ', trim(basepath)//trim(onameU)
@@ -288,8 +288,8 @@ program demo
 
       Y = LR_state()
       if (load) then
-         inquire(file=trim(onameU), exist=existU)
-         inquire(file=trim(onameS), exist=existS)
+         inquire(file=trim(basepath)//trim(onameU), exist=existU)
+         inquire(file=trim(basepath)//trim(onameS), exist=existS)
          if (existU .and. existS) then
             write(*,*) 'Load data from file:'
             write(*,*) '    ', trim(basepath)//trim(onameU)
