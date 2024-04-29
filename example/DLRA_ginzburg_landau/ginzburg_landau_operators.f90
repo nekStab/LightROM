@@ -25,6 +25,17 @@ module Ginzburg_Landau_RKlib
       procedure, pass(self), public :: initialize_lti_system
    end type lti_system
 
+   !--------------------------------------
+   !-----     LINEAR GL OPERATOR     -----
+   !--------------------------------------
+
+   type, extends(abstract_linop), public :: GL_operator
+   contains
+      private
+      procedure, pass(self), public :: matvec  => direct_matvec_GL
+      procedure, pass(self), public :: rmatvec => adjoint_matvec_GL
+   end type GL_operator
+
    !------------------------------------------
    !-----     EXPONENTIAL PROPAGATOR     -----
    !------------------------------------------
@@ -51,32 +62,21 @@ contains
    !-----      LINEARIZED GINZBURG-LANDAU EQUATIONS     -----
    !---------------------------------------------------------
 
-   subroutine rhs(me, t, x, f)
-      ! Time-integrator.
-      class(rk_class), intent(inout)             :: me
-      ! Current time.
-      real(kind=wp)  , intent(in)                :: t
-      ! State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: x
-      ! Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: f
+   subroutine direct_GL(vec_in, vec_out)
 
-      ! Internal variables.
-      integer :: i, j, k
-      real(kind=wp), dimension(nx) :: u, du
-      real(kind=wp), dimension(nx) :: v, dv
+      !> State vector.
+      real(kind=wp)  , dimension(:), intent(in)  :: vec_in
+      !> Time-derivative.
+      real(kind=wp)  , dimension(:), intent(out) :: vec_out
+
+      !> Internal variables.
+      integer                      :: i
+      real(kind=wp), dimension(nx) :: u, v, du, dv
       real(kind=wp)                :: d2u, d2v, cu, cv
 
-      ! Sets the internal variables.
-      f = 0.0_wp
-      u = x(1:nx)      ; du = f(1:nx)
-      v = x(nx+1:2*nx) ; dv = f(nx+1:2*nx)
+      u = vec_in(1:nx)     
+      v = vec_in(nx+1:2*nx)
 
-      !---------------------------------------------------
-      !-----     Linear Ginzburg Landau Equation     -----
-      !---------------------------------------------------
-
-      ! Left most boundary points.
       cu = u(2) / (2*dx) ; cv = v(2) / (2*dx)
       du(1) = -(real(nu)*cu - aimag(nu)*cv) ! Convective term.
       dv(1) = -(aimag(nu)*cu + real(nu)*cv) ! Convective term.
@@ -119,36 +119,31 @@ contains
       du(nx) = du(nx) + mu(nx)*u(nx) ! Non-parallel term.
       dv(nx) = dv(nx) + mu(nx)*v(nx) ! Non-parallel term.
 
-      ! Copy results to the output array.
-      f(1:nx) = du ; f(nx+1:2*nx) = dv
+      vec_out(1:nx)      = du
+      vec_out(nx+1:2*nx) = dv
 
       return
-   end subroutine rhs
+   end subroutine direct_GL
 
    !-----------------------------------------------------------
    !-----     Adjoint linear Ginzburg-Landau equation     -----
    !-----------------------------------------------------------
 
-   subroutine adjoint_rhs(me, t, x, f)
-      ! Time-integrator.
-      class(rk_class), intent(inout)             :: me
-      ! Current time.
-      real(kind=wp)  , intent(in)                :: t
-      ! State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: x
-      ! Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: f
+   subroutine adjoint_GL(vec_in, vec_out)
+      !> State vector.
+      real(kind=wp)  , dimension(:), intent(in)  :: vec_in
+      !> Time-derivative.
+      real(kind=wp)  , dimension(:), intent(out) :: vec_out
 
       ! Internal variables.
-      integer :: i, j, k
+      integer :: i
       real(kind=wp), dimension(nx) :: u, du
       real(kind=wp), dimension(nx) :: v, dv
       real(kind=wp)                :: d2u, d2v, cu, cv
 
       ! Sets the internal variables.
-      f = 0.0_wp
-      u = x(1:nx)      ; du = f(1:nx)
-      v = x(nx+1:2*nx) ; dv = f(nx+1:2*nx)
+      u = vec_in(1:nx)     
+      v = vec_in(nx+1:2*nx)
 
       !---------------------------------------------------
       !-----     Linear Ginzburg Landau Equation     -----
@@ -198,10 +193,85 @@ contains
       dv(nx) = dv(nx) + mu(nx)*v(nx) ! Non-parallel term.
 
       ! Copy results to the output array.
-      f(1:nx) = du ; f(nx+1:2*nx) = dv
+      vec_out(1:nx)      = du
+      vec_out(nx+1:2*nx) = dv
+
+      return
+   end subroutine adjoint_GL
+
+   !--------------------------------------
+   !-----     WRAPPERS FOR RKLIB     -----
+   !--------------------------------------
+
+   subroutine rhs(me, t, x, f)
+      ! Time-integrator.
+      class(rk_class), intent(inout)             :: me
+      ! Current time.
+      real(kind=wp)  , intent(in)                :: t
+      ! State vector.
+      real(kind=wp)  , dimension(:), intent(in)  :: x
+      ! Time-derivative.
+      real(kind=wp)  , dimension(:), intent(out) :: f
+
+      f = 0.0_wp
+      call direct_GL(x, f)
+
+      return
+   end subroutine rhs
+
+   subroutine adjoint_rhs(me, t, x, f)
+      ! Time-integrator.
+      class(rk_class), intent(inout)             :: me
+      ! Current time.
+      real(kind=wp)  , intent(in)                :: t
+      ! State vector.
+      real(kind=wp)  , dimension(:), intent(in)  :: x
+      ! Time-derivative.
+      real(kind=wp)  , dimension(:), intent(out) :: f
+
+      f = 0.0_wp
+      call adjoint_GL(x, f)
 
       return
    end subroutine adjoint_rhs
+
+   !-------------------------------------------------------------
+   !-----     TYPE-BOUND PROCEDURES FOR THE GL OPERATOR     -----
+   !-------------------------------------------------------------
+
+   subroutine direct_matvec_GL(self, vec_in, vec_out)
+      !> Linear Operator.
+      class(GL_operator),intent(in)  :: self
+      !> Input vector.
+      class(abstract_vector) , intent(in)  :: vec_in
+      !> Output vector.
+      class(abstract_vector) , intent(out) :: vec_out
+      select type(vec_in)
+      type is (state_vector)
+         select type(vec_out)
+         type is (state_vector)
+            call direct_GL(vec_in%state, vec_out%state)
+         end select
+      end select
+      return
+   end subroutine direct_matvec_GL
+
+   subroutine adjoint_matvec_GL(self, vec_in, vec_out)
+      !> Linear Operator.
+      class(GL_operator),intent(in)  :: self
+      !> Input vector.
+      class(abstract_vector) , intent(in)  :: vec_in
+      !> Output vector.
+      class(abstract_vector) , intent(out) :: vec_out
+      select type(vec_in)
+      type is (state_vector)
+         select type(vec_out)
+         type is (state_vector)
+            call adjoint_GL(vec_in%state, vec_out%state)
+         end select
+      end select
+      return
+   end subroutine adjoint_matvec_GL
 
    !------------------------------------------------------------------------
    !-----     TYPE-BOUND PROCEDURES FOR THE EXPONENTIAL PROPAGATOR     -----
@@ -311,9 +381,10 @@ contains
    !-----     TYPE BOUND PROCEDURES FOR LTI SYSTEMS    -----
    !--------------------------------------------------------
 
-   subroutine initialize_lti_system(self, A, B, CT, D)
+   subroutine initialize_lti_system(self, A, prop, B, CT, D)
       class(lti_system),       intent(inout) :: self
       class(abstract_linop),   intent(in)    :: A
+      class(abstract_linop),   intent(in)    :: prop
       class(abstract_vector),  intent(in)    :: B(:)
       class(abstract_vector),  intent(in)    :: CT(:)
       real(kind=wp), optional, intent(in)    :: D(:,:)
@@ -323,8 +394,13 @@ contains
 
       ! Operator
       select type (A)
-      type is (exponential_prop)
+      type is (GL_operator)
          allocate(self%A, source=A)
+      end select
+      ! Exp prop
+      select type (prop)
+      type is (exponential_prop)
+         allocate(self%prop, source=prop)
       end select
       ! Input
       select type (B)
