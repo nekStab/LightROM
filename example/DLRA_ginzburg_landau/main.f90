@@ -23,10 +23,10 @@ program demo
    integer, parameter :: rkmax = 14
    integer, parameter :: rk_X0 = 14
    logical, parameter :: verb  = .true.
-   logical, parameter :: run_DLRA_test = .false.
-   logical, parameter :: run_BT_test = .true.
-   logical, parameter :: save  = .true.
-   logical, parameter :: load  = .true.
+   logical, parameter :: run_DLRA_test = .true.
+   logical, parameter :: run_BT_test = .false.
+   logical, parameter :: save  = .false.
+   logical, parameter :: load  = .false.
    character*128      :: oname
    character*128      :: onameU
    character*128      :: onameS
@@ -41,7 +41,8 @@ program demo
    integer, allocatable :: rkv(:)
 
    ! Exponential propagator (RKlib).
-   type(exponential_prop), allocatable       :: A
+   type(GL_operator),      allocatable       :: A
+   type(exponential_prop), allocatable       :: prop
 
    ! LTI system
    type(lti_system)                          :: LTI
@@ -56,8 +57,11 @@ program demo
    real(kind=wp),      allocatable           :: S(:)
    real(kind=wp),      allocatable           :: U_load(:,:)
    real(kind=wp),      allocatable           :: S_load(:,:)
+   real(kind=wp),      allocatable           :: vecs(:,:)
+   complex(kind=wp),   allocatable           :: vals(:)
 
    ! ROM
+   real(kind=wp),      allocatable           :: Swrk(:,:)
    real(kind=wp),      allocatable           :: Ahat(:,:)
    real(kind=wp),      allocatable           :: Bhat(:,:)
    real(kind=wp),      allocatable           :: Chat(:,:)
@@ -75,7 +79,12 @@ program demo
 
    ! Information flag.
    integer                                   :: info
+
+   ! Counters
    integer                                   :: i, j, k, irep, nrep, nsteps
+
+   ! IO
+   integer                                   :: iostatus
    logical                                   :: existU, existS
 !
    ! SVD
@@ -93,18 +102,19 @@ program demo
    !-----     INITIALIZATION     -----
    !----------------------------------
 
-   ! Initialize mesh and system parameters B, CT
+   ! Initialize mesh and system parameters A, B, CT
    if (verb) write(*,*) 'Initialize parameters'
    call initialize_parameters()
 
    ! Initialize propagator
    if (verb) write(*,*) 'Initialize exponential propagator'
-   A = exponential_prop(1.0_wp)
+   prop = exponential_prop(1.0_wp)
 
    ! Initialize LTI system
-   if (verb) write(*,*) 'Initialize LTI system (A, B, CT, _)'
+   A = GL_operator()
+   if (verb) write(*,*) 'Initialize LTI system (A, prop, B, CT, _)'
    LTI = lti_system()
-   call LTI%initialize_lti_system(A, B, CT)
+   call LTI%initialize_lti_system(A, prop, B, CT)
 
    ! Define initial condition
    if (verb) write(*,*) 'Define initial condition'
@@ -114,9 +124,7 @@ program demo
    ! Compute SVD to get low-rank representation
    call svd(U0_in(:,1:rk_X0), U_svd(:,1:2*nx), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
    S0 = 0.0_wp
-   do i = 1,rk_X0
-      S0(i,i) = S_svd(i)
-   end do
+   S0(1:rk_X0,1:rk_X0) = diag(S_svd(1:rk_X0))
    call set_state(U0, U_svd(:,1:rk_X0))
 
    if (run_DLRA_test) then
@@ -145,7 +153,7 @@ program demo
                do irep = 1, nrep
                   ! run integrator
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%A, LTI%B, Tend, tau, torder, info, &
+                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
                                                                      & exptA=exptA, iftrans=.false., ifverb=.false.)
                   call system_clock(count=clock_stop)      ! Stop Timer
 
@@ -160,7 +168,8 @@ program demo
                end do
                if (save) then
                   write(oname,'("GL_Xdata_TO",I1,"_rk",I2.2,"_t",I1,".npy")') torder, rk, j
-                  call save_npy(trim(basepath)//trim(oname), X_out)
+                  call save_npy(oname, X_out)
+                  if (iostatus /= 0) then; write(*,*) "Error loading file", trim(oname); STOP 2; end if
                end if
                deallocate(X%U)
                deallocate(X%S)
@@ -187,7 +196,7 @@ program demo
                do irep = 1, nrep
                   ! run integrator
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%A, LTI%CT, Tend, tau, torder, info, &
+                  call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, &
                                                                      & exptA=exptA, iftrans=.true., ifverb=.false.)
                   call system_clock(count=clock_stop)      ! Stop Timer
 
@@ -202,7 +211,8 @@ program demo
                end do
                if (save) then
                   write(oname,'("GL_Ydata_TO",I1,"_rk",I2.2,"_t",I1,".npy")') torder, rk, j
-                  call save_npy(trim(basepath)//trim(oname), X_out)
+                  call save_npy(oname, X_out)
+                  if (iostatus /= 0) then; write(*,*) "Error loading file", trim(oname); STOP 2; end if
                end if
                deallocate(Y%U)
                deallocate(Y%S)
@@ -213,34 +223,38 @@ program demo
 
    if (run_BT_test) then
       ! Set parameters
-      rk     = 12
+      rk     = 14
       tau    = 0.1_wp
       torder = 2
       ! integration time
       Tmax   = 50.0_wp
-      nrep   = 5
+      nrep   = 10
       Tend   = Tmax/nrep
       nsteps = nint(Tend/tau)
+      allocate(vals(1:rk))
+      allocate(vecs(1:rk,1:rk))
 
-      write(*,*)
+      write(*,*) ''
       write(*,*) '----------------------'
       write(*,*) '   CONTROLLABILITY'
       write(*,*) '----------------------'
-      write(*,*)
+      write(*,*) ''
 
-      onameU = "GL_Xctl_U.npy"
-      onameS = "GL_Xctl_S.npy"
+      onameU = trim(basepath)//"GL_Xctl_U.npy"
+      onameS = trim(basepath)//"GL_Xctl_S.npy"
 
       X = LR_state()
       if (load) then
-         inquire(file=trim(basepath)//trim(onameU), exist=existU)
-         inquire(file=trim(basepath)//trim(onameS), exist=existS)
+         write(*,*) 'Load data from file:'
+         write(*,*) '    ', trim(onameU)
+         write(*,*) '    ', trim(onameS)
+         inquire(file=onameU, exist=existU)
+         inquire(file=onameS, exist=existS)
          if (existU .and. existS) then
-            write(*,*) 'Load data from file:'
-            write(*,*) '    ', trim(basepath)//trim(onameU)
-            write(*,*) '    ', trim(basepath)//trim(onameS)
-            call load_npy(trim(basepath)//trim(onameU), U_load)
-            call load_npy(trim(basepath)//trim(onameU), S_load)
+            call load_npy(onameU, U_load, iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error loading file", trim(onameU); STOP 2; end if
+            call load_npy(onameS, S_load, iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error loading file", trim(onameS); STOP 2; end if
          else
             write(*,*) 'Files to load X not found.'
             STOP 1
@@ -258,7 +272,7 @@ program demo
          do irep = 1, nrep
             ! run integrator
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%A, LTI%B, Tend, tau, torder, info, &
+            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
                                                                & exptA=exptA, iftrans=.false., ifverb=.false.)
             call system_clock(count=clock_stop)      ! Stop Timer
 
@@ -272,30 +286,37 @@ program demo
                               & norm2(X_out), real(clock_stop-clock_start)/real(clock_rate)
          end do
          if (save) then
-            call save_npy(onameU, U_out(:,1:rk))
-            call save_npy(onameS, X%S(1:rk,1:rk))
+            write(*,*) 'Save data to file:'
+            write(*,*) '    ', trim(onameU)
+            write(*,*) '    ', trim(onameS)
+            call save_npy(onameU, U_out(:,1:rk), iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
+            call save_npy(onameS, X%S(1:rk,1:rk), iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
          end if
       end if
 
-      write(*,*)
+      write(*,*) ''
       write(*,*) '--------------------'
       write(*,*) '   OBSERVABILITY'
       write(*,*) '--------------------'
-      write(*,*)
+      write(*,*) ''
 
-      onameU = "GL_Yobs_U.npy"
-      onameS = "GL_Yobs_S.npy"
+      onameU = trim(basepath)//"GL_Yobs_U.npy"
+      onameS = trim(basepath)//"GL_Yobs_S.npy"
 
       Y = LR_state()
       if (load) then
-         inquire(file=trim(basepath)//trim(onameU), exist=existU)
-         inquire(file=trim(basepath)//trim(onameS), exist=existS)
+         write(*,*) 'Load data from file:'
+         write(*,*) '    ', trim(onameU)
+         write(*,*) '    ', trim(onameS)
+         inquire(file=onameU, exist=existU)
+         inquire(file=onameS, exist=existS)
          if (existU .and. existS) then
-            write(*,*) 'Load data from file:'
-            write(*,*) '    ', trim(basepath)//trim(onameU)
-            write(*,*) '    ', trim(basepath)//trim(onameS)
-            call load_npy(trim(basepath)//trim(onameU), U_load)
-            call load_npy(trim(basepath)//trim(onameU), S_load)
+            call load_npy(onameU, U_load, iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error loading file", trim(onameU); STOP 2; end if
+            call load_npy(onameS, S_load, iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error loading file", trim(onameS); STOP 2; end if
          else
             write(*,*) 'Files to load Y not found.'
             STOP 1
@@ -313,7 +334,7 @@ program demo
          do irep = 1, nrep
             ! run integrator
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%A, LTI%CT, Tend, tau, torder, info, &
+            call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, &
                                                                & exptA=exptA, iftrans=.true., ifverb=.false.)
             call system_clock(count=clock_stop)      ! Stop Timer
 
@@ -327,30 +348,65 @@ program demo
                               & norm2(X_out), real(clock_stop-clock_start)/real(clock_rate)
          end do
          if (save) then
-            call save_npy(trim(basepath)//trim(onameU), U_out(:,1:rk))
-            call save_npy(trim(basepath)//trim(onameS), Y%S(1:rk,1:rk))
+            write(*,*) 'Save data to file:'
+            write(*,*) '    ', trim(onameU)
+            write(*,*) '    ', trim(onameS)
+            call save_npy(onameU, U_out(:,1:rk), iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
+            call save_npy(onameS, Y%S(1:rk,1:rk), iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
          end if
-      end if 
-   
-      write(*,*)
+      end if
+         
+      write(*,*) ''
       write(*,*) '------------------------------'
       write(*,*) '   BALANCING TRANSFORMATION'
       write(*,*) '------------------------------'
-      write(*,*)
+      write(*,*) ''
 
-      allocate(T(1:rk), source=U0(1))
-      allocate(Tinv(1:rk), source=U0(1))
-      allocate(S(1:rk))
-      call Balanced_Transformation(T, S, Tinv, X, Y)
+      allocate(Swrk(1:rk,1:rk))
+      if (.not.allocated(Utmp)) allocate(Utmp(1:rk), source=U0(1))
+
+      ! compute sqrt of coefficient matrix X%S and right-multiply it to X%U
+      Swrk = 0.0_wp
+      call sqrtm(Swrk(1:rk,1:rk), X%S)
+      call mat_mult(Utmp, X%U, Swrk(1:rk,1:rk))
+      call get_state(U0_in(:,1:rk), Utmp)
+      ! compute SVD of updated X%U
+      call svd(U0_in(:,1:rk), U_svd(:,1:2*nx), S_svd(1:rk), V_svd(1:rk,1:rk))
+      call set_state(X%U, matmul(U_svd(:,1:rk), diag(S_svd(1:rk))))
+
+      ! compute sqrt of coefficient matrix Y%S and right-multiply it to Y%U
+      Swrk = 0.0_wp
+      call sqrtm(Swrk(1:rk,1:rk), Y%S)
+      call mat_mult(Utmp, Y%U, Swrk(1:rk,1:rk))
+      call get_state(U0_in(:,1:rk), Utmp)
+      ! compute SVD of updated Y%U
+      call svd(U0_in(:,1:rk), U_svd(:,1:2*nx), S_svd(1:rk), V_svd(1:rk,1:rk)) 
+      call set_state(Y%U, matmul(U_svd(:,1:rk), diag(S_svd(1:rk))))   
+
+      ! compute balancing transformation based on SVD of Gramians
+      allocate(T(1:rk), source=U0(1)); allocate(Tinv(1:rk), source=U0(1)); allocate(S(1:rk))
+      call Balancing_Transformation(T, S, Tinv, X%U, Y%U)
+      
       call ROM_Petrov_Galerkin_Projection(Ahat, Bhat, Chat, D, LTI, T, Tinv)
+
       if (save) then
-         write(onameU,'("example/DLRA_ginzburg_landau/GL_Ahat.npy")')
+         write(*,*) 'Save data to file:'
+         onameU = trim(basepath)//"GL_Ahat.npy"
+         write(*,*) '    ', trim(onameU)
          call save_npy(onameU, Ahat)
-         write(onameU,'("example/DLRA_ginzburg_landau/GL_Bhat.npy")')
+         if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
+         onameU = trim(basepath)//"GL_Bhat.npy"
+         write(*,*) '    ', trim(onameU)
          call save_npy(onameU, Bhat)
-         write(onameU,'("example/DLRA_ginzburg_landau/GL_Chat.npy")')
+         if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
+         onameU = trim(basepath)//"GL_Chat.npy"
+         write(*,*) '    ', trim(onameU)
          call save_npy(onameU, Chat)
+         if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
       end if
+      write(*,*) ''
    end if
 
    return
