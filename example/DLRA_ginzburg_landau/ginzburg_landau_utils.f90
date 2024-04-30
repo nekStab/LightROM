@@ -2,6 +2,7 @@ module Ginzburg_Landau_Utils
    ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov_utils
+   use LightKrylov_expmlib
    ! LightROM
    use LightROM_AbstractLTIsystems
    use LightROM_utils
@@ -22,17 +23,19 @@ module Ginzburg_Landau_Utils
    integer,       parameter :: iunit1 = 1
    integer,       parameter :: iunit2 = 2
    character*128, parameter :: basepath = 'local/'
-   integer,       parameter :: rkmax = 14
-   integer,       parameter :: rk_X0 = 14
+   integer,       parameter :: rkmax = 40
+   integer,       parameter :: rk_X0 = 40
 
    private
    public :: iunit1, iunit2, basepath, rkmax, rk_X0
-   public :: run_DLRA_test, run_BT_test
+   public :: run_DLRA_lyapunov_test
+   public :: run_BT_test
+   public :: run_kexpm_test
    public :: stamp_logfile_header
 
 contains
 
-   subroutine run_DLRA_test(LTI, U0, S0, rkv, tauv, Tend, nrep, ifsave, ifverb, iflogs)
+   subroutine run_DLRA_lyapunov_test(LTI, U0, S0, rkv, tauv, Tend, nrep, ifsave, ifverb, iflogs)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Initial condition
@@ -60,7 +63,7 @@ contains
       real(kind=wp),      allocatable           :: vecs(:,:)
       real(kind=wp),      allocatable           :: vals(:)
       real(kind=wp)                             :: sfro
-      real(kind=wp)                             :: tau, Ttot, etime
+      real(kind=wp)                             :: tau, Ttot, etime, etime_tot
       integer                                   :: i, j, k, rk, irep, nsteps
       integer                                   :: info, torder, iostatus
       real(kind=wp)                             :: lagsvd(rkmax)
@@ -78,6 +81,8 @@ contains
       write(*,*) '----------------------'
       write(*,*) '   CONTROLLABILITY'
       write(*,*) '----------------------'
+
+      X = LR_state()
       do torder = 1, 2
          do i = 1, size(rkv)
             rk = rkv(i)
@@ -89,7 +94,6 @@ contains
                tau = tauv(j)
                ! Initialize low-rank representation with rank rk
                if (verb) write(*,*) 'Initialize LR state, rk =', rk
-               X = LR_state()
                call X%initialize_LR_state(U0, S0, rk)
                ! Reset time
                Ttot = 0.0_wp
@@ -107,6 +111,7 @@ contains
                end if
                write(*,'(A16,A4,A4,A10,A6,A8,A16,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend','|| X_DLRA ||_2', 'Elapsed time'
                nsteps = nint(Tend/tau)
+               etime_tot = 0.0_wp
                do irep = 1, nrep
                   ! run integrator
                   etime = 0.0_wp
@@ -119,17 +124,11 @@ contains
                   call dsval(X%S, vals)
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Ttot
-                     do k = 1, rk
-                        write(iunit2,'(E14.6)', ADVANCE='NO') vals(k)
-                     end do
+                     do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
                      write (iunit2,'(A)', ADVANCE='NO') ' | '
-                     do k = 1, rk
-                        write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(1)
-                     end do
+                     do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(1); end do
                      write (iunit2,'(A)', ADVANCE='NO') ' | '
-                     do k = 1, rk
-                        write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(k)
-                     end do
+                     do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(k); end do
                      write (iunit2,'(A)', ADVANCE='NO') ' | '
                      lagsvd(1:rk) = lagsvd(1:rk) - vals
                      sfro = 0.0_wp
@@ -151,15 +150,20 @@ contains
                   if (if_save_logs) then
                      write(iunit1,'(I4," ",A11,I6,F8.4,E16.8,F18.4," s")') irep, 'Xctl OUTPUT', nsteps, Ttot, norm2(X_out), etime
                   end if
+                  etime_tot = etime_tot + etime
                end do
+               if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
                if (if_save_logs) then
-                  close(iunit1)
-                  close(iunit2)
+                  write(iunit1,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit1)
+                  write(Iunit2,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit2)
                end if
                if (if_save_npy) then
-                  write(oname,'("GL_Xdata_TO",I1,"_rk",I2.2,"_t",I1,".npy")') torder, rk, j
-                  call save_npy(trim(basepath)//oname, X_out, iostatus)
-                  if (iostatus /= 0) then; write(*,*) "Error saving file ", trim(oname); STOP 2; end if
+                  write(onameU,'("data_GL_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
+                  write(onameS,'("data_GL_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
+                  call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
+                  if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
+                  call save_npy(trim(basepath)//onameS, X%S(1:rk,1:rk), iostatus)
+                  if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
                end if
                deallocate(X%U)
                deallocate(X%S)
@@ -170,6 +174,8 @@ contains
       write(*,*) '--------------------'
       write(*,*) '   OBSERVABILITY'
       write(*,*) '--------------------'
+
+      Y = LR_state()
       do torder = 1, 2
          do i = 1, size(rkv)
             rk = rkv(i)
@@ -177,7 +183,7 @@ contains
                tau = tauv(j)
                ! Initialize low-rank representation with rank rk
                if (verb) write(*,*) 'Initialize LR state, rk =', rk
-               Y = LR_state()
+               
                call Y%initialize_LR_state(U0, S0, rk)
                ! Reset time
                Ttot = 0.0_wp
@@ -194,6 +200,7 @@ contains
                end if
                write(*,'(A16,A4,A4,A10,A6,A8,A16,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend','|| X_DLRA ||_2', 'Elapsed time'
                nsteps = nint(Tend/tau)
+               etime_tot = 0.0_wp
                do irep = 1, nrep
                   ! run integrator
                   etime = 0.0_wp
@@ -206,17 +213,11 @@ contains
                   call dsval(X%S, vals)
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Ttot
-                     do k = 1, rk
-                        write(iunit2,'(E14.6)', ADVANCE='NO') vals(k)
-                     end do
+                     do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
                      write (iunit2,'(A)', ADVANCE='NO') ' | '
-                     do k = 1, rk
-                        write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(1)
-                     end do
+                     do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(1); end do
                      write (iunit2,'(A)', ADVANCE='NO') ' | '
-                     do k = 1, rk
-                        write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(k)
-                     end do
+                     do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(k); end do
                      write (iunit2,'(A)', ADVANCE='NO') ' | '
                      lagsvd(1:rk) = lagsvd(1:rk) - vals
                      sfro = 0.0_wp
@@ -238,15 +239,20 @@ contains
                   if (if_save_logs) then
                      write(iunit1,'(I4," ",A11,I6,F8.4,E16.8,F18.4," s")') irep, 'Yobs OUTPUT', nsteps, Ttot, norm2(X_out), etime
                   end if
+                  etime_tot = etime_tot + etime
                end do
+               if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
                if (if_save_logs) then
-                  close(iunit1)
-                  close(iunit2)
+                  write(iunit1,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit1)
+                  write(Iunit2,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit2)
                end if
                if (if_save_npy) then
-                  write(oname,'("GL_Ydata_TO",I1,"_rk",I2.2,"_t",I1,".npy")') torder, rk, j
-                  call save_npy(trim(basepath)//oname, X_out, iostatus)
-                  if (iostatus /= 0) then; write(*,*) "Error saving file ", trim(oname); STOP 2; end if
+                  write(onameU,'("data_GL_YU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
+                  write(onameS,'("data_GL_YS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
+                  call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
+                  if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
+                  call save_npy(trim(basepath)//onameS, Y%S(1:rk,1:rk), iostatus)
+                  if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
                end if
                deallocate(Y%U)
                deallocate(Y%S)
@@ -255,7 +261,7 @@ contains
       end do
 
       return
-   end subroutine run_DLRA_test
+   end subroutine run_DLRA_lyapunov_test
 
    !
    ! BALANCED TRUNCATION
@@ -297,7 +303,6 @@ contains
       integer                                   :: info, iostatus
       real(kind=wp)                             :: lagsvd(rkmax)
 
-
       ! ROM
       real(kind=wp),      allocatable           :: Swrk(:,:)
       real(kind=wp),      allocatable           :: Ahat(:,:)
@@ -320,7 +325,7 @@ contains
       character*128      :: oname
       character*128      :: onameU
       character*128      :: onameS
-      logical                                   :: existU, existS
+      logical            :: existU, existS
       integer            :: clock_rate, clock_start, clock_stop
 
       if_save_npy  = optval(ifsave, .false.)
@@ -516,6 +521,164 @@ contains
       write(*,*) ''
 
    end subroutine run_BT_test
+
+   subroutine run_DLRA_riccati_test(LTI, U0, S0, Qc, Rinv, rkv, tauv, Tend, nrep, ifsave, ifverb, iflogs)
+      type(lti_system),              intent(inout) :: LTI
+      !! Considered LTI system
+      type(state_vector),            intent(in)    :: U0(:)
+      real(kind=wp),                 intent(in)    :: S0(:,:)
+      !! Initial condition
+      real(kind=wp),                 intent(in)    :: Qc(:,:)
+      !! Measurement weights.
+      real(kind=wp),                 intent(in)    :: Rinv(:,:)
+      !! Inverse of the actuation weights.
+      real(kind=wp),                 intent(in)    :: tauv(:)
+      !! vector of dt values
+      integer,                       intent(in)    :: rkv(:)
+      !! vector of rank values
+      real(kind=wp),                 intent(in)    :: Tend
+      integer,                       intent(in)    :: nrep
+      ! Optional
+      logical, optional,             intent(in)    :: ifsave
+      logical                                      :: if_save_npy
+      logical, optional,             intent(in)    :: ifverb
+      logical                                      :: verb
+      logical, optional,             intent(in)    :: iflogs
+      logical                                      :: if_save_logs
+      
+      ! Internal variables
+      type(LR_state),     allocatable              :: X     ! Controllability
+      type(LR_state),     allocatable              :: Y     ! Observability
+      real(kind=wp)                                :: U_out(2*nx,rkmax)
+      real(kind=wp)                                :: X_out(2*nx,2*nx)
+      real(kind=wp),      allocatable              :: vecs(:,:)
+      real(kind=wp),      allocatable              :: vals(:)
+      real(kind=wp)                                :: sfro
+      real(kind=wp)                                :: tau, Ttot, etime, etime_tot
+      integer                                      :: i, j, k, rk, irep, nsteps
+      integer                                      :: info, torder, iostatus
+      character*128      :: oname
+      character*128      :: onameU
+      character*128      :: onameS
+      integer            :: clock_rate, clock_start, clock_stop
+
+      if_save_npy  = optval(ifsave, .false.)
+      verb         = optval(ifverb, .false.)
+      if_save_logs = optval(iflogs, .false.)
+
+      call system_clock(count_rate=clock_rate)
+
+      write(*,*) '----------------------'
+      write(*,*) '   RICCATI EQUATION'
+      write(*,*) '----------------------'
+
+      X = LR_state()
+      do torder = 1, 2
+         do i = 1, size(rkv)
+            rk = rkv(i)
+            do j = 1, size(tauv)
+               tau = tauv(j)
+               ! Initialize low-rank representation with rank rk
+               if (verb) write(*,*) 'Initialize LR state, rk =', rk
+               call X%initialize_LR_state(U0, S0, rk)
+               ! Reset time
+               Ttot = 0.0_wp
+               if (verb) write(*,*) 'Run DRLA'
+               write(*,'(A16,A4,A4,A10,A6,A8,A16,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend','|| X_DLRA ||_2', 'Elapsed time'
+               nsteps = nint(Tend/tau)
+               etime_tot = 0.0_wp
+               do irep = 1, nrep
+                  ! run integrator
+                  etime = 0.0_wp
+                  call system_clock(count=clock_start)     ! Start Timer
+                  call numerical_low_rank_splitting_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, &
+                                                                     & Tend, tau, torder, info, &
+                                                                     & exptA=exptA, iftrans=.false., ifverb=.false.)
+                  call system_clock(count=clock_stop)      ! Stop Timer
+                  etime = etime + real(clock_stop-clock_start)/real(clock_rate)
+
+                  ! Reconstruct solution
+                  call get_state(U_out(:,1:rk), X%U)
+                  X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
+
+                  Ttot = Ttot + Tend
+                  write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E16.8,F18.4," s")') irep, 'Xricc OUTPUT', &
+                                    & rk, torder, tau, nsteps, Ttot, norm2(X_out), etime
+                  etime_tot = etime_tot + etime
+               end do
+               if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
+               if (if_save_npy) then
+                  write(onameU,'("data_GL_Riccati_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
+                  write(onameS,'("data_GL_Riccati_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
+                  call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
+                  if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
+                  call save_npy(trim(basepath)//onameS, X%S(1:rk,1:rk), iostatus)
+                  if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
+               end if
+               deallocate(X%U)
+               deallocate(X%S)
+            end do
+         end do
+      end do
+
+   end subroutine run_DLRA_riccati_test
+
+
+   subroutine run_kexpm_test(A, prop, U0, tauv, torder)
+      class(abstract_linop),         intent(inout) :: A
+      !! Linear operator: A
+      class(abstract_linop),         intent(inout) :: prop
+      !! Linear operator: exponential propagator
+      class(abstract_vector),        intent(in)    :: U0
+      !! Abstract vector as a source
+      real(kind=wp),                 intent(in)    :: tauv(:)
+      !! vector of dt values
+      integer,                       intent(inout) :: torder
+      !! torder
+
+      ! internal variables
+      class(abstract_vector),        allocatable   :: U, V    ! scratch bases
+      integer                                      :: i, j, N, info
+      real(kind=wp)                                :: tau, etime
+      integer            :: clock_rate, clock_start, clock_stop
+
+      call system_clock(count_rate=clock_rate)
+
+      allocate(U, source=U0)
+      call U%zero()
+
+      N = 1000
+      
+      do i = 1, size(tauv)
+         tau = tauv(i)
+         ! Reset time
+         etime = 0.0_wp
+         do j = 1, N
+            ! generate random vecor
+            call U%rand()
+            ! run Krylov based exponential propagator
+            call system_clock(count=clock_start)     ! Start Timer
+            call k_exptA(V, A, U, tau, info, .false.)
+            call system_clock(count=clock_stop)      ! Stop Timer
+            etime = etime + real(clock_stop-clock_start)/real(clock_rate)
+         end do
+         write(*,*) 'k_expm:  ', etime
+         ! Reset time
+         etime = 0.0_wp
+         do j = 1, N
+            ! generate random vecor
+            call U%rand()
+            ! run RK integrator
+            call system_clock(count=clock_start)     ! Start Timer
+            call exptA(V, prop, U, tau, info, .false.)
+            call system_clock(count=clock_stop)      ! Stop Timer
+            etime = etime + real(clock_stop-clock_start)/real(clock_rate)
+         end do
+         write(*,*) 'RK expm: ', etime
+      end do
+
+      return
+   end subroutine run_kexpm_test
 
    !
    ! Logfiles
