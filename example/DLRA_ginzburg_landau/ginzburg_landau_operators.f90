@@ -1,4 +1,4 @@
-module Ginzburg_Landau_RKlib
+module Ginzburg_Landau_Operators
    ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov_utils, only : assert_shape
@@ -425,4 +425,4 @@ contains
       return
    end subroutine initialize_lti_system
 
-end module Ginzburg_Landau_RKlib
+end module Ginzburg_Landau_Operators

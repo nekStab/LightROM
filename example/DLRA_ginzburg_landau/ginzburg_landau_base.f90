@@ -12,6 +12,7 @@ module Ginzburg_Landau_Base
    private
    public :: nx, dx
    public :: nu, gamma, mu_0, c_mu, mu_2, mu
+   public :: rk_b, x_b, s_b, rk_c, x_c, s_c
    public :: B, CT, weight
    public :: initialize_parameters
    public :: set_state, get_state, init_rand
@@ -22,7 +23,7 @@ module Ginzburg_Landau_Base
 
    ! Mesh related parameters.
    real(kind=wp), parameter :: L  = 50.0_wp ! Domain length
-   integer      , parameter :: nx = 128     ! Number of grid points (excluding boundaries).
+   integer      , parameter :: nx = 256     ! Number of grid points (excluding boundaries).
    real(kind=wp)            :: dx           ! Grid size.
 
    !-------------------------------------------
