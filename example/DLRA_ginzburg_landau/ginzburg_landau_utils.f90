@@ -13,6 +13,11 @@ module Ginzburg_Landau_Utils
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
 
+   use LightROM_RiccatiSolvers
+   use LightROM_RiccatiUtils
+
+   !use fortime
+
    ! Standard Library.
    use stdlib_optval, only : optval
    use stdlib_linalg, only : eye, diag
@@ -31,11 +36,12 @@ module Ginzburg_Landau_Utils
    public :: run_DLRA_lyapunov_test
    public :: run_BT_test
    public :: run_kexpm_test
+   public :: run_DLRA_riccati_test
    public :: stamp_logfile_header
 
 contains
 
-   subroutine run_DLRA_lyapunov_test(LTI, U0, S0, rkv, tauv, Tend, nrep, ifsave, ifverb, iflogs)
+   subroutine run_DLRA_lyapunov_test(LTI, U0, S0, rkv, tauv, TOv, Tend, nrep, ifsave, ifverb, iflogs)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Initial condition
@@ -45,6 +51,8 @@ contains
       real(kind=wp),                 intent(in) :: tauv(:)
       ! vector of rank values
       integer,                       intent(in) :: rkv(:)
+      ! vector of torders
+      integer,                       intent(in) :: TOv(:)
       real(kind=wp),                 intent(in) :: Tend
       integer,                       intent(in) :: nrep
       ! Optional
@@ -64,7 +72,7 @@ contains
       real(kind=wp),      allocatable           :: vals(:)
       real(kind=wp)                             :: sfro
       real(kind=wp)                             :: tau, Ttot, etime, etime_tot
-      integer                                   :: i, j, k, rk, irep, nsteps
+      integer                                   :: i, j, k, ito, rk, irep, nsteps
       integer                                   :: info, torder, iostatus
       real(kind=wp)                             :: lagsvd(rkmax)
       character*128      :: oname
@@ -83,7 +91,8 @@ contains
       write(*,*) '----------------------'
 
       X = LR_state()
-      do torder = 1, 2
+      do ito = 1, size(TOv)
+         torder = TOv(ito)
          do i = 1, size(rkv)
             rk = rkv(i)
             if (allocated(vals)) deallocate(vals)
@@ -158,8 +167,8 @@ contains
                   write(Iunit2,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit2)
                end if
                if (if_save_npy) then
-                  write(onameU,'("data_GL_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
-                  write(onameS,'("data_GL_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
+                  write(onameU,'("data_GL_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  write(onameS,'("data_GL_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
                   call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
                   call save_npy(trim(basepath)//onameS, X%S(1:rk,1:rk), iostatus)
@@ -176,7 +185,8 @@ contains
       write(*,*) '--------------------'
 
       Y = LR_state()
-      do torder = 1, 2
+      do ito = 1, size(TOv)
+         torder = TOv(ito)
          do i = 1, size(rkv)
             rk = rkv(i)
             do j = 1, size(tauv)
@@ -205,12 +215,12 @@ contains
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%CT, Tend, tau, torder, info, &
+                  call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, &
                                                                      & exptA=exptA, iftrans=.false., ifverb=.false.)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
-                  call dsval(X%S, vals)
+                  call dsval(Y%S, vals)
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Ttot
                      do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
@@ -247,8 +257,8 @@ contains
                   write(Iunit2,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit2)
                end if
                if (if_save_npy) then
-                  write(onameU,'("data_GL_YU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
-                  write(onameS,'("data_GL_YS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
+                  write(onameU,'("data_GL_YU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  write(onameS,'("data_GL_YS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
                   call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
                   call save_npy(trim(basepath)//onameS, Y%S(1:rk,1:rk), iostatus)
@@ -573,7 +583,7 @@ contains
       write(*,*) '----------------------'
 
       X = LR_state()
-      do torder = 1, 2
+      do torder = 1, 1
          do i = 1, size(rkv)
             rk = rkv(i)
             do j = 1, size(tauv)
@@ -593,7 +603,7 @@ contains
                   call system_clock(count=clock_start)     ! Start Timer
                   call numerical_low_rank_splitting_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, &
                                                                      & Tend, tau, torder, info, &
-                                                                     & exptA=exptA, iftrans=.false., ifverb=.false.)
+                                                                     & exptA=exptA, iftrans=.false., ifverb=verb)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
@@ -608,8 +618,8 @@ contains
                end do
                if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
                if (if_save_npy) then
-                  write(onameU,'("data_GL_Riccati_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
-                  write(onameS,'("data_GL_Riccati_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
+                  write(onameU,'("data_GL_Riccati_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  write(onameS,'("data_GL_Riccati_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
                   call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
                   call save_npy(trim(basepath)//onameS, X%S(1:rk,1:rk), iostatus)
@@ -624,7 +634,7 @@ contains
    end subroutine run_DLRA_riccati_test
 
 
-   subroutine run_kexpm_test(A, prop, U0, tauv, torder)
+   subroutine run_kexpm_test(A, prop, U0, tauv, torder, N)
       class(abstract_linop),         intent(inout) :: A
       !! Linear operator: A
       class(abstract_linop),         intent(inout) :: prop
@@ -635,46 +645,81 @@ contains
       !! vector of dt values
       integer,                       intent(inout) :: torder
       !! torder
+      integer,                       intent(in)    :: n
+      !! Number of repeats
 
       ! internal variables
-      class(abstract_vector),        allocatable   :: U, V    ! scratch bases
-      integer                                      :: i, j, N, info
-      real(kind=wp)                                :: tau, etime
+      class(abstract_vector),        allocatable   :: U, V_kryl, V_rk   ! scratch bases
+      integer                                      :: i, j, info
+      real(kind=wp)                                :: tau
+      real(kind=wp)                                :: tv_kryl(N), tv_rk(N)
+      real(kind=wp)                                :: etime_kryl, etime_rk, stddev_kryl, stddev_rk
       integer            :: clock_rate, clock_start, clock_stop
+      !type(timer)                                  :: tmr
 
       call system_clock(count_rate=clock_rate)
-
-      allocate(U, source=U0)
-      call U%zero()
-
-      N = 1000
       
+      allocate(U, source=U0); call U%zero()
+      allocate(V_kryl, source=U0); call V_kryl%zero()
+      allocate(V_rk,   source=U0); call V_rk%zero()
+
+      tv_kryl = 0.0_wp
+      tv_rk = 0.0_wp
+
+      write(*,*) 'Comparison over N = ', N, 'runs.'
+      write(*,'(A8," | ",2(10X,A10,10X,5X))') 'tau','KRYLOV','R-K'
+      write(*,'(A8," | ",3(A10,1X),3X,3(A10,1X))') ' ','TOT','AVG','STDDEV','TOT','AVG','STDDEV'
+      write(*,*) '------------------------------------------------------------------------------'
+
       do i = 1, size(tauv)
          tau = tauv(i)
          ! Reset time
-         etime = 0.0_wp
+         etime_kryl = 0.0_wp
+         etime_rk   = 0.0_wp
+         
+         !call tmr%timer_start()
+         !call U%rand()
+         !call k_exptA(V_kryl, A, U, tau, info, .false.)
+         !call tmr%timer_stop(nloops=N,message="test" , print=.true., color='red')
+         !call tmr%timer_start()
+         !call U%rand()
+         !call exptA(V_rk, prop, U, tau, info, .false.)
+         !call tmr%timer_stop(nloops=N, message="test" , print=.true., color='blue')
+
          do j = 1, N
             ! generate random vecor
             call U%rand()
             ! run Krylov based exponential propagator
             call system_clock(count=clock_start)     ! Start Timer
-            call k_exptA(V, A, U, tau, info, .false.)
+            call k_exptA(V_kryl, A, U, tau, info, .false.)
             call system_clock(count=clock_stop)      ! Stop Timer
-            etime = etime + real(clock_stop-clock_start)/real(clock_rate)
-         end do
-         write(*,*) 'k_expm:  ', etime
-         ! Reset time
-         etime = 0.0_wp
-         do j = 1, N
-            ! generate random vecor
-            call U%rand()
+            tv_kryl(j) = real(clock_stop-clock_start)/real(clock_rate)
+            etime_kryl = etime_kryl + tv_kryl(j)
             ! run RK integrator
             call system_clock(count=clock_start)     ! Start Timer
-            call exptA(V, prop, U, tau, info, .false.)
+            call exptA(V_rk, prop, U, tau, info, .false.)
             call system_clock(count=clock_stop)      ! Stop Timer
-            etime = etime + real(clock_stop-clock_start)/real(clock_rate)
+            tv_rk(j) = real(clock_stop-clock_start)/real(clock_rate)
+            etime_rk = etime_rk + tv_rk(j)
+            ! Check solution
+            call V_kryl%axpby(1.0_wp, V_rk, -1.0_wp)
+            if (V_kryl%norm()/(2*nx) > 10*atol) then
+               write(*,*) "Iteration", j, ": Solutions do not match!"
+               write(*,* ) " tol", 10*atol, "delta = ", V_kryl%norm()/(2*nx)
+            end if
          end do
-         write(*,*) 'RK expm: ', etime
+         tv_kryl = tv_kryl - etime_kryl/N
+         tv_rk = tv_rk - etime_rk/N
+         stddev_kryl = 0.0_wp
+         stddev_rk   = 0.0_wp
+         do j = 1, N
+            stddev_kryl = stddev_kryl + tv_kryl(j)**2
+            stddev_rk   = stddev_rk + tv_rk(j)**2
+         end do
+         write(*,'(F8.6," | ",3(F10.6,1X),3X,3(F10.6,1X))') tau, &
+                                 & etime_kryl, etime_kryl/N, sqrt(stddev_kryl/(N-1)), &
+                                 & etime_rk,   etime_rk/N,   sqrt(stddev_rk/(N-1))
+         
       end do
 
       return
