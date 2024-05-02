@@ -53,3 +53,4 @@ source-dir = "example/DLRA_ginzburg_landau"
 
 [example.dependencies]
 rklib = { git="https://github.com/jacobwilliams/rklib.git" }
+fortime = { git = "https://github.com/gha3mi/fortime.git" }
