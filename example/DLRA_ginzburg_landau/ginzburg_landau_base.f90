@@ -23,7 +23,7 @@ module Ginzburg_Landau_Base
 
    ! Mesh related parameters.
    real(kind=wp), parameter :: L  = 50.0_wp ! Domain length
-   integer      , parameter :: nx = 256     ! Number of grid points (excluding boundaries).
+   integer      , parameter :: nx = 128     ! Number of grid points (excluding boundaries).
    real(kind=wp)            :: dx           ! Grid size.
 
    !-------------------------------------------
@@ -95,10 +95,10 @@ contains
 
       ! Define integration weights
       weight       = dx
-      weight(1)    = 0.5_wp*dx
-      weight(nx)   = 0.5_wp*dx
-      weight(nx+1) = 0.5_wp*dx
-      weight(2*nx) = 0.5_wp*dx
+      !weight(1)    = 0.5_wp*dx
+      !weight(nx)   = 0.5_wp*dx
+      !weight(nx+1) = 0.5_wp*dx
+      !weight(2*nx) = 0.5_wp*dx
 
       ! Construct B & C
       x2(1:nx)      = x(2:nx+1)
