@@ -36,7 +36,8 @@ module LightROM_RiccatiSolvers
 
    contains
 
-   subroutine numerical_low_rank_splitting_riccati_integrator(X, A, B, CT, Qc, Rinv, Tend, tau, torder, info, exptA, iftrans)
+   subroutine numerical_low_rank_splitting_riccati_integrator(X, A, B, CT, Qc, Rinv, Tend, tau, torder, info, &
+                                                               & exptA, iftrans, ifverb)
       !! Numerical integrator for the matrix-valued differential Riccati equation of the form
       !!
       !!    $$\dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
@@ -129,16 +130,19 @@ module LightROM_RiccatiSolvers
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
       logical,                   optional, intent(in)    :: iftrans
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      logical,                   optional, intent(in)    :: ifverb
+      !! Toggle verbosity
 
       ! Internal variables   
       integer                                            :: istep, nsteps, iostep
       real(kind=wp)                                      :: T
-      logical, parameter                                 :: verbose = .false.
+      logical                                            :: verbose
       logical                                            :: trans
       procedure(abstract_exptA), pointer                 :: p_exptA => null()
 
       ! Optional arguments
       trans = optval(iftrans, .false.)
+      verbose = optval(ifverb, .false.)
       if (present(exptA)) then
          p_exptA => exptA
       else
