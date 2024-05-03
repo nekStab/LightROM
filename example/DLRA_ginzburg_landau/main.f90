@@ -122,9 +122,10 @@ program demo
    run_test = .true.
    if (run_test) then
       nrk  = 6; allocate(rkv(1:nrk));   rkv  = (/ 2, 6, 10, 14, 20, 40 /)
+      !nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 2 /)
       ntau = 4; allocate(tauv(1:ntau)); tauv = (/ 1.0, 0.1, 0.01, 0.001 /)
       !ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 1.0 /)
-      allocate(TOv(1)); TOv = (/ 1 /)
+      allocate(TOv(1)); TOv = (/ 1, 2 /)
       Tend = 1.0_wp
       nrep = 60
       ! run DLRA
@@ -137,7 +138,6 @@ program demo
       deallocate(TOv)
    end if 
 
-   STOP 1
    !----------------------------------
    !
    ! DLRA TEST FOR BALANCING TRANSFORMATION

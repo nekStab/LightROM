@@ -68,7 +68,6 @@ contains
       type(LR_state),     allocatable           :: Y     ! Observability
       real(kind=wp)                             :: U_out(2*nx,rkmax)
       real(kind=wp)                             :: X_out(2*nx,2*nx)
-      real(kind=wp),      allocatable           :: vecs(:,:)
       real(kind=wp),      allocatable           :: vals(:)
       real(kind=wp)                             :: sfro
       real(kind=wp)                             :: tau, Ttot, etime, etime_tot
@@ -96,9 +95,7 @@ contains
          do i = 1, size(rkv)
             rk = rkv(i)
             if (allocated(vals)) deallocate(vals)
-            if (allocated(vecs)) deallocate(vecs)
             allocate(vals(1:rk))
-            allocate(vecs(1:rk,1:rk))
             do j = 1, size(tauv)
                tau = tauv(j)
                ! Initialize low-rank representation with rank rk
@@ -148,11 +145,9 @@ contains
                      write(iunit2,'(E14.6)'), sfro           
                   end if
                   lagsvd(1:rk) = vals
-
                   ! Reconstruct solution
                   call get_state(U_out(:,1:rk), X%U)
                   X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
-
                   Ttot = Ttot + Tend
                   write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E16.8,F18.4," s")') irep, 'Xctl OUTPUT', &
                                     & rk, torder, tau, nsteps, Ttot, norm2(X_out), etime
@@ -189,11 +184,12 @@ contains
          torder = TOv(ito)
          do i = 1, size(rkv)
             rk = rkv(i)
+            if (allocated(vals)) deallocate(vals)
+            allocate(vals(1:rk))
             do j = 1, size(tauv)
                tau = tauv(j)
                ! Initialize low-rank representation with rank rk
                if (verb) write(*,*) 'Initialize LR state, rk =', rk
-               
                call Y%initialize_LR_state(U0, S0, rk)
                ! Reset time
                Ttot = 0.0_wp
@@ -216,7 +212,7 @@ contains
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
                   call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, &
-                                                                     & exptA=exptA, iftrans=.false., ifverb=.false.)
+                                                                     & exptA=exptA, iftrans=.true., ifverb=.false.)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
