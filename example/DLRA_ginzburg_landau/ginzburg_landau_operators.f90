@@ -13,7 +13,7 @@ module Ginzburg_Landau_Operators
    implicit none
 
    private
-   public :: exptA
+   public :: exptA, direct_GL, adjoint_GL
 
    !-----------------------------------------------
    !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
@@ -76,6 +76,10 @@ contains
 
       u = vec_in(1:nx)     
       v = vec_in(nx+1:2*nx)
+
+      !---------------------------------------------------
+      !-----     Linear Ginzburg Landau Equation     -----
+      !---------------------------------------------------
 
       cu = u(2) / (2*dx) ; cv = v(2) / (2*dx)
       du(1) = -(real(nu)*cu - aimag(nu)*cv) ! Convective term.
@@ -207,11 +211,11 @@ contains
       ! Time-integrator.
       class(rk_class), intent(inout)             :: me
       ! Current time.
-      real(kind=wp)  , intent(in)                :: t
+      real(kind=wp),   intent(in)                :: t
       ! State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: x
+      real(kind=wp),   dimension(:), intent(in)  :: x
       ! Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: f
+      real(kind=wp),   dimension(:), intent(out) :: f
 
       f = 0.0_wp
       call direct_GL(x, f)
@@ -223,11 +227,11 @@ contains
       ! Time-integrator.
       class(rk_class), intent(inout)             :: me
       ! Current time.
-      real(kind=wp)  , intent(in)                :: t
+      real(kind=wp),   intent(in)                :: t
       ! State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: x
+      real(kind=wp),   dimension(:), intent(in)  :: x
       ! Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: f
+      real(kind=wp),   dimension(:), intent(out) :: f
 
       f = 0.0_wp
       call adjoint_GL(x, f)
@@ -241,11 +245,11 @@ contains
 
    subroutine direct_matvec_GL(self, vec_in, vec_out)
       !> Linear Operator.
-      class(GL_operator),intent(in)  :: self
+      class(GL_operator),     intent(in)  :: self
       !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
+      class(abstract_vector), intent(in)  :: vec_in
       !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
+      class(abstract_vector), intent(out) :: vec_out
       select type(vec_in)
       type is (state_vector)
          select type(vec_out)
@@ -258,11 +262,11 @@ contains
 
    subroutine adjoint_matvec_GL(self, vec_in, vec_out)
       !> Linear Operator.
-      class(GL_operator),intent(in)  :: self
+      class(GL_operator),     intent(in)  :: self
       !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
+      class(abstract_vector), intent(in)  :: vec_in
       !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
+      class(abstract_vector), intent(out) :: vec_out
       select type(vec_in)
       type is (state_vector)
          select type(vec_out)
@@ -281,9 +285,9 @@ contains
       ! Linear Operator.
       class(exponential_prop), intent(in)  :: self
       ! Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
+      class(abstract_vector),  intent(in)  :: vec_in
       ! Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
+      class(abstract_vector),  intent(out) :: vec_out
 
       ! Time-integrator.
       type(rks54_class) :: prop
@@ -308,9 +312,9 @@ contains
       ! Linear Operator.
       class(exponential_prop), intent(in)  :: self
       ! Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
+      class(abstract_vector),  intent(in)  :: vec_in
       ! Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
+      class(abstract_vector),  intent(out) :: vec_out
 
       ! Time-integrator.
       type(rks54_class) :: prop
@@ -349,10 +353,8 @@ contains
       integer,                 intent(out)   :: info
       !! Information flag
       logical, optional,       intent(in)    :: trans
-      !! Direct or Adjoint?                
-      
-      ! internal variables
       logical                                :: transpose
+      !! Direct or Adjoint?
 
       ! optional argument
       transpose = optval(trans, .false.)
@@ -366,7 +368,7 @@ contains
             type is (exponential_prop)
                ! set integration time
                A%tau = tau
-               if (trans) then
+               if (transpose) then
                   call A%rmatvec(vec_in, vec_out)
                else
                   call A%matvec(vec_in, vec_out)
