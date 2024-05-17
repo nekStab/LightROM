@@ -9,6 +9,7 @@ module Ginzburg_Landau_Utils
    ! Ginzburg Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators
+   use Ginzburg_Landau_RK_Lyapunov
 
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
@@ -37,6 +38,7 @@ module Ginzburg_Landau_Utils
    public :: run_BT_test
    public :: run_kexpm_test
    public :: run_DLRA_riccati_test
+   public :: run_lyap_convergence_test
    public :: stamp_logfile_header
 
 contains
@@ -720,6 +722,127 @@ contains
 
       return
    end subroutine run_kexpm_test
+
+   subroutine run_lyap_convergence_test(LTI, U0, S0, Tend, tauv, rkv, TOv, ifsave, ifverb)
+      ! LTI system
+      type(lti_system),              intent(inout) :: LTI
+      ! Initial condition
+      type(state_vector),            intent(inout)    :: U0(:)
+      real(kind=wp),                 intent(inout)    :: S0(:,:)
+      real(kind=wp),                 intent(in)    :: Tend
+      ! vector of dt values
+      real(kind=wp),                 intent(in)    :: tauv(:)
+      ! vector of rank values
+      integer,                       intent(in)    :: rkv(:)
+      ! vector of torders
+      integer,                       intent(in)    :: TOv(:)
+      ! Optional
+      logical, optional,             intent(in)    :: ifsave
+      logical                                      :: if_save_npy
+      logical, optional,             intent(in)    :: ifverb
+      logical                                      :: verb
+
+      ! Internals
+      type(LR_state),                allocatable   :: X_state
+      type(rk_lyapunov),             allocatable   :: RK_propagator
+      type(state_matrix)                           :: X_mat(2)
+      real(kind=wp),                 allocatable   :: X_RKlib(:,:,:)
+      real(kind=wp)                                :: X_mat_ref(N,N)
+      real(kind=wp)                                :: U0_mat(N, rkmax)
+      integer                                      :: info
+      integer                                      :: i, j, ito, rk, nsteps, torder
+      integer                                      :: irep, nrep
+      real(kind=wp)                                :: etime, tau
+      ! OUTPUT
+      real(kind=wp)                                :: U_out(N,rkmax)
+      real(kind=wp)                                :: X_out(N,N)
+      real(kind=wp)                                :: X_mat_flat(N**2)
+      real(kind=wp)                                :: res_flat(N**2)
+      character*128      :: oname
+      integer            :: iostatus
+      ! timer
+      integer            :: clock_rate, clock_start, clock_stop
+
+
+      real(kind=wp), dimension(N**2)               :: AX, XAH 
+
+      if_save_npy  = optval(ifsave, .false.)
+      verb         = optval(ifverb, .false.)
+
+      call system_clock(count_rate=clock_rate)
+
+      ! initialize exponential propagator
+      RK_propagator = RK_lyapunov(Tend)
+
+      nrep = 1
+      allocate(X_RKlib(N, N, nrep))
+      call get_state(U0_mat(:,1:rk_X0), U0)
+
+      X_out = matmul( U0_mat, matmul( S0, transpose(U0_mat ) ) )
+
+      if (if_save_npy) then
+         write(oname,'("data_GL_X0_RK_n",I4.4,".npy")') nx
+         call save_npy(trim(basepath)//oname, X_out, iostatus)
+         if (iostatus /= 0) then; write(*,*) "Error saving file", trim(oname); STOP 2; end if
+      end if
+      
+      call set_state_mat(X_mat(1:1), X_out)
+      write(*,'(A10,A26,A26,A26,A20)') 'RKlib:','Tend','|| X_RK ||_2/N', '|| res ||_2/N','Elapsed time'
+      write(*,*) '         ------------------------------------------------------------------------'
+      do irep = 1, nrep
+         call system_clock(count=clock_start)     ! Start Timer
+         ! integrate
+         call RK_propagator%matvec(X_mat(1), X_mat(2))
+         call system_clock(count=clock_stop)      ! Stop Timer
+         ! recover output
+         call get_state_mat(X_RKlib(:,:,irep), X_mat(2:2))
+         call CARE(res_flat, reshape(X_RKlib(:,:,irep), shape(res_flat)), BBTW_flat, .false.)
+         ! replace input
+         call set_state_mat(X_mat(1:1), X_RKlib(:,:,irep))
+         write(*,'(I10,F26.4,E26.8,E26.8,F18.4," s")') irep, irep*Tend, norm2(X_RKlib(:,:,irep))/N, norm2(res_flat)/N, &
+                        & real(clock_stop-clock_start)/real(clock_rate)
+         if (if_save_npy) then
+            write(oname,'("data_GL_X_RK_n",I4.4,"_r",I3.3,".npy")') nx, irep
+            call save_npy(trim(basepath)//oname, X_RKlib(:,:,irep), iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(oname); STOP 2; end if
+         end if
+      enddo
+      X_mat_ref = X_RKlib(:,:,nrep)
+      
+      write(*,*) ''
+      write(*,'(A16,A4,A4,A10,A6,A8,A24,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
+                                 & '|| X_DLRA - X_RK ||_2', 'Elapsed time'
+      X_state = LR_state()
+      do ito = 1, size(TOv)
+         torder = TOv(ito)
+         do i = 1, size(rkv)
+            rk = rkv(i)
+            do j = 1, size(tauv)
+               tau = tauv(j)
+               ! Initialize low-rank representation with rank rk
+               if (verb) write(*,*) 'Initialize LR state, rk =', rk
+               call X_state%initialize_LR_state(U0, S0, rk)
+               if (verb) write(*,*) 'Run DRLA'
+               nsteps = nint(Tend/tau)
+               ! run integrator
+               call system_clock(count=clock_start)     ! Start Timer
+               call numerical_low_rank_splitting_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, torder, info, &
+                                                                     & exptA=exptA, iftrans=.false., ifverb=.false.)
+               call system_clock(count=clock_stop)      ! Stop Timer
+               etime = real(clock_stop-clock_start)/real(clock_rate)
+               ! Reconstruct solution
+               call get_state(U_out(:,1:rk), X_state%U)
+               X_out = matmul(U_out(:,1:rk), matmul(X_state%S, transpose(U_out(:,1:rk))))
+               write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E24.8,F18.4," s")') 1, 'Xctl OUTPUT', &
+                                 & rk, torder, tau, nsteps, Tend, norm2(X_out - X_mat_ref)/N, etime
+               if (verb) write(*,*) 'Total integration time (DLRA):', etime, 's'
+               deallocate(X_state%U)
+               deallocate(X_state%S)
+            end do
+         end do
+      end do
+      
+   end subroutine run_lyap_convergence_test
 
    !
    ! Logfiles
