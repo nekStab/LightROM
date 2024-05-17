@@ -47,8 +47,8 @@ program demo
    ! Initial condition
    real(kind=wp)                             :: U0_in(2*nx, rkmax)
    real(kind=wp)                             :: S0(rkmax,rkmax)
-   type(state_vector), allocatable           :: U0(:)
-   type(state_vector), allocatable           :: Utmp(:)
+   type(state_vector),     allocatable       :: U0(:)
+   type(state_vector),     allocatable       :: Utmp(:)
    
    ! OUTPUT
    real(kind=wp)                             :: U_out(2*nx,rkmax)
@@ -65,12 +65,13 @@ program demo
 
    ! Counters
    integer                                   :: i, j, k, irep, nrep, istep, nsteps
+   integer,                allocatable       :: perm(:)
    real(kind=wp)                             :: Tmax, etime
-!
+
    ! SVD
-   real(kind=wp)  :: U_svd(2*nx,2*nx)
-   real(kind=wp)  :: S_svd(rkmax)
-   real(kind=wp)  :: V_svd(rkmax,rkmax)
+   real(wp)  :: U_svd(rk_X0,rk_X0)
+   real(wp)  :: S_svd(rk_X0)
+   real(wp)  :: V_svd(rk_X0,rk_X0)
 
    logical        :: ifsave, ifload, ifverb, iflogs
    
@@ -92,26 +93,39 @@ program demo
    LTI = lti_system()
    call LTI%initialize_lti_system(A, prop, B, CT)
 
-   ! Define initial condition
+   ! Define initial condition of the form X0 + U0 @ S0 @ U0.T SPD 
    if (verb) write(*,*) 'Define initial condition'
-   allocate(U0(1:rk_X0))
-   call init_rand(U0, .false.)
-   call get_state(U0_in(:,1:rk_X0), U0)
-   ! Compute SVD to get low-rank representation
-   call svd(U0_in(:,1:rk_X0), U_svd(:,1:2*nx), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
+   allocate(Utmp(1:rk_X0)); allocate(U0(1:rk_X0))
+   call random_number(U_out)
+   U_out(nx+1:2*nx,:) = 0.0_wp
+   call set_state(Utmp, U_out)
    S0 = 0.0_wp
-   S0(1:rk_X0,1:rk_X0) = diag(S_svd(1:rk_X0))
-   call set_state(U0, U_svd(:,1:rk_X0))
+   allocate(perm(1:rk_X0)); perm = 0
+   call qr_factorization(Utmp, S0, perm, info)
+   call svd(S0(:,1:rk_X0), U_svd(:,1:rk_X0), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
+   S0 = diag(S_svd)
+   call mat_mult(U0, Utmp, U_svd)
 
-   !call get_state(U_out(:,1:1), LTI%B)
-   !sqrtw = sqrt(weight)
-   !U_out(:,1) = sqrtw*U_out(:,1)
-   !X_out = 0.0_wp
-   !X_out = matmul(U_out(:,1:1), transpose(U_out(:,1:1)))
-   !call print_mat(2*nx, 2*nx, X_out)
-   !print *, maxval(X_out)
-   !print *, weight(1:10)
-   !STOP 1
+   !----------------------------------
+   !
+   ! DLRA CONVERGENCE TEST FOR LYAPUNOV EQUATION
+   !
+   !----------------------------------
+
+   run_test = .false.
+   if (run_test) then
+      nrk  = 7; allocate(rkv(1:nrk));   rkv  = (/ 2, 6, 10, 14, 20, 40, 80, 100 /)
+      ntau = 3; allocate(tauv(1:ntau)); tauv = (/ 0.01, 0.001, 0.0001 /)
+      allocate(TOv(2)); TOv = (/ 1, 2 /)
+      Tend = 0.03_wp
+      ! run DLRA
+      ifsave = .true. ! save X_rk to disk (LightROM/local)
+      ifverb = .true. ! verbosity
+      call run_lyap_convergence_test(LTI, U0, S0, Tend, tauv, rkv, TOv, ifverb)
+      deallocate(rkv)
+      deallocate(tauv)
+      deallocate(TOv)
+   end if 
 
    !----------------------------------
    !
@@ -122,10 +136,10 @@ program demo
    run_test = .true.
    if (run_test) then
       nrk  = 6; allocate(rkv(1:nrk));   rkv  = (/ 2, 6, 10, 14, 20, 40 /)
-      !nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 2 /)
+      !nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 40 /)
       ntau = 4; allocate(tauv(1:ntau)); tauv = (/ 1.0, 0.1, 0.01, 0.001 /)
-      !ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 1.0 /)
-      allocate(TOv(1)); TOv = (/ 1, 2 /)
+      !ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 0.1 /)
+      allocate(TOv(2)); TOv = (/ 1, 2 /)
       Tend = 1.0_wp
       nrep = 60
       ! run DLRA
