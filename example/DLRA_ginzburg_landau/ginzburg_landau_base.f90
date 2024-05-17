@@ -16,6 +16,7 @@ module Ginzburg_Landau_Base
    public :: B, CT, weight
    public :: initialize_parameters
    public :: set_state, get_state, init_rand
+   public :: N, BBTW_flat, CTCW_flat
 
    !-------------------------------
    !-----     PARAMETERS 1    -----
@@ -74,6 +75,11 @@ module Ginzburg_Landau_Base
    integer,       parameter    :: rk_c = 1           ! number of outputs to the system
    type(state_vector)          :: CT(rk_c)
 
+   ! Data matrices for RK lyap
+   integer,       parameter    :: N = 2*nx     ! Number of grid points (excluding boundaries).
+   real(kind=wp)               :: BBTW_flat(N**2)
+   real(kind=wp)               :: CTCW_flat(N**2)
+
 contains
 
    !--------------------------------------------------------------
@@ -85,6 +91,7 @@ contains
       ! Mesh array.
       real(kind=wp), allocatable :: x(:)
       real(kind=wp)              :: x2(1:2*nx)
+      real(kind=wp)              :: tmpv(N, 2)
 
       ! Construct mesh.
       x = linspace(-L/2, L/2, nx+2)
@@ -101,12 +108,21 @@ contains
       !weight(2*nx) = 0.5_wp*dx
 
       ! Construct B & C
-      x2(1:nx)      = x(2:nx+1)
-      x2(nx+1:2*nx) = x(2:nx+1)
+      x2       = 0.0_wp
+      x2(1:nx) = x(2:nx+1) ! actuation is real
       ! actuator is a Guassian centered just upstream of branch I
       B(1)%state = exp(-((x2 - x_b)/s_b)**2)
       ! the sensor is a Gaussian centered at branch II
-      CT(1)%state = exp(-((x2 - x_c)/s_c)**2)      
+      CT(1)%state = exp(-((x2 - x_c)/s_c)**2)
+      
+      ! RK lyap
+      tmpv = 0.0_wp
+      call get_state(tmpv(:,1:1), B(1:1))
+      tmpv(:,2) = weight*tmpv(:,1)
+      BBTW_flat(1:N**2) = reshape(matmul(tmpv(:,1:1), transpose(tmpv(:,2:2))), shape(BBTW_flat))
+      call get_state(tmpv(:,1:1), CT(1:1))
+      tmpv(:,2) = weight*tmpv(:,1)
+      CTCW_flat(1:N**2) = reshape(matmul(tmpv(:,1:1), transpose(tmpv(:,2:2))), shape(CTCW_flat))
 
       return
    end subroutine initialize_parameters
