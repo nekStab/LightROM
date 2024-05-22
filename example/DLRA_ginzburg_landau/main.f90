@@ -114,10 +114,10 @@ program demo
 
    run_test = .false.
    if (run_test) then
-      nrk  = 7; allocate(rkv(1:nrk));   rkv  = (/ 2, 6, 10, 14, 20, 40, 80, 100 /)
-      ntau = 3; allocate(tauv(1:ntau)); tauv = (/ 0.01, 0.001, 0.0001 /)
+      nrk  = 8; allocate(rkv(1:nrk));   rkv  = (/ 2, 6, 10, 14, 20, 40, 80, 128, 256 /)
+      ntau = 3; allocate(tauv(1:ntau)); tauv = logspace(-4.0, -3.0, ntau)
       allocate(TOv(2)); TOv = (/ 1, 2 /)
-      Tend = 0.03_wp
+      Tend = 0.01_wp
       ! run DLRA
       ifsave = .true. ! save X_rk to disk (LightROM/local)
       ifverb = .true. ! verbosity
@@ -136,9 +136,7 @@ program demo
    run_test = .true.
    if (run_test) then
       nrk  = 6; allocate(rkv(1:nrk));   rkv  = (/ 2, 6, 10, 14, 20, 40 /)
-      !nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 40 /)
-      ntau = 4; allocate(tauv(1:ntau)); tauv = (/ 1.0, 0.1, 0.01, 0.001 /)
-      !ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 0.1 /)
+      ntau = 4; allocate(tauv(1:ntau)); tauv = (/ 0.1, 0.01, 0.001, 0.0001 /)
       allocate(TOv(2)); TOv = (/ 1, 2 /)
       Tend = 1.0_wp
       nrep = 60
