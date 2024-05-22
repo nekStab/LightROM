@@ -29,8 +29,8 @@ module Ginzburg_Landau_Utils
    integer,       parameter :: iunit1 = 1
    integer,       parameter :: iunit2 = 2
    character*128, parameter :: basepath = 'local/'
-   integer,       parameter :: rkmax = 40
-   integer,       parameter :: rk_X0 = 40
+   integer,       parameter :: rkmax = 256
+   integer,       parameter :: rk_X0 = 256
 
    private
    public :: iunit1, iunit2, basepath, rkmax, rk_X0
@@ -76,6 +76,7 @@ contains
       integer                                   :: i, j, k, ito, rk, irep, nsteps
       integer                                   :: info, torder, iostatus
       real(kind=wp)                             :: lagsvd(rkmax)
+      real(kind=wp)                             :: res(N**2)
       character*128      :: oname
       character*128      :: onameU
       character*128      :: onameS
@@ -87,9 +88,11 @@ contains
 
       call system_clock(count_rate=clock_rate)
 
+      write(*,*) ''
       write(*,*) '----------------------'
       write(*,*) '   CONTROLLABILITY'
       write(*,*) '----------------------'
+      write(*,*) ''
 
       X = LR_state()
       do ito = 1, size(TOv)
@@ -111,13 +114,14 @@ contains
                   write(oname,'("output_GL_X_norm__n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
                   open(unit=iunit1, file=trim(basepath)//oname)
                   call stamp_logfile_header(iunit1, 'Controllability Gramian', rk, tau, Tend, torder)
-                  write(iunit1,'(A16,A4,A10,A16,A20)') 'DLRA:','  rk',' Tend','|| X_DLRA ||_2', 'Elapsed time'
+                  write(iunit1,'(A16,A4,A10,A18,A18,A20)') 'DLRA:','  rk',' Tend','|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
                   write(oname,'("output_GL_X_sigma_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
                   open(unit=iunit2, file=trim(basepath)//oname)
                   call stamp_logfile_header(iunit2, 'Controllability Gramian', rk, tau, Tend, torder)
                   write(iunit2,*) 'DLRA: T    sigma_i    d(sigma-i)/sigma-1    d(sigma_i)/sigma_i    ||Sum(sigma_i)||_2'
                end if
-               write(*,'(A16,A4,A4,A10,A6,A8,A16,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend','|| X_DLRA ||_2', 'Elapsed time'
+               write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
+                                    & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
                nsteps = nint(Tend/tau)
                etime_tot = 0.0_wp
                do irep = 1, nrep
@@ -151,10 +155,12 @@ contains
                   call get_state(U_out(:,1:rk), X%U)
                   X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
                   Ttot = Ttot + Tend
-                  write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E16.8,F18.4," s")') irep, 'Xctl OUTPUT', &
-                                    & rk, torder, tau, nsteps, Ttot, norm2(X_out), etime
+                  call CARE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
+                  write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
+                                    & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
                   if (if_save_logs) then
-                     write(iunit1,'(I4," ",A11,I6,F8.4,E16.8,F18.4," s")') irep, 'Xctl OUTPUT', nsteps, Ttot, norm2(X_out), etime
+                     write(iunit1,'(I4," ",A11,I6,F8.4,E18.8,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
+                                    & nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
                   end if
                   etime_tot = etime_tot + etime
                end do
@@ -164,8 +170,8 @@ contains
                   write(Iunit2,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit2)
                end if
                if (if_save_npy) then
-                  write(onameU,'("data_GL_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
-                  write(onameS,'("data_GL_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  write(onameU,'("data_GLXY_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  write(onameS,'("data_GLXY_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
                   call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
                   call save_npy(trim(basepath)//onameS, X%S(1:rk,1:rk), iostatus)
@@ -177,9 +183,11 @@ contains
          end do
       end do
 
+      write(*,*) ''
       write(*,*) '--------------------'
       write(*,*) '   OBSERVABILITY'
       write(*,*) '--------------------'
+      write(*,*) ''
 
       Y = LR_state()
       do ito = 1, size(TOv)
@@ -200,13 +208,14 @@ contains
                   write(oname,'("output_GL_Y_norm__n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
                   open(unit=iunit1, file=trim(basepath)//oname)
                   call stamp_logfile_header(iunit1, 'Observability Gramian', rk, tau, Tend, torder)
-                  write(iunit1,'(A16,A4,A10,A16,A20)') 'DLRA:','  rk',' Tend','|| X_DLRA ||_2', 'Elapsed time'
+                  write(iunit1,'(A16,A4,A10,A18,A18,A20)') 'DLRA:','  rk',' Tend','|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
                   write(oname,'("output_GL_Y_sigma_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
                   open(unit=iunit2, file=trim(basepath)//oname)
                   call stamp_logfile_header(iunit2, 'Observability Gramian', rk, tau, Tend, torder)
                   write(iunit2,*) 'DLRA: T    sigma_i    d(sigma-i)/sigma-1    d(sigma_i)/sigma_i    ||Sum(sigma_i)||_2'
                end if
-               write(*,'(A16,A4,A4,A10,A6,A8,A16,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend','|| X_DLRA ||_2', 'Elapsed time'
+               write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
+                                    & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
                nsteps = nint(Tend/tau)
                etime_tot = 0.0_wp
                do irep = 1, nrep
@@ -242,10 +251,11 @@ contains
                   X_out = matmul(U_out(:,1:rk), matmul(Y%S, transpose(U_out(:,1:rk))))
 
                   Ttot = Ttot + Tend
-                  write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E16.8,F18.4," s")') irep, 'Yobs OUTPUT', &
-                                    & rk, torder, tau, nsteps, Ttot, norm2(X_out), etime
+                  write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Yobs OUTPUT', &
+                                    & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
                   if (if_save_logs) then
-                     write(iunit1,'(I4," ",A11,I6,F8.4,E16.8,F18.4," s")') irep, 'Yobs OUTPUT', nsteps, Ttot, norm2(X_out), etime
+                     write(iunit1,'(I4," ",A11,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Yobs OUTPUT', &
+                                    & nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
                   end if
                   etime_tot = etime_tot + etime
                end do
@@ -255,8 +265,8 @@ contains
                   write(Iunit2,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit2)
                end if
                if (if_save_npy) then
-                  write(onameU,'("data_GL_YU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
-                  write(onameS,'("data_GL_YS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  write(onameU,'("data_GLXY_YU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  write(onameS,'("data_GLXY_YS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
                   call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
                   call save_npy(trim(basepath)//onameS, Y%S(1:rk,1:rk), iostatus)
@@ -310,6 +320,7 @@ contains
       integer                                   :: i, j, k, irep, nsteps
       integer                                   :: info, iostatus
       real(kind=wp)                             :: lagsvd(rkmax)
+      real(kind=wp)                             :: res(N**2)
 
       ! ROM
       real(kind=wp),      allocatable           :: Swrk(:,:)
@@ -381,7 +392,8 @@ contains
          ! Reset time
          Ttot = 0.0_wp
          etime_tot = 0.0_wp
-         write(*,'(A16,A4,A4,A10,A6,A8,A16,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend','|| X_DLRA ||_2', 'Elapsed time'
+         write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
+                           & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
          do irep = 1, nrep
             ! run integrator
             etime = 0.0_wp
@@ -394,10 +406,11 @@ contains
             ! Reconstruct solution
             call get_state(U_out(:,1:rk), X%U)
             X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
-
             Ttot = Ttot + Tend
-            write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E16.8,F18.4," s")') irep, 'Xctl OUTPUT', &
-                              & rk, torder, tau, nsteps, Ttot, norm2(X_out), etime
+            call CARE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
+            write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
+                              & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
+            Ttot = Ttot + Tend
             etime_tot = etime_tot + etime
          end do
          if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
@@ -447,7 +460,8 @@ contains
          ! Reset time
          Ttot = 0.0_wp
          etime_tot = 0.0_wp
-         write(*,'(A16,A4,A4,A10,A6,A8,A16,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend','|| X_DLRA ||_2', 'Elapsed time'
+         write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
+                                    & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
          do irep = 1, nrep
             ! run integrator
             etime = 0.0_wp
@@ -462,8 +476,8 @@ contains
             X_out = matmul(U_out(:,1:rk), matmul(Y%S, transpose(U_out(:,1:rk))))
 
             Ttot = Ttot + Tend
-            write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E16.8,F18.4," s")') irep, 'Yobs OUTPUT', &
-                              & rk, torder, tau, nsteps, Ttot, norm2(X_out), etime
+            write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Yobs OUTPUT', &
+                              & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
             etime_tot = etime_tot + etime
          end do
          if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
@@ -756,62 +770,122 @@ contains
       ! OUTPUT
       real(kind=wp)                                :: U_out(N,rkmax)
       real(kind=wp)                                :: X_out(N,N)
+      real(kind=wp)                                :: Bmat(N,2)
+      real(kind=wp)                                :: tmp(N,2)
+      real(kind=wp),      allocatable              :: U_load(:,:)
       real(kind=wp)                                :: X_mat_flat(N**2)
       real(kind=wp)                                :: res_flat(N**2)
       character*128      :: oname
+      character*128      :: onameU
+      character*128      :: onameS
       integer            :: iostatus
       ! timer
       integer            :: clock_rate, clock_start, clock_stop
-
-
-      real(kind=wp), dimension(N**2)               :: AX, XAH 
+      logical            :: existfile, load_data
 
       if_save_npy  = optval(ifsave, .false.)
       verb         = optval(ifverb, .false.)
+
+      load_data = .false.
 
       call system_clock(count_rate=clock_rate)
 
       ! initialize exponential propagator
       RK_propagator = RK_lyapunov(Tend)
 
+      oname = trim(basepath)//"Xctl_RK_W/data_BS_X_W.npy"
+      inquire(file=oname, exist=existfile)
+      if (existfile) then
+         call load_npy(trim(oname), U_load, iostatus)
+         print *, 'Load Bartels-Stuart solution ', trim(oname)
+         if (iostatus /= 0) then; write(*,*) "Error loading file", trim(oname); STOP 2; end if
+      else
+         write(*,*) 'Cannot find ', trim(oname); STOP 12
+      end if
+      call CARE(res_flat, reshape(U_load, shape(res_flat)), BBTW_flat, .false.)
+      print *, '   || res ||_2/N = ', norm2(res_flat)/N
+
       nrep = 1
       allocate(X_RKlib(N, N, nrep))
-      call get_state(U0_mat(:,1:rk_X0), U0)
-
-      X_out = matmul( U0_mat, matmul( S0, transpose(U0_mat ) ) )
-
-      if (if_save_npy) then
-         write(oname,'("data_GL_X0_RK_n",I4.4,".npy")') nx
-         call save_npy(trim(basepath)//oname, X_out, iostatus)
-         if (iostatus /= 0) then; write(*,*) "Error saving file", trim(oname); STOP 2; end if
+      if (load_data) then
+         ! Load initial condition
+         write(oname,'("data_GL_lyapconv_X0_RK_n",I4.4,".npy")') nx
+         inquire(file=trim(basepath)//oname, exist=existfile)
+         if (existfile) then
+            call load_npy(trim(basepath)//trim(oname), U_load, iostatus)
+            print *, 'Load initial condition: ', trim(basepath)//trim(oname)
+            if (iostatus /= 0) then; write(*,*) "Error loading file", trim(basepath)//trim(oname); STOP 2; end if
+         else
+            write(*,*) 'Cannot find ', trim(basepath)//trim(oname); STOP 12
+         end if
+         X_out = U_load(1:N, 1:N)
+         ! Load reference RK solution
+         write(oname,'("data_GL_lyapconv_X_RK_n",I4.4,"_r",I3.3,".npy")') nx, nrep
+         inquire(file=trim(basepath)//trim(oname), exist=existfile)
+         if (existfile) then
+            print *, 'Load RK solution ', trim(basepath)//trim(oname)
+            call load_npy(trim(basepath)//trim(oname), U_load, iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error loading file", trim(basepath)//trim(oname); STOP 2; end if
+         else
+            write(*,*) 'Cannot find ', trim(basepath)//trim(oname); STOP 12
+         end if
+         ! Set reference RK solution
+         X_mat_ref = U_load(1:N, 1:N)
+      else
+         ! Set random initial condition
+         call get_state(U0_mat(:,1:rk_X0), U0)
+         X_out = matmul( U0_mat, matmul( S0, transpose(U0_mat ) ) )
+         if (if_save_npy) then
+            ! Save forcing RK
+            write(oname,'("data_GL_lyapconv_BBTW_RK_n",I4.4,".npy")') nx
+            write(*,*) 'Save ', trim(basepath)//trim(oname)
+            call save_npy(trim(basepath)//oname, reshape(BBTW_flat, (/ N,N /)), iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
+            ! Save initial condition
+            write(oname,'("data_GL_lyapconv_X0_RK_n",I4.4,".npy")') nx
+            write(*,*) 'Save ', trim(basepath)//trim(oname)
+            call save_npy(trim(basepath)//oname, X_out, iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
+            ! Save forcing DLRA
+            Bmat = 0.0_wp
+            call get_state(Bmat, LTI%B(1:rk_b))
+            X_out = matmul(Bmat, transpose(Bmat))
+            write(oname,'("data_GL_lyapconv_BBTW_DLRA_n",I4.4,".npy")') nx
+            write(*,*) 'Save ', trim(basepath)//trim(oname)
+            call save_npy(trim(basepath)//oname, X_out, iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
+         end if
+         X_out = matmul( U0_mat, matmul( S0, transpose(U0_mat ) ) )
+         ! Set initial condition for RK
+         call set_state_mat(X_mat(1:1), X_out)
+         write(*,'(A10,A26,A26,A26,A20)') 'RKlib:','Tend','|| X_RK ||_2/N', '|| res ||_2/N','Elapsed time'
+         write(*,*) '         ------------------------------------------------------------------------'
+         do irep = 1, nrep
+            call system_clock(count=clock_start)     ! Start Timer
+            ! integrate
+            call RK_propagator%matvec(X_mat(1), X_mat(2))
+            call system_clock(count=clock_stop)      ! Stop Timer
+            ! recover output
+            call get_state_mat(X_RKlib(:,:,irep), X_mat(2:2))
+            call CARE(res_flat, reshape(X_RKlib(:,:,irep), shape(res_flat)), BBTW_flat, .false.)
+            ! replace input
+            call set_state_mat(X_mat(1:1), X_RKlib(:,:,irep))
+            write(*,'(I10,F26.4,E26.8,E26.8,F18.4," s")') irep, irep*Tend, norm2(X_RKlib(:,:,irep))/N, norm2(res_flat)/N, &
+                           & real(clock_stop-clock_start)/real(clock_rate)
+            if (if_save_npy) then
+               write(oname,'("data_GL_lyapconv_X_RK_n",I4.4,"_r",I3.3,".npy")') nx, irep
+               write(*,*) 'Save ', trim(basepath)//trim(oname)
+               call save_npy(trim(basepath)//oname, X_RKlib(:,:,irep), iostatus)
+               if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
+            end if
+         enddo
+         ! Set reference RK solution
+         X_mat_ref = X_RKlib(:,:,nrep)
       end if
       
-      call set_state_mat(X_mat(1:1), X_out)
-      write(*,'(A10,A26,A26,A26,A20)') 'RKlib:','Tend','|| X_RK ||_2/N', '|| res ||_2/N','Elapsed time'
-      write(*,*) '         ------------------------------------------------------------------------'
-      do irep = 1, nrep
-         call system_clock(count=clock_start)     ! Start Timer
-         ! integrate
-         call RK_propagator%matvec(X_mat(1), X_mat(2))
-         call system_clock(count=clock_stop)      ! Stop Timer
-         ! recover output
-         call get_state_mat(X_RKlib(:,:,irep), X_mat(2:2))
-         call CARE(res_flat, reshape(X_RKlib(:,:,irep), shape(res_flat)), BBTW_flat, .false.)
-         ! replace input
-         call set_state_mat(X_mat(1:1), X_RKlib(:,:,irep))
-         write(*,'(I10,F26.4,E26.8,E26.8,F18.4," s")') irep, irep*Tend, norm2(X_RKlib(:,:,irep))/N, norm2(res_flat)/N, &
-                        & real(clock_stop-clock_start)/real(clock_rate)
-         if (if_save_npy) then
-            write(oname,'("data_GL_X_RK_n",I4.4,"_r",I3.3,".npy")') nx, irep
-            call save_npy(trim(basepath)//oname, X_RKlib(:,:,irep), iostatus)
-            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(oname); STOP 2; end if
-         end if
-      enddo
-      X_mat_ref = X_RKlib(:,:,nrep)
-      
       write(*,*) ''
-      write(*,'(A16,A4,A4,A10,A6,A8,A24,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
-                                 & '|| X_DLRA - X_RK ||_2', 'Elapsed time'
+      write(*,'(A16,A4,A4,A10,A6,A8,A26,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
+                                 & '|| X_DLRA - X_RK ||_2/N', 'Elapsed time'
       X_state = LR_state()
       do ito = 1, size(TOv)
          torder = TOv(ito)
@@ -833,9 +907,19 @@ contains
                ! Reconstruct solution
                call get_state(U_out(:,1:rk), X_state%U)
                X_out = matmul(U_out(:,1:rk), matmul(X_state%S, transpose(U_out(:,1:rk))))
-               write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E24.8,F18.4," s")') 1, 'Xctl OUTPUT', &
+               write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E26.8,F18.4," s")') 1, 'Xctl OUTPUT', &
                                  & rk, torder, tau, nsteps, Tend, norm2(X_out - X_mat_ref)/N, etime
                if (verb) write(*,*) 'Total integration time (DLRA):', etime, 's'
+               if (j == size(tauv) .and. if_save_npy) then
+                  write(onameU,'("data_GL_lyapconv_XU_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  write(onameS,'("data_GL_lyapconv_XS_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  write(*,*) 'Save ', trim(basepath)//trim(onameU)
+                  call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
+                  if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
+                  write(*,*) 'Save ', trim(basepath)//trim(onameS)
+                  call save_npy(trim(basepath)//onameS, X_state%S(1:rk,1:rk), iostatus)
+                  if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
+               end if
                deallocate(X_state%U)
                deallocate(X_state%S)
             end do
