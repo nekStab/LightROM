@@ -13,7 +13,7 @@ module Ginzburg_Landau_Base
    public :: nx, dx
    public :: nu, gamma, mu_0, c_mu, mu_2, mu
    public :: rk_b, x_b, s_b, rk_c, x_c, s_c
-   public :: B, CT, weight
+   public :: B, CT, weight, weight_mat
    public :: initialize_parameters
    public :: set_state, get_state, init_rand
    public :: N, BBTW_flat, CTCW_flat
@@ -66,17 +66,18 @@ module Ginzburg_Landau_Base
 
    ! Input-Output system parameters
    real(kind=wp)               :: weight(2*nx)       ! integration weights
-   integer,       parameter    :: rk_b = 1           ! number of inputs to the system
+   integer,       parameter    :: rk_b = 2           ! number of inputs to the system
    real(kind=wp), parameter    :: x_b = -11.0_wp     ! location of input Gaussian
    real(kind=wp), parameter    :: s_b = 1.0_wp       ! variance of input Gaussian
    type(state_vector)          :: B(rk_b)
    real(kind=wp), parameter    :: x_c = sqrt(-2.0_wp*(mu_0 - c_mu**2)/mu_2) ! location of input Gaussian
    real(kind=wp), parameter    :: s_c = 1.0_wp       ! variance of input Gaussian
-   integer,       parameter    :: rk_c = 1           ! number of outputs to the system
+   integer,       parameter    :: rk_c = 2           ! number of outputs to the system
    type(state_vector)          :: CT(rk_c)
 
    ! Data matrices for RK lyap
-   integer,       parameter    :: N = 2*nx     ! Number of grid points (excluding boundaries).
+   integer,       parameter    :: N = 2*nx           ! Number of grid points (excluding boundaries).
+   real(kind=wp)               :: weight_mat(N**2)   ! integration weights
    real(kind=wp)               :: BBTW_flat(N**2)
    real(kind=wp)               :: CTCW_flat(N**2)
 
@@ -92,6 +93,7 @@ contains
       real(kind=wp), allocatable :: x(:)
       real(kind=wp)              :: x2(1:2*nx)
       real(kind=wp)              :: tmpv(N, 2)
+      integer                    :: i
 
       ! Construct mesh.
       x = linspace(-L/2, L/2, nx+2)
@@ -101,28 +103,42 @@ contains
       mu(:) = (mu_0 - c_mu**2) + (mu_2 / 2.0_wp) * x(2:nx+1)**2
 
       ! Define integration weights
-      weight       = dx
-      !weight(1)    = 0.5_wp*dx
-      !weight(nx)   = 0.5_wp*dx
-      !weight(nx+1) = 0.5_wp*dx
-      !weight(2*nx) = 0.5_wp*dx
+      weight     = dx
+      weight_mat = dx
 
       ! Construct B & C
-      x2       = 0.0_wp
-      x2(1:nx) = x(2:nx+1) ! actuation is real
+      ! B = [ [ Br, -Bi ], [ Bi, Br ] ]
+      ! B = [ [ Cr, -Ci ], [ Ci, Cr ] ]
+      ! where Bi = Ci = 0
+
       ! actuator is a Guassian centered just upstream of branch I
-      B(1)%state = exp(-((x2 - x_b)/s_b)**2)
+      ! column 1
+      x2       = 0.0_wp
+      x2(1:nx) = x(2:nx+1)
+      B(1)%state = 0.5*exp(-((x2 - x_b)/s_b)**2)*sqrt(weight)
+      ! column 2
+      x2            = 0.0_wp
+      x2(nx+1:2*nx) = x(2:nx+1)
+      B(2)%state = 0.5*exp(-((x2 - x_b)/s_b)**2)*sqrt(weight)
+
       ! the sensor is a Gaussian centered at branch II
-      CT(1)%state = exp(-((x2 - x_c)/s_c)**2)
-      
+      ! column 1
+      x2       = 0.0_wp
+      x2(1:nx) = x(2:nx+1)
+      CT(1)%state = 0.5*exp(-((x2 - x_c)/s_c)**2)*sqrt(weight)
+      ! column 2
+      x2            = 0.0_wp
+      x2(nx+1:2*nx) = x(2:nx+1)
+      CT(2)%state = 0.5*exp(-((x2 - x_c)/s_c)**2)*sqrt(weight)
+
+      ! Note that we have included the integration weights into the actuator/sensor definitions
+
       ! RK lyap
       tmpv = 0.0_wp
-      call get_state(tmpv(:,1:1), B(1:1))
-      tmpv(:,2) = weight*tmpv(:,1)
-      BBTW_flat(1:N**2) = reshape(matmul(tmpv(:,1:1), transpose(tmpv(:,2:2))), shape(BBTW_flat))
-      call get_state(tmpv(:,1:1), CT(1:1))
-      tmpv(:,2) = weight*tmpv(:,1)
-      CTCW_flat(1:N**2) = reshape(matmul(tmpv(:,1:1), transpose(tmpv(:,2:2))), shape(CTCW_flat))
+      call get_state(tmpv(:,1:rk_b), B(1:rk_b))
+      BBTW_flat(1:N**2) = reshape(matmul(tmpv, transpose(tmpv)), shape(BBTW_flat))
+      call get_state(tmpv(:,1:rk_c), CT(1:rk_c))
+      CTCW_flat(1:N**2) = reshape(matmul(tmpv, transpose(tmpv)), shape(CTCW_flat))
 
       return
    end subroutine initialize_parameters
