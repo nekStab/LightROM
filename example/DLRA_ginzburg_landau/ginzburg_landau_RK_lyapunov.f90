@@ -85,7 +85,7 @@ contains
       class(abstract_vector), intent(in) :: vec
       select type(vec)
       type is(state_matrix)
-         alpha = dot_product(self%state, vec%state)
+         alpha = dot_product(self%state, weight_mat*vec%state)
       end select
       return
    end function matrix_dot
