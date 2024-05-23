@@ -410,7 +410,6 @@ contains
             call CALE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
             write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
                               & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
-            Ttot = Ttot + Tend
             etime_tot = etime_tot + etime
          end do
          if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
@@ -579,6 +578,7 @@ contains
       real(kind=wp)                                :: tau, Ttot, etime, etime_tot
       integer                                      :: i, j, k, rk, irep, nsteps
       integer                                      :: info, torder, iostatus
+      real(kind=wp)                                :: res(N**2)
       character*128      :: oname
       character*128      :: onameU
       character*128      :: onameS
@@ -606,7 +606,8 @@ contains
                ! Reset time
                Ttot = 0.0_wp
                if (verb) write(*,*) 'Run DRLA'
-               write(*,'(A16,A4,A4,A10,A6,A8,A16,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend','|| X_DLRA ||_2', 'Elapsed time'
+               write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
+                              & '|| X_DLRA ||_2', '|| res ||_2','Elapsed time'
                nsteps = nint(Tend/tau)
                etime_tot = 0.0_wp
                do irep = 1, nrep
@@ -622,10 +623,10 @@ contains
                   ! Reconstruct solution
                   call get_state(U_out(:,1:rk), X%U)
                   X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
-
                   Ttot = Ttot + Tend
-                  write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E16.8,F18.4," s")') irep, 'Xricc OUTPUT', &
-                                    & rk, torder, tau, nsteps, Ttot, norm2(X_out), etime
+                  call CARE(res, reshape(X_out, shape(res)), reshape(CTQcCW_mat, shape(res)), BRinvBTW_mat, .false.)
+                  write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Xricc OUTPUT', &
+                                    & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
                   etime_tot = etime_tot + etime
                end do
                if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
