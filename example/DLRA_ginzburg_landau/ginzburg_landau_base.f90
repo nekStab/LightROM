@@ -7,6 +7,7 @@ module Ginzburg_Landau_Base
    ! Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
+   use stdlib_linalg, only : eye
    implicit none
 
    private
@@ -17,6 +18,7 @@ module Ginzburg_Landau_Base
    public :: initialize_parameters
    public :: set_state, get_state, init_rand
    public :: N, BBTW_flat, CTCW_flat
+   public :: Qc, Rinv, CTQcCW_mat, BRinvBTW_mat
 
    !-------------------------------
    !-----     PARAMETERS 1    -----
@@ -74,12 +76,17 @@ module Ginzburg_Landau_Base
    real(kind=wp), parameter    :: s_c = 1.0_wp       ! variance of input Gaussian
    integer,       parameter    :: rk_c = 2           ! number of outputs to the system
    type(state_vector)          :: CT(rk_c)
+   real(kind=wp)               :: Qc(rk_c,rk_c)
+   real(kind=wp)               :: Rinv(rk_b,rk_b)
 
    ! Data matrices for RK lyap
    integer,       parameter    :: N = 2*nx           ! Number of grid points (excluding boundaries).
    real(kind=wp)               :: weight_mat(N**2)   ! integration weights
    real(kind=wp)               :: BBTW_flat(N**2)
    real(kind=wp)               :: CTCW_flat(N**2)
+   ! Data matrices for Riccatis
+   real(kind=wp)               :: CTQcCW_mat(N,N)
+   real(kind=wp)               :: BRinvBTW_mat(N,N)
 
 contains
 
@@ -133,12 +140,16 @@ contains
 
       ! Note that we have included the integration weights into the actuator/sensor definitions
 
-      ! RK lyap
+      ! RK lyap & riccati
+      Qc   = eye(rk_c)
+      Rinv = eye(rk_b)
       tmpv = 0.0_wp
       call get_state(tmpv(:,1:rk_b), B(1:rk_b))
-      BBTW_flat(1:N**2) = reshape(matmul(tmpv, transpose(tmpv)), shape(BBTW_flat))
+      BBTW_flat(1:N**2)     = reshape(matmul(tmpv, transpose(tmpv)), shape(BBTW_flat))
+      BRinvBTW_mat(1:N,1:N) = matmul(matmul(tmpv, Rinv), transpose(tmpv))
       call get_state(tmpv(:,1:rk_c), CT(1:rk_c))
-      CTCW_flat(1:N**2) = reshape(matmul(tmpv, transpose(tmpv)), shape(CTCW_flat))
+      CTCW_flat(1:N**2)     = reshape(matmul(tmpv, transpose(tmpv)), shape(CTCW_flat))
+      CTQcCW_mat(1:N,1:N)   = matmul(matmul(tmpv, Qc), transpose(tmpv))
 
       return
    end subroutine initialize_parameters
