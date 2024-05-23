@@ -18,6 +18,8 @@ module LightROM_AbstractLTIsystems
    type, extends(abstract_dynamical_system), abstract, public :: abstract_lti_system
       !> Dynamics matrix.
       class(abstract_linop),  allocatable :: A
+      !> Exponential propagator.
+      class(abstract_linop),  allocatable :: prop
       !> Input-to-state matrix.
       class(abstract_vector), allocatable :: B(:)
       !> State-to-output matrix.

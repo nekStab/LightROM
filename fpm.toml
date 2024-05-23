@@ -32,8 +32,25 @@ test-drive.tag = "v0.4.0"
 
 [[example]]
 
-name = "DLRA_laplacian2D_abstract_lti"
-source-dir = "example/DLRA_laplacian2D_abstract_lti"
+name = "DLRA_laplacian2D_lti_lyapunov"
+source-dir = "example/DLRA_laplacian2D_lti_lyapunov"
 
 [example.dependencies]
 rklib = { git="https://github.com/jacobwilliams/rklib.git" }
+
+[[example]]
+
+name = "DLRA_laplacian2D_lti_riccati"
+source-dir = "example/DLRA_laplacian2D_lti_riccati"
+
+[example.dependencies]
+rklib = { git="https://github.com/jacobwilliams/rklib.git" }
+
+[[example]]
+
+name = "DLRA_ginzburg_landau"
+source-dir = "example/DLRA_ginzburg_landau"
+
+[example.dependencies]
+rklib = { git="https://github.com/jacobwilliams/rklib.git" }
+fortime = { git = "https://github.com/gha3mi/fortime.git" }

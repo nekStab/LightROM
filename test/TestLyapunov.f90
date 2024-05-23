@@ -3,6 +3,7 @@ module TestLyapunov
    use TestVector
    use TestMatrices
    Use LightROM_LyapunovUtils
+   use stdlib_math, only : linspace
    use testdrive  , only : new_unittest, unittest_type, error_type, check
    use stdlib_math, only : all_close
    implicit none
@@ -62,11 +63,28 @@ module TestLyapunov
       real(wp) :: tau, z, c
       real(wp) :: difference(nk,2)
 
-      pad = 0.0_wp
+      ! --> Mesh related parameters.
+      real(kind=wp), parameter :: L  = 20.0_wp !> Domain length
+      integer      , parameter :: nx = 12      !> Number of grid points (excluding boundaries).
+      real(kind=wp), parameter :: dx = L/nx     !> Grid size.
 
-      ! --> Initialize matrix.
-      A = rmatrix() ; call random_number(A%data)
+      ! --> Physical parameters.
+      complex(kind=wp), parameter :: nu    = cmplx(2.0_wp, 0.2_wp, kind=wp)
+      complex(kind=wp), parameter :: gamma = cmplx(1.0_wp, -1.0_wp, kind=wp)
+      real(kind=wp)   , parameter :: mu_0  = 0.38_wp
+      real(kind=wp)   , parameter :: c_mu  = 0.2_wp
+      real(kind=wp)   , parameter :: mu_2  = -0.01_wp
+      real(kind=wp)               :: mu(1:nx)
+
+      real(kind=wp)               :: x(1:nx+2)
       
+      x = linspace(-L/2, L/2, nx+2)
+
+      x = exp(-(x - 3.0_wp)**2/2.0_wp)
+
+      write(*,*) x
+
+
       call check(error, 0.0_wp < rtol)
       
       return

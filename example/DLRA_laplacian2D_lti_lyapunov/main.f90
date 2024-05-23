@@ -1,13 +1,17 @@
 program demo
    use LightKrylov
    use LightKrylov_expmlib
-   use lightKrylov_utils
-   use Laplacian2D_LTI
-   use Laplacian2D_LTI_Lyapunov
+   use LightKrylov_utils
+
    use LightROM_AbstractLTIsystems
+   use LightROM_utils
+
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
-   use LightROM_utils
+
+   use Laplacian2D_LTI_Lyapunov_Base
+   use Laplacian2D_LTI_Lyapunov_Operators
+   use Laplacian2D_LTI_Lyapunov_RKlib
 
    use stdlib_optval, only : optval 
    use stdlib_linalg, only : eye
@@ -56,9 +60,9 @@ program demo
    real(wp)                        :: X_RKlib_ref(N,N)
 
    ! Initial condition
-   real(wp)                        :: U0_mat(N, rkmax)
+   real(wp)                        :: U0(N, rkmax)
    real(wp)                        :: S0(rkmax,rkmax)
-   real(wp)                        :: X0_mat(N,N)
+   real(wp)                        :: X0(N,N)
 
    ! OUTPUT
    real(wp)                        :: U_out(N,rkmax)
@@ -125,17 +129,17 @@ program demo
    allocate(LTI%D(1:p,1:rk_b)); LTI%D = 0.0_wp
 
    ! Define initial condition
-   call random_number(U0_mat(:, 1:rk_X0))
+   call random_number(U0(:, 1:rk_X0))
    ! Compute SVD to get low-rank representation
-   call svd(U0_mat(:,1:rk_X0), U_svd(:,1:N), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
+   call svd(U0(:,1:rk_X0), U_svd(:,1:N), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
    S0 = 0.0_wp
    do i = 1,rk_X0
       S0(i,i) = S_svd(i)
    end do
-   U0_mat(:,1:rk_X0) = U_svd(:,1:rk_X0)
+   U0(:,1:rk_X0) = U_svd(:,1:rk_X0)
    
    ! Compute the full initial condition X0 = U_in @ S0 @ U_in.T
-   X0_mat = matmul( U0_mat(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U0_mat(:,1:rk_X0))))
+   X0 = matmul( U0(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U0(:,1:rk_X0))))
    
    !------------------
    ! COMPUTE EXACT SOLUTION OF THE LYAPUNOV EQUATION WITH LAPACK
@@ -184,7 +188,7 @@ program demo
    RK_propagator = rklib_lyapunov_mat(Tend)
 
    allocate(X_RKlib(N, N, nrep))
-   call set_state(X_mat_RKlib(1:1), X0_mat)
+   call set_state(X_mat_RKlib(1:1), X0)
    write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','|| X_RK - X_ref ||_2/N', 'Elapsed time'
    write(*,*) '         ------------------------------------------------------------------------'
    do irep = 1, nrep
@@ -220,12 +224,15 @@ program demo
    rkv = (/ 2, 6, 10, 14 /)
    dtv = logspace(-5.0_wp, -1.0_wp, ndt)
 
+   X = LR_state()
+
    do torder = 1, 2
       do i = 1, nrk
          rk = rkv(i)
 
          allocate(U(1:rk)); call mat_zero(U)
-         allocate(S(1:rk,1:rk)); S = 0.0_wp
+         allocate(X%U(1:rk), source=U(1:rk))
+         allocate(X%S(1:rk,1:rk))
          write(*,'(A10,I1)') ' torder = ', torder
 
          do j = ndt, 1, -1
@@ -233,15 +240,11 @@ program demo
             if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
 
             ! Reset input
-            call set_state(U(1:rk), U0_mat(:,1:rk))
-            ! populate LR state
-            X = LR_state()
-            allocate(X%U(1:rk), source=U(1:rk))
-            allocate(X%S(1:rk,1:rk)); X%S = S0(1:rk,1:rk)
+            call X%set_LR_state(U0(:,1:rk), S0(1:rk,1:rk))
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_integrator(X, LTI, Tend, dt, torder, info)
+            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, torder, info)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution
@@ -255,148 +258,23 @@ program demo
          end do
 
          if (save) then
-            write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")'), torder, rk
+            write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
             call save_npy(oname, X_out)
          end if
 
+         deallocate(X%U);
+         deallocate(X%S);
          deallocate(U);
-         deallocate(S);
 
       end do
    end do
 
    if (save) then
       call save_npy("example/DLRA_laplacian2D/data_A.npy", Adata)
-      call save_npy("example/DLRA_laplacian2D/data_X0.npy", X0_mat)
+      call save_npy("example/DLRA_laplacian2D/data_X0.npy", X0)
       call save_npy("example/DLRA_laplacian2D/data_Q.npy", BBTdata)
       call save_npy("example/DLRA_laplacian2D/data_X_ref.npy", Xref)
       call save_npy("example/DLRA_laplacian2D/data_X_RK.npy", X_RKlib_ref)
    end if
-
-contains
-
-   !--------------------------------------------------------------------
-   !-----     UTILITIES FOR STATE_VECTOR AND STATE MATRIX TYPES    -----
-   !--------------------------------------------------------------------
-
-   subroutine get_state(mat_out, state_in)
-      !! Utility function to transfer data from a state vector to a real array
-      real(kind=wp),          intent(out) :: mat_out(:,:)
-      class(abstract_vector), intent(in)  :: state_in(:)
-      ! internal variables
-      integer :: k, kdim
-      mat_out = 0.0_wp
-      select type (state_in)
-      type is (state_vector)
-         kdim = size(state_in)
-         call assert_shape(mat_out, (/ N, kdim /), 'get_state -> state_vector', 'mat_out')
-         do k = 1, kdim
-            mat_out(:,k) = state_in(k)%state
-         end do
-      type is (state_matrix)
-         call assert_shape(mat_out, (/ N, N /), 'get_state -> state_matrix', 'mat_out')
-         mat_out = reshape(state_in(1)%state, (/ N, N /))
-      end select
-      return
-   end subroutine get_state
-
-   subroutine set_state(state_out, mat_in)
-      !! Utility function to transfer data from a real array to a state vector
-      class(abstract_vector), intent(out) :: state_out(:)
-      real(kind=wp),          intent(in)  :: mat_in(:,:)
-      ! internal variables
-      integer       :: k, kdim
-      select type (state_out)
-      type is (state_vector)
-         kdim = size(state_out)
-         call assert_shape(mat_in, (/ N, kdim /), 'set_state -> state_vector', 'mat_in')
-         call mat_zero(state_out)
-         do k = 1, kdim
-            state_out(k)%state = mat_in(:,k)
-         end do
-      type is (state_matrix)
-         call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
-         call mat_zero(state_out)
-         state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
-      end select
-      return
-   end subroutine set_state
-
-   subroutine init_rand(state, ifnorm)
-      !! Utility function to initialize a state vector with random data
-      class(abstract_vector), intent(inout)  :: state(:)
-      logical, optional,      intent(in)     :: ifnorm
-      ! internal variables
-      integer :: k, kdim
-      logical :: normalize
-      normalize = optval(ifnorm,.true.)
-      select type (state)
-      type is (state_vector)
-         kdim = size(state)
-         do k = 1, kdim
-            call state(k)%rand(ifnorm = normalize)
-         end do
-      type is (state_matrix)
-         kdim = size(state)
-         do k = 1, kdim
-            call state(k)%rand(ifnorm = normalize)
-         end do
-      end select
-      return
-   end subroutine init_rand
-
-   subroutine build_operator(A)
-      !! Build the two-dimensional Laplace operator explicitly
-      real(kind=wp), intent(out) :: A(N,N)
-
-      A = -4.0_wp/dx2*eye(N)
-      do i = 1, nx
-         do j = 1, nx - 1
-            k = (i-1)*nx + j
-            A(k + 1, k) = 1.0_wp/dx2
-            A(k, k + 1) = 1.0_wp/dx2
-         end do 
-      end do
-      do i = 1, N-nx
-         A(i, i + nx) = 1.0_wp/dx2
-         A(i + nx, i) = 1.0_wp/dx2
-      end do
-      return
-   end subroutine build_operator
-
-   subroutine reconstruct_TQ(T, Q, A, D, E, tw)
-      !! Reconstruct tridiagonal matrix T and orthogonal projector Q from dsytd2 output (A, D, E)
-      real(kind=wp), intent(out) :: T(N,N)
-      real(kind=wp), intent(out) :: Q(N,N)
-      real(kind=wp), intent(in)  :: A(N,N)
-      real(kind=wp), intent(in)  :: D(N)
-      real(kind=wp), intent(in)  :: E(N-1)
-      real(kind=wp), intent(in)  :: tw(N-1)
-
-      ! internal variables
-      real(wp)  :: Hi(N,N)
-      real(wp)  :: vec(N,1)
-
-      ! Build orthogonal Q = H(1) @  H(2) @ ... @ H(n-1)
-      Q = eye(N)
-      do i = 1, N - 1
-         vec          = 0.0_wp
-         vec(i+1,1)   = 1.0_wp
-         vec(i+2:N,1) = A(i+2:N,i)
-         Hi           = eye(N) - tw(i) * matmul( vec, transpose(vec) )
-         Q            = matmul( Q, Hi )
-      end do
-
-      ! Build tridiagonal T
-      T = 0.0_wp
-      do i = 1, N
-         T(i,i) = D(i)
-      end do
-      do i = 1, N - 1
-         T(i,i+1) = E(i)
-         T(i+1,i) = E(i)
-      end do
-
-   end subroutine reconstruct_TQ
 
 end program demo
