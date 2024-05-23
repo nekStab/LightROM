@@ -14,7 +14,7 @@ module Ginzburg_Landau_RK_Lyapunov
    implicit none
 
    private
-   public :: CALE, GL_mat
+   public :: CALE, CARE, GL_mat
    public :: get_state_mat, set_state_mat, init_rand
 
    !-------------------------------------------
@@ -71,6 +71,37 @@ contains
       res_flat = AX_flat + XAH_flat + Q_flat
 
    end subroutine CALE
+
+   subroutine CARE(res_flat, x_flat, CTQcC_flat, BRinvBT_mat, adjoint)
+      ! residual
+      real(kind=wp),                 intent(out) :: res_flat(:)
+      ! solution
+      real(kind=wp),                 intent(in)  :: x_flat(:)
+      ! inhomogeneity
+      real(kind=wp),                 intent(in)  :: CTQcC_flat(:)
+      ! inhomogeneity
+      real(kind=wp),                 intent(in)  :: BRinvBT_mat(:,:)
+      !> Adjoint
+      logical, optional :: adjoint
+      logical           :: adj
+
+      ! internals
+      real(kind=wp),   dimension(N**2) :: x_tmp, AX_flat, XAH_flat, NL_flat
+      real(kind=wp),   dimension(N,N)  :: x_mat
+
+      !> Deal with optional argument
+      adj  = optval(adjoint,.false.)
+
+      res_flat = 0.0_wp; AX_flat = 0.0_wp; XAH_flat = 0.0_wp; x_tmp = 0.0_wp
+      call GL_mat( AX_flat, x_flat, adjoint = adj, transpose = .false.)
+      x_mat = reshape(x_flat, (/ N,N /))
+      x_tmp = reshape(transpose(x_mat), shape(x_flat))
+      call GL_mat(XAH_flat, x_tmp,  adjoint = adj, transpose = .true. )
+      NL_flat = reshape(matmul(x_mat, matmul(BRinvBTW_mat, x_mat)), shape(NL_flat))
+      ! construct Lyapunov equation
+      res_flat = AX_flat + XAH_flat + CTQcC_flat + NL_flat
+
+   end subroutine CARE
 
    !-----     TYPE-BOUND PROCEDURE FOR MATRICES     -----
 
