@@ -55,11 +55,6 @@ program demo
    real(kind=wp)                             :: X_out(2*nx,2*nx)
    real(kind=wp)                             :: lagsvd(rkmax)
 
-   ! Riccati
-   real(kind=wp)                             :: Qc(rk_c,rk_c)
-   real(kind=wp)                             :: Rinv(rk_b, rk_b)
-   real(kind=wp)                             :: sqrtw(2*nx)
-
    ! Information flag.
    integer                                   :: info
 
@@ -135,8 +130,8 @@ program demo
 
    run_test = .true.
    if (run_test) then
-      nrk  = 6; allocate(rkv(1:nrk));   rkv  = (/ 2, 6, 10, 14, 20, 40 /)
-      ntau = 4; allocate(tauv(1:ntau)); tauv = (/ 0.1, 0.01, 0.001, 0.0001 /)
+      nrk  = 6; allocate(rkv(1:nrk));   rkv  = (/ 6, 10, 12, 14, 20, 40 /)
+      ntau = 5; allocate(tauv(1:ntau)); tauv = (/ 1.0, 0.1, 0.01, 0.001, 0.0001 /)
       allocate(TOv(2)); TOv = (/ 1, 2 /)
       Tend = 1.0_wp
       nrep = 60
@@ -163,8 +158,8 @@ program demo
       tau    = 0.1_wp
       torder = 2
       ! integration time
-      Tmax   = 50.0_wp
-      nrep   = 10
+      Tmax   = 60.0_wp
+      nrep   = 12
       Tend   = Tmax/nrep
       nsteps = nint(Tend/tau)
       ! run DLRA
@@ -194,14 +189,12 @@ program demo
    !
    !----------------------------------
 
-   run_test = .false.
+   run_test = .true.
    if (run_test) then
-      nrk  = 6; allocate(rkv(1:nrk));   rkv  = (/ 2, 6, 10, 14, 20, 40 /)
-      ntau = 2; allocate(tauv(1:ntau)); tauv = (/ 1.0, 0.1 /)
+      nrk  = 6; allocate(rkv(1:nrk));   rkv  = (/ 6, 10, 12, 14, 20, 40 /)
+      ntau = 5; allocate(tauv(1:ntau)); tauv = (/ 1.0, 0.1, 0.01, 0.001, 0.0001 /)
       Tend = 1.0_wp
       nrep = 60
-      Qc   = eye(rk_c)
-      Rinv = eye(rk_b)
       ! run DLRA
       ifsave = .true. ! save X and Y matrices to disk (LightROM/local)
       ifverb = .true. ! verbosity
