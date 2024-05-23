@@ -155,7 +155,7 @@ contains
                   call get_state(U_out(:,1:rk), X%U)
                   X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
                   Ttot = Ttot + Tend
-                  call CARE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
+                  call CALE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
                   write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
                                     & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
                   if (if_save_logs) then
@@ -249,8 +249,8 @@ contains
                   ! Reconstruct solution
                   call get_state(U_out(:,1:rk), Y%U)
                   X_out = matmul(U_out(:,1:rk), matmul(Y%S, transpose(U_out(:,1:rk))))
-
                   Ttot = Ttot + Tend
+                  call CALE(res, reshape(X_out, shape(res)), CTCW_flat, .true.)
                   write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Yobs OUTPUT', &
                                     & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
                   if (if_save_logs) then
@@ -407,7 +407,7 @@ contains
             call get_state(U_out(:,1:rk), X%U)
             X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
             Ttot = Ttot + Tend
-            call CARE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
+            call CALE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
             write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
                               & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
             Ttot = Ttot + Tend
@@ -474,8 +474,8 @@ contains
             ! Reconstruct solution
             call get_state(U_out(:,1:rk), Y%U)
             X_out = matmul(U_out(:,1:rk), matmul(Y%S, transpose(U_out(:,1:rk))))
-
             Ttot = Ttot + Tend
+            call CALE(res, reshape(X_out, shape(res)), CTCW_flat, .true.)
             write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Yobs OUTPUT', &
                               & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
             etime_tot = etime_tot + etime
@@ -802,7 +802,7 @@ contains
       else
          write(*,*) 'Cannot find ', trim(oname); STOP 12
       end if
-      call CARE(res_flat, reshape(U_load, shape(res_flat)), BBTW_flat, .false.)
+      call CALE(res_flat, reshape(U_load, shape(res_flat)), BBTW_flat, .false.)
       print *, '   || res ||_2/N = ', norm2(res_flat)/N
 
       nrep = 1
@@ -867,7 +867,7 @@ contains
             call system_clock(count=clock_stop)      ! Stop Timer
             ! recover output
             call get_state_mat(X_RKlib(:,:,irep), X_mat(2:2))
-            call CARE(res_flat, reshape(X_RKlib(:,:,irep), shape(res_flat)), BBTW_flat, .false.)
+            call CALE(res_flat, reshape(X_RKlib(:,:,irep), shape(res_flat)), BBTW_flat, .false.)
             ! replace input
             call set_state_mat(X_mat(1:1), X_RKlib(:,:,irep))
             write(*,'(I10,F26.4,E26.8,E26.8,F18.4," s")') irep, irep*Tend, norm2(X_RKlib(:,:,irep))/N, norm2(res_flat)/N, &

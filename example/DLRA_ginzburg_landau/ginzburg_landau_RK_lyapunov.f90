@@ -14,7 +14,7 @@ module Ginzburg_Landau_RK_Lyapunov
    implicit none
 
    private
-   public :: CARE, GL_mat
+   public :: CALE, GL_mat
    public :: get_state_mat, set_state_mat, init_rand
 
    !-------------------------------------------
@@ -46,7 +46,7 @@ module Ginzburg_Landau_RK_Lyapunov
 
 contains
 
-   subroutine CARE(res_flat, x_flat, Q_flat, adjoint)
+   subroutine CALE(res_flat, x_flat, Q_flat, adjoint)
       ! residual
       real(kind=wp),                 intent(out) :: res_flat(:)
       ! solution
@@ -70,7 +70,7 @@ contains
       ! construct Lyapunov equation
       res_flat = AX_flat + XAH_flat + Q_flat
 
-   end subroutine CARE
+   end subroutine CALE
 
    !-----     TYPE-BOUND PROCEDURE FOR MATRICES     -----
 
