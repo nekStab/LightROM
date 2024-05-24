@@ -1,10 +1,11 @@
 program demo
    use LightKrylov
-   use LightKrylov_expmlib
-   use LightKrylov_utils
+   use LightKrylov, only : wp => dp
+   use LightKrylov_ExpmLib
+   use LightKrylov_Utils
 
    use LightROM_AbstractLTIsystems
-   use LightROM_utils
+   use LightROM_Utils
 
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
@@ -43,11 +44,11 @@ program demo
 
    ! LTI system
    type(lti_system)                :: LTI
-   real(kind=wp), allocatable      :: D(:,:)
+   real(wp), allocatable           :: D(:,:)
    integer                         :: p
 
    ! Laplacian
-   type(laplace_operator),   allocatable :: A
+   type(laplace_operator), allocatable :: A
 
    ! LR representation
    type(LR_state)                  :: X
@@ -125,7 +126,7 @@ program demo
    LTI = lti_system()
    allocate(LTI%A,         source=A)
    allocate(LTI%B(1:rk_b), source=B(1:rk_b));
-   allocate(LTI%CT(1:p),   source=B(1)); call mat_zero(LTI%CT)
+   allocate(LTI%CT(1:p),   source=B(1)); call zero_basis(LTI%CT)
    allocate(LTI%D(1:p,1:rk_b)); LTI%D = 0.0_wp
 
    ! Define initial condition
@@ -230,7 +231,7 @@ program demo
       do i = 1, nrk
          rk = rkv(i)
 
-         allocate(U(1:rk)); call mat_zero(U)
+         allocate(U(1:rk)); call zero_basis(U)
          allocate(X%U(1:rk), source=U(1:rk))
          allocate(X%S(1:rk,1:rk))
          write(*,'(A10,I1)') ' torder = ', torder

@@ -1,6 +1,7 @@
 module Ginzburg_Landau_Operators
    ! LightKrylov for linear algebra.
    use LightKrylov
+   use LightKrylov, only : wp => dp
    use LightKrylov_utils, only : assert_shape
    ! LightROM
    use LightROM_AbstractLTIsystems
@@ -19,7 +20,7 @@ module Ginzburg_Landau_Operators
    !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
    !-----------------------------------------------
 
-   type, extends(abstract_lti_system), public :: lti_system
+   type, extends(abstract_lti_system_rdp), public :: lti_system
    contains
       private
       procedure, pass(self), public :: initialize_lti_system
@@ -29,7 +30,7 @@ module Ginzburg_Landau_Operators
    !-----     LINEAR GL OPERATOR     -----
    !--------------------------------------
 
-   type, extends(abstract_linop), public :: GL_operator
+   type, extends(abstract_linop_rdp), public :: GL_operator
    contains
       private
       procedure, pass(self), public :: matvec  => direct_matvec_GL
@@ -40,8 +41,8 @@ module Ginzburg_Landau_Operators
    !-----     EXPONENTIAL PROPAGATOR     -----
    !------------------------------------------
 
-   type, extends(abstract_linop), public :: exponential_prop
-      real(kind=wp) :: tau ! Integration time.
+   type, extends(abstract_linop_rdp), public :: exponential_prop
+      real(wp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec => direct_solver
@@ -65,14 +66,14 @@ contains
    subroutine direct_GL(vec_in, vec_out)
 
       !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: vec_in
+      real(wp), dimension(:), intent(in)  :: vec_in
       !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: vec_out
+      real(wp), dimension(:), intent(out) :: vec_out
 
       !> Internal variables.
-      integer                      :: i
-      real(kind=wp), dimension(nx) :: u, v, du, dv
-      real(kind=wp)                :: d2u, d2v, cu, cv
+      integer                 :: i
+      real(wp), dimension(nx) :: u, v, du, dv
+      real(wp)                :: d2u, d2v, cu, cv
 
       u = vec_in(1:nx)     
       v = vec_in(nx+1:2*nx)
@@ -135,15 +136,15 @@ contains
 
    subroutine adjoint_GL(vec_in, vec_out)
       !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: vec_in
+      real(wp), dimension(:), intent(in)  :: vec_in
       !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: vec_out
+      real(wp), dimension(:), intent(out) :: vec_out
 
       ! Internal variables.
       integer :: i
-      real(kind=wp), dimension(nx) :: u, du
-      real(kind=wp), dimension(nx) :: v, dv
-      real(kind=wp)                :: d2u, d2v, cu, cv
+      real(wp), dimension(nx) :: u, du
+      real(wp), dimension(nx) :: v, dv
+      real(wp)                :: d2u, d2v, cu, cv
 
       ! Sets the internal variables.
       u = vec_in(1:nx)     
@@ -209,13 +210,13 @@ contains
 
    subroutine rhs(me, t, x, f)
       ! Time-integrator.
-      class(rk_class), intent(inout)             :: me
+      class(rk_class),               intent(inout) :: me
       ! Current time.
-      real(kind=wp),   intent(in)                :: t
+      real(wp),                      intent(in)    :: t
       ! State vector.
-      real(kind=wp),   dimension(:), intent(in)  :: x
+      real(wp),        dimension(:), intent(in)    :: x
       ! Time-derivative.
-      real(kind=wp),   dimension(:), intent(out) :: f
+      real(wp),        dimension(:), intent(out)   :: f
 
       f = 0.0_wp
       call direct_GL(x, f)
@@ -225,13 +226,13 @@ contains
 
    subroutine adjoint_rhs(me, t, x, f)
       ! Time-integrator.
-      class(rk_class), intent(inout)             :: me
+      class(rk_class),               intent(inout) :: me
       ! Current time.
-      real(kind=wp),   intent(in)                :: t
+      real(wp),                      intent(in)    :: t
       ! State vector.
-      real(kind=wp),   dimension(:), intent(in)  :: x
+      real(wp),        dimension(:), intent(in)    :: x
       ! Time-derivative.
-      real(kind=wp),   dimension(:), intent(out) :: f
+      real(wp),        dimension(:), intent(out)   :: f
 
       f = 0.0_wp
       call adjoint_GL(x, f)
@@ -245,11 +246,11 @@ contains
 
    subroutine direct_matvec_GL(self, vec_in, vec_out)
       !> Linear Operator.
-      class(GL_operator),     intent(in)  :: self
+      class(GL_operator),          intent(in)  :: self
       !> Input vector.
-      class(abstract_vector), intent(in)  :: vec_in
+      class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
-      class(abstract_vector), intent(out) :: vec_out
+      class(abstract_vector_rdp), intent(out) :: vec_out
       select type(vec_in)
       type is (state_vector)
          select type(vec_out)
@@ -262,11 +263,11 @@ contains
 
    subroutine adjoint_matvec_GL(self, vec_in, vec_out)
       !> Linear Operator.
-      class(GL_operator),     intent(in)  :: self
+      class(GL_operator),         intent(in)  :: self
       !> Input vector.
-      class(abstract_vector), intent(in)  :: vec_in
+      class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
-      class(abstract_vector), intent(out) :: vec_out
+      class(abstract_vector_rdp), intent(out) :: vec_out
       select type(vec_in)
       type is (state_vector)
          select type(vec_out)
@@ -283,15 +284,15 @@ contains
 
    subroutine direct_solver(self, vec_in, vec_out)
       ! Linear Operator.
-      class(exponential_prop), intent(in)  :: self
+      class(exponential_prop),     intent(in)  :: self
       ! Input vector.
-      class(abstract_vector),  intent(in)  :: vec_in
+      class(abstract_vector_rdp),  intent(in)  :: vec_in
       ! Output vector.
-      class(abstract_vector),  intent(out) :: vec_out
+      class(abstract_vector_rdp),  intent(out) :: vec_out
 
       ! Time-integrator.
       type(rks54_class) :: prop
-      real(kind=wp)     :: dt = 1.0_wp
+      real(wp)          :: dt = 1.0_wp
 
       select type(vec_in)
       type is(state_vector)
@@ -310,15 +311,15 @@ contains
 
    subroutine adjoint_solver(self, vec_in, vec_out)
       ! Linear Operator.
-      class(exponential_prop), intent(in)  :: self
+      class(exponential_prop),     intent(in)  :: self
       ! Input vector.
-      class(abstract_vector),  intent(in)  :: vec_in
+      class(abstract_vector_rdp),  intent(in)  :: vec_in
       ! Output vector.
-      class(abstract_vector),  intent(out) :: vec_out
+      class(abstract_vector_rdp),  intent(out) :: vec_out
 
       ! Time-integrator.
       type(rks54_class) :: prop
-      real(kind=wp)     :: dt = 1.0_wp
+      real(wp)          :: dt = 1.0_wp
 
       select type(vec_in)
       type is(state_vector)
@@ -342,18 +343,18 @@ contains
    subroutine exptA(vec_out, A, vec_in, tau, info, trans)
       !! Subroutine for the exponential propagator that conforms with the abstract interface
       !! defined in expmlib.f90
-      class(abstract_vector),  intent(out)   :: vec_out
+      class(abstract_vector_rdp),  intent(out)   :: vec_out
       !! Output vector
-      class(abstract_linop),   intent(inout) :: A
+      class(abstract_linop_rdp),   intent(inout) :: A
       !! Linear operator
-      class(abstract_vector),  intent(in)    :: vec_in
+      class(abstract_vector_rdp),  intent(in)    :: vec_in
       !! Input vector.
-      real(kind=wp),           intent(in)    :: tau
+      real(wp),                    intent(in)    :: tau
       !! Integration horizon
-      integer,                 intent(out)   :: info
+      integer,                     intent(out)   :: info
       !! Information flag
-      logical, optional,       intent(in)    :: trans
-      logical                                :: transpose
+      logical, optional,           intent(in)    :: trans
+      logical                                    :: transpose
       !! Direct or Adjoint?
 
       ! optional argument
@@ -384,12 +385,12 @@ contains
    !--------------------------------------------------------
 
    subroutine initialize_lti_system(self, A, prop, B, CT, D)
-      class(lti_system),       intent(inout) :: self
-      class(abstract_linop),   intent(in)    :: A
-      class(abstract_linop),   intent(in)    :: prop
-      class(abstract_vector),  intent(in)    :: B(:)
-      class(abstract_vector),  intent(in)    :: CT(:)
-      real(kind=wp), optional, intent(in)    :: D(:,:)
+      class(lti_system),           intent(inout) :: self
+      class(abstract_linop_rdp),   intent(in)    :: A
+      class(abstract_linop_rdp),   intent(in)    :: prop
+      class(abstract_vector_rdp),  intent(in)    :: B(:)
+      class(abstract_vector_rdp),  intent(in)    :: CT(:)
+      real(wp),          optional, intent(in)    :: D(:,:)
 
       ! internal variables
       integer                                :: rk_b, rk_c

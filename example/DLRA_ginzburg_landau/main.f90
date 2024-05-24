@@ -1,10 +1,12 @@
 program demo
    use LightKrylov
-   use LightKrylov_expmlib
-   use LightKrylov_utils
+   use LightKrylov, only : wp => dp
+   use LightKrylov_AbstractVectors
+   use LightKrylov_ExpmLib
+   use LightKrylov_Utils
 
    use LightROM_AbstractLTIsystems
-   use LightROM_utils
+   use LightROM_Utils
 
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
@@ -31,9 +33,9 @@ program demo
    ! rk_B & rk_C are set in ginzburg_landau_base.f90
 
    integer  :: nrk, ntau, rk,  torder
-   real(kind=wp) :: tau, Tend, Ttot
+   real(wp) :: tau, Tend, Ttot
    ! vector of dt values
-   real(kind=wp), allocatable :: tauv(:)
+   real(wp), allocatable :: tauv(:)
    ! vector of rank values
    integer, allocatable :: rkv(:), TOv(:)
 
@@ -45,15 +47,15 @@ program demo
    type(lti_system)                          :: LTI
 
    ! Initial condition
-   real(kind=wp)                             :: U0_in(2*nx, rkmax)
-   real(kind=wp)                             :: S0(rkmax,rkmax)
+   real(wp)                                :: U0_in(2*nx, rkmax)
+   real(wp)                                :: S0(rkmax,rkmax)
    type(state_vector),     allocatable       :: U0(:)
    type(state_vector),     allocatable       :: Utmp(:)
    
    ! OUTPUT
-   real(kind=wp)                             :: U_out(2*nx,rkmax)
-   real(kind=wp)                             :: X_out(2*nx,2*nx)
-   real(kind=wp)                             :: lagsvd(rkmax)
+   real(wp)                                  :: U_out(2*nx,rkmax)
+   real(wp)                                  :: X_out(2*nx,2*nx)
+   real(wp)                                  :: lagsvd(rkmax)
 
    ! Information flag.
    integer                                   :: info
@@ -61,7 +63,7 @@ program demo
    ! Counters
    integer                                   :: i, j, k, irep, nrep, istep, nsteps
    integer,                allocatable       :: perm(:)
-   real(kind=wp)                             :: Tmax, etime
+   real(wp)                                  :: Tmax, etime
 
    ! SVD
    real(wp)  :: U_svd(rk_X0,rk_X0)
@@ -96,10 +98,14 @@ program demo
    call set_state(Utmp, U_out)
    S0 = 0.0_wp
    allocate(perm(1:rk_X0)); perm = 0
-   call qr_factorization(Utmp, S0, perm, info)
+   call qr(Utmp, S0, perm, info)
    call svd(S0(:,1:rk_X0), U_svd(:,1:rk_X0), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
    S0 = diag(S_svd)
-   call mat_mult(U0, Utmp, U_svd)
+   block
+   class(abstract_vector_rdp), allocatable :: Xwrk(:)
+   call linear_combination(Xwrk, Utmp, U_svd); call copy_basis(U0, Xwrk)
+   end block
+   !call linear_combination(U0, Utmp, U_svd)
 
    !----------------------------------
    !

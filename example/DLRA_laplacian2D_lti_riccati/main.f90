@@ -1,10 +1,12 @@
 program demo
    use LightKrylov
-   use LightKrylov_expmlib
-   use LightKrylov_utils
+   use LightKrylov, only : wp => dp
+   use LightKrylov_AbstractVectors
+   use LightKrylov_ExpmLib
+   use LightKrylov_Utils
 
    use LightROM_AbstractLTIsystems
-   use LightROM_utils
+   use LightROM_Utils
    
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
@@ -76,17 +78,17 @@ program demo
    real(wp)  :: V_svd(rkmax,rkmax)
 
    ! LAPACK SOLUTION RICATTI
-   real(kind=wp)      :: Hdata(2*N,2*N)
-   real(kind=wp)      :: wr(2*N), wi(2*N)
-   real(kind=wp)      :: VR(2*N,2*N)
+   real(wp)           :: Hdata(2*N,2*N)
+   real(wp)           :: wr(2*N), wi(2*N)
+   real(wp)           :: VR(2*N,2*N)
    integer, parameter :: lwork = 1040
-   real(kind=wp)      :: work(lwork)
-   real(kind=wp)      :: UR(2*N,N)
-   real(kind=wp)      :: UI(2*N,N)
+   real(wp)           :: work(lwork)
+   real(wp)           :: UR(2*N,N)
+   real(wp)           :: UI(2*N,N)
    logical            :: flag
-   real(kind=wp)      :: F(N,N)
-   real(kind=wp)      :: Ginv(N,N)
-   real(kind=wp)      :: Xref(N,N)
+   real(wp)           :: F(N,N)
+   real(wp)           :: Ginv(N,N)
+   real(wp)           :: Xref(N,N)
    integer :: icnt
 
    ! timer
@@ -243,7 +245,7 @@ program demo
       do i = 1, nrk
          rk = rkv(i)
 
-         allocate(U(1:rk)); call mat_zero(U)
+         allocate(U(1:rk)); call zero_basis(U)
          allocate(S(1:rk,1:rk)); S = 0.0_wp
          allocate(X%U(1:rk), source=U(1:rk))
          allocate(X%S(1:rk,1:rk)); 
@@ -289,8 +291,8 @@ program demo
    call initialize_problem(1.0_wp, 1.0_wp)
 
    ! Reset LTI system
-   call mat_copy(LTI%B, B)
-   call mat_copy(LTI%CT, CT)
+   call copy_basis(LTI%B, B)
+   call copy_basis(LTI%CT, CT)
 
    write(*,*)
    write(*,*) 'RICCATI EQUATION FOR THE 2D LAPLACE OPERATOR:'
@@ -425,7 +427,7 @@ program demo
       do i = 1, nrk
          rk = rkv(i)
 
-         allocate(U(1:rk)); call mat_zero(U)
+         allocate(U(1:rk)); call zero_basis(U)
          allocate(X%U(1:rk), source=U(1:rk))
          allocate(X%S(1:rk,1:rk)); 
          write(*,'(A10,I1)') ' torder = ', torder

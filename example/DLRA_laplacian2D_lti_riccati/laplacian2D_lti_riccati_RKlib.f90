@@ -5,6 +5,7 @@ module Laplacian2D_LTI_Riccati_RKlib
    use rklib_module
    !> LightKrylov for linear algebra.
    use LightKrylov
+   use LightKrylov, only : wp => dp
    !> Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
@@ -17,16 +18,16 @@ module Laplacian2D_LTI_Riccati_RKlib
    !-----     EXPONENTIAL PROPAGATOR RKLIB    -----
    !-----------------------------------------------
 
-   type, extends(abstract_linop), public :: rklib_exptA_laplacian
-      real(kind=wp) :: tau ! Integration time.
+   type, extends(abstract_linop_rdp), public :: rklib_exptA_laplacian
+      real(wp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec  => direct_solver_vec
       procedure, pass(self), public :: rmatvec => direct_solver_vec                  ! dummy
    end type rklib_exptA_laplacian
 
-   type, extends(abstract_linop), public :: rklib_riccati_mat
-      real(kind=wp) :: tau ! Integration time.
+   type, extends(abstract_linop_rdp), public :: rklib_riccati_mat
+      real(wp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec  => direct_solver_riccati_mat
@@ -45,11 +46,11 @@ contains
       !> Time-integrator.
       class(rk_class), intent(inout)             :: me
       !> Current time.
-      real(kind=wp)  , intent(in)                :: t
+      real(wp),      intent(in)                :: t
       !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: x
+      real(wp),        dimension(:), intent(in)  :: x
       !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: f
+      real(wp),        dimension(:), intent(out) :: f
 
       f = 0.0_wp
       call laplacian(f(1:N), x(1:N))
@@ -61,9 +62,9 @@ contains
       !> Linear Operator.
       class(rklib_exptA_laplacian), intent(in)  :: self
       !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
+      class(abstract_vector_rdp),   intent(in)  :: vec_in
       !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
+      class(abstract_vector_rdp),   intent(out) :: vec_out
 
       !> Time-integrator.
       type(rks54_class) :: prop
@@ -90,16 +91,16 @@ contains
       !> Time-integrator.
       class(rk_class), intent(inout)             :: me
       !> Current time.
-      real(kind=wp)  , intent(in)                :: t
+      real(wp),        intent(in)                :: t
       !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: x
+      real(wp),        dimension(:), intent(in)  :: x
       !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: f
+      real(wp),        dimension(:), intent(out) :: f
 
       !> Internal variables.
       integer :: i, j, k
-      real(kind=wp), dimension(N,N) :: xm
-      real(kind=wp), dimension(N**2) :: dv, dvT
+      real(wp), dimension(N,N) :: xm
+      real(wp), dimension(N**2) :: dv, dvT
 
       !> Sets the internal variables.
       dv  = 0.0_wp
@@ -116,11 +117,11 @@ contains
 
    subroutine direct_solver_riccati_mat(self, vec_in, vec_out)
       !> Linear Operator.
-      class(rklib_riccati_mat), intent(in)  :: self
+      class(rklib_riccati_mat),   intent(in)  :: self
       !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
+      class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
+      class(abstract_vector_rdp), intent(out) :: vec_out
       !> Time-integrator.
       type(rks54_class) :: prop
       real(kind=wp)     :: dt = 0.1_wp

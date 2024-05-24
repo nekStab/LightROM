@@ -1,11 +1,14 @@
 module Ginzburg_Landau_Utils
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov_utils
-   use LightKrylov_expmlib
+   use LightKrylov, only : wp => dp
+   use LightKrylov_AbstractVectors
+   use LightKrylov_Constants
+   use LightKrylov_Utils
+   use LightKrylov_ExpmLib
    ! LightROM
    use LightROM_AbstractLTIsystems
-   use LightROM_utils
+   use LightROM_Utils
    ! Ginzburg Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators
@@ -48,14 +51,14 @@ contains
       type(lti_system),              intent(inout) :: LTI
       ! Initial condition
       type(state_vector),            intent(in) :: U0(:)
-      real(kind=wp),                 intent(in) :: S0(:,:)
+      real(wp),                      intent(in) :: S0(:,:)
       ! vector of dt values
-      real(kind=wp),                 intent(in) :: tauv(:)
+      real(wp),                      intent(in) :: tauv(:)
       ! vector of rank values
       integer,                       intent(in) :: rkv(:)
       ! vector of torders
       integer,                       intent(in) :: TOv(:)
-      real(kind=wp),                 intent(in) :: Tend
+      real(wp),                      intent(in) :: Tend
       integer,                       intent(in) :: nrep
       ! Optional
       logical, optional,             intent(in) :: ifsave
@@ -68,15 +71,15 @@ contains
       ! Internal variables
       type(LR_state),     allocatable           :: X     ! Controllability
       type(LR_state),     allocatable           :: Y     ! Observability
-      real(kind=wp)                             :: U_out(2*nx,rkmax)
-      real(kind=wp)                             :: X_out(2*nx,2*nx)
-      real(kind=wp),      allocatable           :: vals(:)
-      real(kind=wp)                             :: sfro
-      real(kind=wp)                             :: tau, Ttot, etime, etime_tot
+      real(wp)                                  :: U_out(2*nx,rkmax)
+      real(wp)                                  :: X_out(2*nx,2*nx)
+      real(wp),           allocatable           :: vals(:)
+      real(wp)                                  :: sfro
+      real(wp)                                  :: tau, Ttot, etime, etime_tot
       integer                                   :: i, j, k, ito, rk, irep, nsteps
       integer                                   :: info, torder, iostatus
-      real(kind=wp)                             :: lagsvd(rkmax)
-      real(kind=wp)                             :: res(N**2)
+      real(wp)                                  :: lagsvd(rkmax)
+      real(wp)                                  :: res(N**2)
       character*128      :: oname
       character*128      :: onameU
       character*128      :: onameS
@@ -128,12 +131,12 @@ contains
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
-                                                                     & exptA=exptA, iftrans=.false., ifverb=.false.)
+!change!                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
+!change!                                                                     & exptA=exptA, iftrans=.false., ifverb=.false.)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
-                  call dsval(X%S, vals)
+                  call sval(X%S, vals)
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Ttot
                      do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
@@ -222,12 +225,12 @@ contains
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, &
-                                                                     & exptA=exptA, iftrans=.true., ifverb=.false.)
+!change!                  call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, &
+!change!                                                                     & exptA=exptA, iftrans=.true., ifverb=.false.)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
-                  call dsval(Y%S, vals)
+                  call sval(Y%S, vals)
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Ttot
                      do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
@@ -290,11 +293,11 @@ contains
       type(lti_system),              intent(inout) :: LTI
       ! Initial condition
       type(state_vector),            intent(in) :: U0(:)
-      real(kind=wp),                 intent(in) :: S0(:,:)
+      real(wp),                      intent(in) :: S0(:,:)
       integer,                       intent(in) :: rk
-      real(kind=wp),                 intent(inout) :: tau
+      real(wp),                      intent(inout) :: tau
       integer,                       intent(inout) :: torder
-      real(kind=wp),                 intent(in) :: Tmax
+      real(wp),                      intent(in) :: Tmax
       integer,                       intent(in) :: nrep
       ! Optional
       logical, optional,             intent(in) :: ifsave
@@ -310,36 +313,36 @@ contains
       type(LR_state),     allocatable           :: X     ! Controllability
       type(LR_state),     allocatable           :: Y     ! Observability
       type(state_vector), allocatable           :: Utmp(:)
-      real(kind=wp)                             :: U0_in(2*nx, rkmax)
-      real(kind=wp)                             :: U_out(2*nx,rkmax)
-      real(kind=wp)                             :: X_out(2*nx,2*nx)
-      real(kind=wp),      allocatable           :: vecs(:,:)
-      real(kind=wp),      allocatable           :: vals(:)
-      real(kind=wp)                             :: sfro
-      real(kind=wp)                             :: Tend, Ttot, etime, etime_tot
+      real(wp)                                  :: U0_in(2*nx, rkmax)
+      real(wp)                                  :: U_out(2*nx,rkmax)
+      real(wp)                                  :: X_out(2*nx,2*nx)
+      real(wp),           allocatable           :: vecs(:,:)
+      real(wp),           allocatable           :: vals(:)
+      real(wp)                                  :: sfro
+      real(wp)                                  :: Tend, Ttot, etime, etime_tot
       integer                                   :: i, j, k, irep, nsteps
       integer                                   :: info, iostatus
-      real(kind=wp)                             :: lagsvd(rkmax)
-      real(kind=wp)                             :: res(N**2)
+      real(wp)                                  :: lagsvd(rkmax)
+      real(wp)                                  :: res(N**2)
 
       ! ROM
-      real(kind=wp),      allocatable           :: Swrk(:,:)
-      real(kind=wp),      allocatable           :: Ahat(:,:)
-      real(kind=wp),      allocatable           :: Bhat(:,:)
-      real(kind=wp),      allocatable           :: Chat(:,:)
-      real(kind=wp),      allocatable           :: D(:,:)
+      real(wp),           allocatable           :: Swrk(:,:)
+      real(wp),           allocatable           :: Ahat(:,:)
+      real(wp),           allocatable           :: Bhat(:,:)
+      real(wp),           allocatable           :: Chat(:,:)
+      real(wp),           allocatable           :: D(:,:)
 
       ! BT
       type(state_vector), allocatable           :: T(:)
       type(state_vector), allocatable           :: Tinv(:)
-      real(kind=wp),      allocatable           :: S(:)
-      real(kind=wp),      allocatable           :: U_load(:,:)
-      real(kind=wp),      allocatable           :: S_load(:,:)
+      real(wp),           allocatable           :: S(:)
+      real(wp),           allocatable           :: U_load(:,:)
+      real(wp),           allocatable           :: S_load(:,:)
 
       ! SVD
-      real(kind=wp)  :: U_svd(2*nx,2*nx)
-      real(kind=wp)  :: S_svd(rkmax)
-      real(kind=wp)  :: V_svd(rkmax,rkmax)
+      real(wp)       :: U_svd(2*nx,2*nx)
+      real(wp)       :: S_svd(rkmax)
+      real(wp)       :: V_svd(rkmax,rkmax)
 
       character*128      :: oname
       character*128      :: onameU
@@ -398,8 +401,8 @@ contains
             ! run integrator
             etime = 0.0_wp
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
-                                                               & exptA=exptA, iftrans=.false., ifverb=.false.)
+!change!            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
+!change!                                                               & exptA=exptA, iftrans=.false., ifverb=.false.)
             call system_clock(count=clock_stop)      ! Stop Timer
             etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
@@ -465,8 +468,8 @@ contains
             ! run integrator
             etime = 0.0_wp
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, &
-                                                               & exptA=exptA, iftrans=.true., ifverb=.false.)
+!change!            call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, &
+!change!                                                               & exptA=exptA, iftrans=.true., ifverb=.false.)
             call system_clock(count=clock_stop)      ! Stop Timer
             etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
@@ -503,7 +506,12 @@ contains
       ! compute sqrt of coefficient matrix X%S and right-multiply it to X%U
       Swrk = 0.0_wp
       call sqrtm(Swrk(1:rk,1:rk), X%S)
-      call mat_mult(Utmp, X%U, Swrk(1:rk,1:rk))
+      block
+      class(abstract_vector_rdp), allocatable :: Xwrk(:)
+      call linear_combination(Xwrk, X%U, Swrk(1:rk,1:rk))
+      call copy_basis(Utmp, Xwrk)
+      end block
+      !call linear_combination(Utmp, X%U, Swrk(1:rk,1:rk))
       call get_state(U0_in(:,1:rk), Utmp)
       ! compute SVD of updated X%U
       call svd(U0_in(:,1:rk), U_svd(:,1:2*nx), S_svd(1:rk), V_svd(1:rk,1:rk))
@@ -512,7 +520,12 @@ contains
       ! compute sqrt of coefficient matrix Y%S and right-multiply it to Y%U
       Swrk = 0.0_wp
       call sqrtm(Swrk(1:rk,1:rk), Y%S)
-      call mat_mult(Utmp, Y%U, Swrk(1:rk,1:rk))
+      block
+      class(abstract_vector_rdp), allocatable :: Xwrk(:)
+      call linear_combination(Xwrk, Y%U, Swrk(1:rk,1:rk))
+      call copy_basis(Utmp, Xwrk)
+      end block
+      !call linear_combination(Utmp, Y%U, Swrk(1:rk,1:rk))
       call get_state(U0_in(:,1:rk), Utmp)
       ! compute SVD of updated Y%U
       call svd(U0_in(:,1:rk), U_svd(:,1:2*nx), S_svd(1:rk), V_svd(1:rk,1:rk)) 
@@ -547,17 +560,17 @@ contains
       type(lti_system),              intent(inout) :: LTI
       !! Considered LTI system
       type(state_vector),            intent(in)    :: U0(:)
-      real(kind=wp),                 intent(in)    :: S0(:,:)
+      real(wp),                      intent(in)    :: S0(:,:)
       !! Initial condition
-      real(kind=wp),                 intent(in)    :: Qc(:,:)
+      real(wp),                      intent(in)    :: Qc(:,:)
       !! Measurement weights.
-      real(kind=wp),                 intent(in)    :: Rinv(:,:)
+      real(wp),                      intent(in)    :: Rinv(:,:)
       !! Inverse of the actuation weights.
-      real(kind=wp),                 intent(in)    :: tauv(:)
+      real(wp),                      intent(in)    :: tauv(:)
       !! vector of dt values
       integer,                       intent(in)    :: rkv(:)
       !! vector of rank values
-      real(kind=wp),                 intent(in)    :: Tend
+      real(wp),                      intent(in)    :: Tend
       integer,                       intent(in)    :: nrep
       ! Optional
       logical, optional,             intent(in)    :: ifsave
@@ -570,15 +583,15 @@ contains
       ! Internal variables
       type(LR_state),     allocatable              :: X     ! Controllability
       type(LR_state),     allocatable              :: Y     ! Observability
-      real(kind=wp)                                :: U_out(2*nx,rkmax)
-      real(kind=wp)                                :: X_out(2*nx,2*nx)
-      real(kind=wp),      allocatable              :: vecs(:,:)
-      real(kind=wp),      allocatable              :: vals(:)
-      real(kind=wp)                                :: sfro
-      real(kind=wp)                                :: tau, Ttot, etime, etime_tot
+      real(wp)                                     :: U_out(2*nx,rkmax)
+      real(wp)                                     :: X_out(2*nx,2*nx)
+      real(wp),           allocatable              :: vecs(:,:)
+      real(wp),           allocatable              :: vals(:)
+      real(wp)                                     :: sfro
+      real(wp)                                     :: tau, Ttot, etime, etime_tot
       integer                                      :: i, j, k, rk, irep, nsteps
       integer                                      :: info, torder, iostatus
-      real(kind=wp)                                :: res(N**2)
+      real(wp)                                     :: res(N**2)
       character*128      :: oname
       character*128      :: onameU
       character*128      :: onameS
@@ -614,9 +627,9 @@ contains
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, &
-                                                                     & Tend, tau, torder, info, &
-                                                                     & exptA=exptA, iftrans=.false., ifverb=verb)
+!change!                  call numerical_low_rank_splitting_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, &
+!change!                                                                     & Tend, tau, torder, info, &
+!change!                                                                     & exptA=exptA, iftrans=.false., ifverb=verb)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
@@ -648,13 +661,13 @@ contains
 
 
    subroutine run_kexpm_test(A, prop, U0, tauv, torder, N)
-      class(abstract_linop),         intent(inout) :: A
+      class(abstract_linop_rdp),     intent(inout) :: A
       !! Linear operator: A
-      class(abstract_linop),         intent(inout) :: prop
+      class(abstract_linop_rdp),     intent(inout) :: prop
       !! Linear operator: exponential propagator
-      class(abstract_vector),        intent(in)    :: U0
+      class(abstract_vector_rdp),    intent(in)    :: U0
       !! Abstract vector as a source
-      real(kind=wp),                 intent(in)    :: tauv(:)
+      real(wp),                      intent(in)    :: tauv(:)
       !! vector of dt values
       integer,                       intent(inout) :: torder
       !! torder
@@ -662,11 +675,11 @@ contains
       !! Number of repeats
 
       ! internal variables
-      class(abstract_vector),        allocatable   :: U, V_kryl, V_rk   ! scratch bases
+      class(abstract_vector_rdp),    allocatable   :: U, V_kryl, V_rk   ! scratch bases
       integer                                      :: i, j, info
-      real(kind=wp)                                :: tau
-      real(kind=wp)                                :: tv_kryl(N), tv_rk(N)
-      real(kind=wp)                                :: etime_kryl, etime_rk, stddev_kryl, stddev_rk
+      real(wp)                                     :: tau
+      real(wp)                                     :: tv_kryl(N), tv_rk(N)
+      real(wp)                                     :: etime_kryl, etime_rk, stddev_kryl, stddev_rk
       integer            :: clock_rate, clock_start, clock_stop
       !type(timer)                                  :: tmr
 
@@ -716,9 +729,9 @@ contains
             etime_rk = etime_rk + tv_rk(j)
             ! Check solution
             call V_kryl%axpby(1.0_wp, V_rk, -1.0_wp)
-            if (V_kryl%norm()/(2*nx) > 10*atol) then
+            if (V_kryl%norm()/(2*nx) > 10*atol_dp     ) then
                write(*,*) "Iteration", j, ": Solutions do not match!"
-               write(*,* ) " tol", 10*atol, "delta = ", V_kryl%norm()/(2*nx)
+               write(*,* ) " tol", 10*atol_dp     , "delta = ", V_kryl%norm()/(2*nx)
             end if
          end do
          tv_kryl = tv_kryl - etime_kryl/N
@@ -743,10 +756,10 @@ contains
       type(lti_system),              intent(inout) :: LTI
       ! Initial condition
       type(state_vector),            intent(inout)    :: U0(:)
-      real(kind=wp),                 intent(inout)    :: S0(:,:)
-      real(kind=wp),                 intent(in)    :: Tend
+      real(wp),                      intent(inout)    :: S0(:,:)
+      real(wp),                      intent(in)    :: Tend
       ! vector of dt values
-      real(kind=wp),                 intent(in)    :: tauv(:)
+      real(wp),                      intent(in)    :: tauv(:)
       ! vector of rank values
       integer,                       intent(in)    :: rkv(:)
       ! vector of torders
@@ -761,21 +774,21 @@ contains
       type(LR_state),                allocatable   :: X_state
       type(rk_lyapunov),             allocatable   :: RK_propagator
       type(state_matrix)                           :: X_mat(2)
-      real(kind=wp),                 allocatable   :: X_RKlib(:,:,:)
-      real(kind=wp)                                :: X_mat_ref(N,N)
-      real(kind=wp)                                :: U0_mat(N, rkmax)
+      real(wp),                      allocatable   :: X_RKlib(:,:,:)
+      real(wp)                                     :: X_mat_ref(N,N)
+      real(wp)                                     :: U0_mat(N, rkmax)
       integer                                      :: info
       integer                                      :: i, j, ito, rk, nsteps, torder
       integer                                      :: irep, nrep
-      real(kind=wp)                                :: etime, tau
+      real(wp)                                     :: etime, tau
       ! OUTPUT
-      real(kind=wp)                                :: U_out(N,rkmax)
-      real(kind=wp)                                :: X_out(N,N)
-      real(kind=wp)                                :: Bmat(N,2)
-      real(kind=wp)                                :: tmp(N,2)
-      real(kind=wp),      allocatable              :: U_load(:,:)
-      real(kind=wp)                                :: X_mat_flat(N**2)
-      real(kind=wp)                                :: res_flat(N**2)
+      real(wp)                                     :: U_out(N,rkmax)
+      real(wp)                                     :: X_out(N,N)
+      real(wp)                                     :: Bmat(N,2)
+      real(wp)                                     :: tmp(N,2)
+      real(wp),           allocatable              :: U_load(:,:)
+      real(wp)                                     :: X_mat_flat(N**2)
+      real(wp)                                     :: res_flat(N**2)
       character*128      :: oname
       character*128      :: onameU
       character*128      :: onameS
@@ -901,8 +914,8 @@ contains
                nsteps = nint(Tend/tau)
                ! run integrator
                call system_clock(count=clock_start)     ! Start Timer
-               call numerical_low_rank_splitting_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, torder, info, &
-                                                                     & exptA=exptA, iftrans=.false., ifverb=.false.)
+!change!             !call numerical_low_rank_splitting_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, torder, info, &
+!change!             !                                                      & exptA=exptA, iftrans=.false., ifverb=.false.)
                call system_clock(count=clock_stop)      ! Stop Timer
                etime = real(clock_stop-clock_start)/real(clock_rate)
                ! Reconstruct solution
@@ -937,8 +950,8 @@ contains
       integer,       intent(in) :: iunit
       character(*),  intent(in) :: problem
       integer,       intent(in) :: rk
-      real(kind=wp), intent(in) :: tau
-      real(kind=wp), intent(in) :: Tend
+      real(wp),      intent(in) :: tau
+      real(wp),      intent(in) :: Tend
       integer,       intent(in) :: torder
 
       write(iunit,*) '-----------------------'

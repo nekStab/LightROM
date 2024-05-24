@@ -1,9 +1,11 @@
 module Ginzburg_Landau_Base
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov_utils, only : assert_shape
+   use LightKrylov, only: wp => dp
+   use LightKrylov_Utils, only : assert_shape
    ! LightROM
    use LightROM_AbstractLTIsystems
+   use LightROM_Utils   ! zero_basis for now
    ! Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
@@ -25,16 +27,16 @@ module Ginzburg_Landau_Base
    !-------------------------------
 
    ! Mesh related parameters.
-   real(kind=wp), parameter :: L  = 50.0_wp ! Domain length
-   integer      , parameter :: nx = 128     ! Number of grid points (excluding boundaries).
-   real(kind=wp)            :: dx           ! Grid size.
+   real(wp), parameter :: L  = 50.0_wp ! Domain length
+   integer,  parameter :: nx = 128     ! Number of grid points (excluding boundaries).
+   real(wp)            :: dx           ! Grid size.
 
    !-------------------------------------------
    !-----     LIGHTKRYLOV VECTOR TYPE     -----
    !-------------------------------------------
 
-   type, extends(abstract_vector), public :: state_vector
-      real(kind=wp) :: state(2*nx) = 0.0_wp
+   type, extends(abstract_vector_rdp), public :: state_vector
+      real(wp) :: state(2*nx) = 0.0_wp
    contains
       private
       procedure, pass(self), public :: zero
@@ -48,7 +50,7 @@ module Ginzburg_Landau_Base
    !-----     LIGHTKRYLOV SYM LOW RANK STATE TYPE     -----
    !-------------------------------------------------------
 
-   type, extends(abstract_sym_low_rank_state), public :: LR_state
+   type, extends(abstract_sym_low_rank_state_rdp), public :: LR_state
    contains
       private
       procedure, pass(self), public :: initialize_LR_state
@@ -59,34 +61,34 @@ module Ginzburg_Landau_Base
    !-------------------------------
 
    ! Physical parameters.
-   complex(kind=wp), parameter :: nu    = cmplx(2.0_wp, 0.2_wp, kind=wp)
-   complex(kind=wp), parameter :: gamma = cmplx(1.0_wp, -1.0_wp, kind=wp)
-   real(kind=wp)   , parameter :: mu_0  = 0.38_wp
-   real(kind=wp)   , parameter :: c_mu  = 0.2_wp
-   real(kind=wp)   , parameter :: mu_2  = -0.01_wp
-   real(kind=wp)               :: mu(1:nx)
+   complex(wp), parameter :: nu    = cmplx(2.0_wp, 0.2_wp, wp)
+   complex(wp), parameter :: gamma = cmplx(1.0_wp, -1.0_wp, wp)
+   real(wp),    parameter :: mu_0  = 0.38_wp
+   real(wp),    parameter :: c_mu  = 0.2_wp
+   real(wp),    parameter :: mu_2  = -0.01_wp
+   real(wp)               :: mu(1:nx)
 
    ! Input-Output system parameters
-   real(kind=wp)               :: weight(2*nx)       ! integration weights
-   integer,       parameter    :: rk_b = 2           ! number of inputs to the system
-   real(kind=wp), parameter    :: x_b = -11.0_wp     ! location of input Gaussian
-   real(kind=wp), parameter    :: s_b = 1.0_wp       ! variance of input Gaussian
-   type(state_vector)          :: B(rk_b)
-   real(kind=wp), parameter    :: x_c = sqrt(-2.0_wp*(mu_0 - c_mu**2)/mu_2) ! location of input Gaussian
-   real(kind=wp), parameter    :: s_c = 1.0_wp       ! variance of input Gaussian
-   integer,       parameter    :: rk_c = 2           ! number of outputs to the system
-   type(state_vector)          :: CT(rk_c)
-   real(kind=wp)               :: Qc(rk_c,rk_c)
-   real(kind=wp)               :: Rinv(rk_b,rk_b)
+   real(wp)               :: weight(2*nx)       ! integration weights
+   integer,  parameter    :: rk_b = 2           ! number of inputs to the system
+   real(wp), parameter    :: x_b = -11.0_wp     ! location of input Gaussian
+   real(wp), parameter    :: s_b = 1.0_wp       ! variance of input Gaussian
+   type(state_vector)     :: B(rk_b)
+   real(wp), parameter    :: x_c = sqrt(-2.0_wp*(mu_0 - c_mu**2)/mu_2) ! location of input Gaussian
+   real(wp), parameter    :: s_c = 1.0_wp       ! variance of input Gaussian
+   integer,  parameter    :: rk_c = 2           ! number of outputs to the system
+   type(state_vector)     :: CT(rk_c)
+   real(wp)               :: Qc(rk_c,rk_c)
+   real(wp)               :: Rinv(rk_b,rk_b)
 
    ! Data matrices for RK lyap
-   integer,       parameter    :: N = 2*nx           ! Number of grid points (excluding boundaries).
-   real(kind=wp)               :: weight_mat(N**2)   ! integration weights
-   real(kind=wp)               :: BBTW_flat(N**2)
-   real(kind=wp)               :: CTCW_flat(N**2)
+   integer,  parameter    :: N = 2*nx           ! Number of grid points (excluding boundaries).
+   real(wp)               :: weight_mat(N**2)   ! integration weights
+   real(wp)               :: BBTW_flat(N**2)
+   real(wp)               :: CTCW_flat(N**2)
    ! Data matrices for Riccatis
-   real(kind=wp)               :: CTQcCW_mat(N,N)
-   real(kind=wp)               :: BRinvBTW_mat(N,N)
+   real(wp)               :: CTQcCW_mat(N,N)
+   real(wp)               :: BRinvBTW_mat(N,N)
 
 contains
 
@@ -97,10 +99,10 @@ contains
    subroutine initialize_parameters()
       implicit none
       ! Mesh array.
-      real(kind=wp), allocatable :: x(:)
-      real(kind=wp)              :: x2(1:2*nx)
-      real(kind=wp)              :: tmpv(N, 2)
-      integer                    :: i
+      real(wp), allocatable :: x(:)
+      real(wp)              :: x2(1:2*nx)
+      real(wp)              :: tmpv(N, 2)
+      integer               :: i
 
       ! Construct mesh.
       x = linspace(-L/2, L/2, nx+2)
@@ -172,10 +174,10 @@ contains
       return
    end subroutine zero
 
-   real(kind=wp) function dot(self, vec) result(alpha)
+   real(wp) function dot(self, vec) result(alpha)
       ! weighted inner product
-      class(state_vector)   , intent(in) :: self
-      class(abstract_vector), intent(in) :: vec
+      class(state_vector),        intent(in) :: self
+      class(abstract_vector_rdp), intent(in) :: vec
       select type(vec)
       type is(state_vector)
          alpha = dot_product(self%state, weight*vec%state)
@@ -185,15 +187,15 @@ contains
 
    subroutine scal(self, alpha)
       class(state_vector), intent(inout) :: self
-      real(kind=wp)      , intent(in)    :: alpha
+      real(wp),            intent(in)    :: alpha
       self%state = self%state * alpha
       return
    end subroutine scal
 
    subroutine axpby(self, alpha, vec, beta)
-      class(state_vector)   , intent(inout) :: self
-      class(abstract_vector), intent(in)    :: vec
-      real(kind=wp)         , intent(in)    :: alpha, beta
+      class(state_vector),        intent(inout) :: self
+      class(abstract_vector_rdp), intent(in)    :: vec
+      real(wp),                   intent(in)    :: alpha, beta
       select type(vec)
       type is(state_vector)
          self%state = alpha*self%state + beta*vec%state
@@ -206,7 +208,7 @@ contains
       logical, optional,   intent(in)    :: ifnorm
       ! internals
       logical :: normalize
-      real(kind=wp) :: alpha
+      real(wp) :: alpha
       normalize = optval(ifnorm,.true.)
       call random_number(self%state)
       if (normalize) then
@@ -222,8 +224,8 @@ contains
 
    subroutine get_state(mat_out, state_in)
       !! Utility function to transfer data from a state vector to a real array
-      real(kind=wp),          intent(out) :: mat_out(:,:)
-      class(abstract_vector), intent(in)  :: state_in(:)
+      real(wp),                   intent(out) :: mat_out(:,:)
+      class(abstract_vector_rdp), intent(in)  :: state_in(:)
       ! internal variables
       integer :: k, kdim
       mat_out = 0.0_wp
@@ -240,15 +242,15 @@ contains
 
    subroutine set_state(state_out, mat_in)
       !! Utility function to transfer data from a real array to a state vector
-      class(abstract_vector), intent(out) :: state_out(:)
-      real(kind=wp),          intent(in)  :: mat_in(:,:)
+      class(abstract_vector_rdp), intent(out) :: state_out(:)
+      real(wp),                   intent(in)  :: mat_in(:,:)
       ! internal variables
       integer       :: k, kdim
       select type (state_out)
       type is (state_vector)
          kdim = size(state_out)
          call assert_shape(mat_in, (/ 2*nx, kdim /), 'set_state -> state_vector', 'mat_in')
-         call mat_zero(state_out)
+         call zero_basis(state_out)
          do k = 1, kdim
             state_out(k)%state = mat_in(:,k)
          end do
@@ -258,8 +260,8 @@ contains
 
    subroutine init_rand(state, ifnorm)
       !! Utility function to initialize a state vector with random data
-      class(abstract_vector), intent(inout)  :: state(:)
-      logical, optional,      intent(in)     :: ifnorm
+      class(abstract_vector_rdp), intent(inout)  :: state(:)
+      logical, optional,          intent(in)     :: ifnorm
       ! internal variables
       integer :: k, kdim
       logical :: normalize
@@ -279,10 +281,10 @@ contains
    !------------------------------------------------------
 
    subroutine initialize_LR_state(self, U, S, rk)
-      class(LR_state),        intent(inout) :: self
-      class(abstract_vector), intent(in)    :: U(:)
-      real(kind=wp),          intent(in)    :: S(:,:)
-      integer,                intent(in)    :: rk
+      class(LR_state),            intent(inout) :: self
+      class(abstract_vector_rdp), intent(in)    :: U(:)
+      real(wp),                   intent(in)    :: S(:,:)
+      integer,                    intent(in)    :: rk
 
       if (rk > size(U)) then
          write(*,*) 'Input state rank is lower than the chosen rank! Abort.'

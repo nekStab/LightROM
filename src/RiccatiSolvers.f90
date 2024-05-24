@@ -4,40 +4,66 @@ module LightROM_RiccatiSolvers
 
    ! LightKrylov modules
    use LightKrylov
-   use LightKrylov_expmlib
-   use lightkrylov_BaseKrylov
+   use LightKrylov, only: wp => dp
+   use LightKrylov_AbstractVectors
+   use LightKrylov_ExpmLib
+   use Lightkrylov_BaseKrylov
    ! LightROM modules
    use LightROM_LyapunovUtils
    use LightROM_LyapunovSolvers
    use LightROM_RiccatiUtils
-   use lightROM_AbstractLTIsystems
+   use LightROM_AbstractLTIsystems
+   use LightROM_Utils   ! zero_basis for now
    ! Standard Library
    use stdlib_optval, only : optval
    use stdlib_linalg, only : eye
    implicit none
 
    ! global scratch arrays
-   class(abstract_vector),  allocatable   :: Uwrk0(:)
-   class(abstract_vector),  allocatable   :: Uwrk1(:)
-   class(abstract_vector),  allocatable   :: U1(:)
-   class(abstract_vector),  allocatable   :: QU(:)
-   real(kind=wp),           allocatable   :: Swrk0(:,:)
-   real(kind=wp),           allocatable   :: Swrk1(:,:)
+   class(abstract_vector_rdp), allocatable   :: Uwrk0(:)
+   class(abstract_vector_rdp), allocatable   :: Uwrk1(:)
+   class(abstract_vector_rdp), allocatable   :: U1(:)
+   class(abstract_vector_rdp), allocatable   :: QU(:)
+   real(wp),                   allocatable   :: Swrk0(:,:)
+   real(wp),                   allocatable   :: Swrk1(:,:)
    ! global scratch arrays for the predictor step
-   class(abstract_vector),  allocatable   :: U0(:)
-   class(abstract_vector),  allocatable   :: T0(:)
-   class(abstract_vector),  allocatable   :: Ut(:)
-   class(abstract_vector),  allocatable   :: Tt(:)
-   real(kind=wp),           allocatable   :: S0(:,:)
+   class(abstract_vector_rdp), allocatable   :: U0(:)
+   class(abstract_vector_rdp), allocatable   :: T0(:)
+   class(abstract_vector_rdp), allocatable   :: Ut(:)
+   class(abstract_vector_rdp), allocatable   :: Tt(:)
+   real(wp),                   allocatable   :: S0(:,:)
 
    private
    public :: numerical_low_rank_splitting_riccati_integrator
-   public :: G_forward_map_riccati, K_step_riccati, S_step_riccati, L_step_riccati
+   public :: G_forward_map_riccati
+   public :: K_step_riccati
+   public :: S_step_riccati
+   public :: L_step_riccati
+
+   interface numerical_low_rank_splitting_riccati_integrator
+      module procedure numerical_low_rank_splitting_riccati_integrator_rdp
+   end interface
+
+   interface G_forward_map_riccati
+      module procedure G_forward_map_riccati_rdp
+   end interface
+
+   interface K_step_riccati
+      module procedure K_step_riccati_rdp
+   end interface
+
+   interface S_step_riccati
+      module procedure S_step_riccati_rdp
+   end interface
+
+   interface L_step_riccati
+      module procedure L_step_riccati_rdp
+   end interface
 
    contains
 
-   subroutine numerical_low_rank_splitting_riccati_integrator(X, A, B, CT, Qc, Rinv, Tend, tau, torder, info, &
-                                                               & exptA, iftrans, ifverb)
+   subroutine numerical_low_rank_splitting_riccati_integrator_rdp(X, A, B, CT, Qc, Rinv, Tend, tau, torder, info, &
+                                                                   & exptA, iftrans, ifverb)
       !! Numerical integrator for the matrix-valued differential Riccati equation of the form
       !!
       !!    $$\dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
@@ -105,40 +131,40 @@ module LightROM_RiccatiSolvers
       !! - Mena, H., Ostermann, A., Pfurtscheller, L.-M., Piazzola, C. (2018). "Numerical low-rank 
       !!   approximation of matrix differential equations", Journal of Computational and Applied Mathematics,
       !!   340, 602-614
-      class(abstract_sym_low_rank_state),  intent(inout) :: X
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_linop),               intent(inout) :: A
+      class(abstract_linop_rdp),              intent(inout) :: A
       !! Linear operator.
-      class(abstract_vector),              intent(in)    :: B(:)
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
       !! System input.
-      class(abstract_vector),              intent(in)    :: CT(:)
+      class(abstract_vector_rdp),             intent(in)    :: CT(:)
       !! System output.
-      real(kind=wp),                       intent(in)    :: Qc(:,:)
+      real(wp),                               intent(in)    :: Qc(:,:)
       !! Measurement weights.
-      real(kind=wp),                       intent(in)    :: Rinv(:,:)
+      real(wp),                               intent(in)    :: Rinv(:,:)
       !! Inverse of the actuation weights.
-      real(kind=wp),                       intent(in)    :: Tend
+      real(wp),                               intent(in)    :: Tend
       !! Integration time horizon. 
-      real(kind=wp),                       intent(inout) :: tau
+      real(wp),                               intent(inout) :: tau
       !! Desired time step. The avtual time-step will be computed such as to reach Tend in an integer number
       !! of steps.
-      integer,                             intent(in)    :: torder
+      integer,                                intent(in)    :: torder
       !! Order of time integration. Only 1st (Lie splitting) and 2nd (Strang splitting) orders are implemented.
-      integer,                             intent(out)   :: info
+      integer,                                intent(out)   :: info
       !! Information flag.
-      procedure(abstract_exptA), optional                :: exptA
+      procedure(abstract_exptA_rdp), optional               :: exptA
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
-      logical,                   optional, intent(in)    :: iftrans
+      logical,                   optional,    intent(in)    :: iftrans
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
-      logical,                   optional, intent(in)    :: ifverb
+      logical,                   optional,    intent(in)    :: ifverb
       !! Toggle verbosity
 
       ! Internal variables   
-      integer                                            :: istep, nsteps, iostep
-      real(kind=wp)                                      :: T
-      logical                                            :: verbose
-      logical                                            :: trans
-      procedure(abstract_exptA), pointer                 :: p_exptA => null()
+      integer                                                :: istep, nsteps, iostep
+      real(wp)                                               :: T
+      logical                                                :: verbose
+      logical                                                :: trans
+      procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
 
       ! Optional arguments
       trans = optval(iftrans, .false.)
@@ -146,7 +172,7 @@ module LightROM_RiccatiSolvers
       if (present(exptA)) then
          p_exptA => exptA
       else
-         p_exptA => k_exptA
+         p_exptA => exptA !k_exptA_rdp
       endif
 
       T = 0.0_wp
@@ -161,7 +187,7 @@ module LightROM_RiccatiSolvers
 
       dlra : do istep = 1, nsteps
          ! dynamical low-rank approximation solver
-         call numerical_low_rank_splitting_riccati_step(X, A, B, CT, Qc, Rinv, tau, torder, info, p_exptA, trans)
+         call numerical_low_rank_splitting_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, torder, info, p_exptA, trans)
 
          T = T + tau
          !> here we can do some checks such as whether we have reached steady state
@@ -185,39 +211,39 @@ module LightROM_RiccatiSolvers
       if (allocated(S0)) deallocate(S0)
 
       return
-   end subroutine numerical_low_rank_splitting_riccati_integrator
+   end subroutine numerical_low_rank_splitting_riccati_integrator_rdp
 
    !-----------------------------
    !-----     UTILITIES     -----
    !-----------------------------
 
-   subroutine numerical_low_rank_splitting_riccati_step(X, A, B, CT, Qc, Rinv, tau, torder, info, exptA, iftrans)
-      class(abstract_sym_low_rank_state),  intent(inout) :: X
+   subroutine numerical_low_rank_splitting_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, torder, info, exptA, iftrans)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_linop),               intent(inout) :: A
+      class(abstract_linop_rdp),              intent(inout) :: A
       !! Linear operator.
-      class(abstract_vector),              intent(in)    :: B(:)
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
       !! System input.
-      class(abstract_vector),              intent(in)    :: CT(:)
+      class(abstract_vector_rdp),             intent(in)    :: CT(:)
       !! System output.
-      real(kind=wp),                       intent(in)    :: Qc(:,:)
+      real(wp),                               intent(in)    :: Qc(:,:)
       !! Measurement weights.
-      real(kind=wp),                       intent(in)    :: Rinv(:,:)
+      real(wp),                               intent(in)    :: Rinv(:,:)
       !! Inverse of the actuation weights.
-      real(kind=wp),                       intent(inout) :: tau
+      real(wp),                               intent(inout) :: tau
       !! Time step.
-      integer,                             intent(in)    :: torder
+      integer,                                intent(in)    :: torder
       !! Order of time integration. Only 1st (Lie splitting) and 2nd (Strang splitting) orders are implemented.
-      integer,                             intent(out)   :: info
+      integer,                                intent(out)   :: info
       !! Information flag.
-      procedure(abstract_exptA), optional                :: exptA
+      procedure(abstract_exptA_rdp), optional               :: exptA
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
-      logical,                   optional, intent(in)    :: iftrans
+      logical,                   optional,    intent(in)    :: iftrans
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
 
       ! Internal variables
-      integer                                            :: istep, nsteps, integrator, rk
-      logical                                            :: trans
+      integer                                               :: istep, nsteps, integrator, rk
+      logical                                               :: trans
 
       ! Optional argument
       trans = optval(iftrans, .false.)
@@ -253,28 +279,28 @@ module LightROM_RiccatiSolvers
          if (.not. allocated(Ut)) allocate(Ut(1:rk), source=X%U(1:rk))
          if (.not. allocated(Tt)) allocate(Tt(1:rk), source=X%U(1:rk))
          if (.not. allocated(S0)) allocate(S0(1:rk,1:rk))
-         call mat_zero(U0); call mat_zero(T0); call mat_zero(Ut); call mat_zero(Tt); S0 = 0.0_wp
+         call zero_basis(U0); call zero_basis(T0); call zero_basis(Ut); call zero_basis(Tt); S0 = 0.0_wp
          ! scratch arrays
          if (.not. allocated(Uwrk0)) allocate(Uwrk0(1:rk), source=X%U(1:rk))
          if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk))
-         call mat_zero(Uwrk0); Swrk0 = 0.0_wp
+         call zero_basis(Uwrk0); Swrk0 = 0.0_wp
          ! second order step
          call M_forward_map        (X, A,                  0.5*tau, info, exptA, trans)
          ! Save current state
-         call mat_copy(U0, X%U); S0 = X%S                         ! --> save      
+         call copy_basis(U0, X%U); S0 = X%S                                 ! --> save      
          ! Precompute T0
-         call mat_mult(Uwrk0, U0, S0)                             ! K0 = U0 @ S0
-         call apply_p_outerproduct_w(Swrk0, U0, Uwrk0, B, Rinv)   ! (U0.T) @ B @ R^(-1) @ B.T @ K0
-         call mat_mult(T0, Uwrk0, Swrk0)                          ! K0 @ Swrk0
+         call linear_combination(Uwrk0, U0, S0)                      ! K0 = U0 @ S0
+         call apply_premult_outerprod_w(Swrk0, U0, Uwrk0, B, Rinv)   ! (U0.T) @ B @ R^(-1) @ B.T @ K0
+         call linear_combination(T0, Uwrk0, Swrk0)                   ! K0 @ Swrk0
          ! First order integration
          call G_forward_map_riccati(X,    B, CT, Qc, Rinv,     tau, info, ifpred=.true., T0=T0)
          ! Precompute Tt
-         call mat_copy(Ut, X%U)                                   ! --> save
-         call mat_mult(Uwrk0, X%U, X%S)                           ! Kt = Ut @ St
-         call apply_p_outerproduct_w(Swrk0, X%U, Uwrk0, B, Rinv)  ! (Ut.T) @ B @ R^(-1) @ B.T @ Kt
-         call mat_mult(Tt, Uwrk0, Swrk0)                          ! Kt @ Swrk0
+         call copy_basis(Ut, X%U)                                           ! --> save
+         call linear_combination(Uwrk0, X%U, X%S)                    ! Kt = Ut @ St
+         call apply_premult_outerprod_w(Swrk0, X%U, Uwrk0, B, Rinv)  ! (Ut.T) @ B @ R^(-1) @ B.T @ Kt
+         call linear_combination(Tt, Uwrk0, Swrk0)                   ! Kt @ Swrk0
          ! Reset state
-         call mat_copy(X%U, U0); X%S = S0
+         call copy_basis(X%U, U0); X%S = S0
          ! Second order integration
          call G_forward_map_riccati(X,    B, CT, Qc, Rinv,     tau, info, ifpred=.false., T0=T0, Tt=Tt, U0=U0, Ut=Ut)
          call M_forward_map        (X, A,                  0.5*tau, info, exptA, trans)
@@ -282,29 +308,29 @@ module LightROM_RiccatiSolvers
 
       return
 
-   end subroutine numerical_low_rank_splitting_riccati_step
+   end subroutine numerical_low_rank_splitting_riccati_step_rdp
 
-   subroutine G_forward_map_riccati(X, B, CT, Qc, Rinv, tau, info, ifpred, T0, Tt, U0, Ut)
-      class(abstract_sym_low_rank_state),  intent(inout) :: X
+   subroutine G_forward_map_riccati_rdp(X, B, CT, Qc, Rinv, tau, info, ifpred, T0, Tt, U0, Ut)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_vector),              intent(in)    :: B(:)
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
       !! System input.
-      class(abstract_vector),              intent(in)    :: CT(:)
+      class(abstract_vector_rdp),             intent(in)    :: CT(:)
       !! System output.
-      real(kind=wp),                       intent(in)    :: Qc(:,:)
+      real(wp),                               intent(in)    :: Qc(:,:)
       !! Measurement weights.
-      real(kind=wp),                       intent(in)    :: Rinv(:,:)
+      real(wp),                               intent(in)    :: Rinv(:,:)
       !! Inverse of the actuation weights.
-      real(kind=wp),                       intent(in)    :: tau
+      real(wp),                               intent(in)    :: tau
       !! Time step.
-      integer,                             intent(out)   :: info
+      integer,                                intent(out)   :: info
       !! Information flag.
-      logical,                optional,    intent(in)    :: ifpred
+      logical,                optional,       intent(in)    :: ifpred
       !! For Strang splitting: Determine whether we are in the predictor or corrector step
-      class(abstract_vector), optional,    intent(inout) :: T0(:)  ! will be reused as Gamma
-      class(abstract_vector), optional,    intent(in)    :: Tt(:)
-      class(abstract_vector), optional,    intent(in)    :: U0(:)
-      class(abstract_vector), optional,    intent(in)    :: Ut(:)
+      class(abstract_vector_rdp), optional,   intent(inout) :: T0(:)  ! will be reused as Gamma
+      class(abstract_vector_rdp), optional,   intent(in)    :: Tt(:)
+      class(abstract_vector_rdp), optional,   intent(in)    :: U0(:)
+      class(abstract_vector_rdp), optional,   intent(in)    :: Ut(:)
       !! Intermediate values
       
       ! Internal variables
@@ -314,7 +340,7 @@ module LightROM_RiccatiSolvers
       if (.not. allocated(U1))  allocate(U1( 1:rk), source=X%U(1)); 
       if (.not. allocated(QU))  allocate(QU( 1:rk), source=X%U(1));
       if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk))
-      call mat_zero(U1); call mat_zero(QU)
+      call zero_basis(U1); call zero_basis(QU)
 
       if (present(ifpred)) then
          ! second order in time
@@ -328,12 +354,17 @@ module LightROM_RiccatiSolvers
             call S_step_riccati(X, U1, QU, B, CT, Qc, Rinv, 0.5*tau, info, reverse=.false.)
             call L_step_riccati(X, U1,     B, CT, Qc, Rinv,     tau, info)
             ! Compute Gamma = 0.5*(T0 @ (U1.T @ U0) + Tt @ (U1.T @ Ut))
-            call mat_zero(QU); Swrk0 = 0.0_wp                           ! we use QU as a scratch array
-            call mat_mult(Swrk0, X%U, U0); call mat_mult(QU, T0, Swrk0)
-            call mat_mult(Swrk0, X%U, Ut); call mat_mult(T0, Tt, Swrk0) ! overwrite T0 with Gamma
-            call mat_axpby(T0, 0.5_wp, QU, 0.5_wp)
+            block
+            class(abstract_vector_rdp), allocatable :: Xwrk(:)
+            call zero_basis(QU); Swrk0 = 0.0_wp                           ! we use QU as a scratch array
+            call innerprod_matrix(Swrk0, X%U, U0)
+            call linear_combination(Xwrk, T0, Swrk0); call copy_basis(QU, Xwrk)
+            call innerprod_matrix(Swrk0, X%U, Ut)
+            call linear_combination(Xwrk, Tt, Swrk0); call copy_basis(T0, Xwrk) ! overwrite T0 with Gamma
+            call axpby_basis(T0, 0.5_wp, QU, 0.5_wp)
+            end block
             ! Update X to most recent value
-            call mat_copy(X%U, U1)
+            call copy_basis(X%U, U1)
             ! reverse steps based on Gamma
             call S_step_riccati(X, U1, QU, B, CT, Qc, Rinv, 0.5*tau, info, reverse=.true., NL=T0)
             call K_step_riccati(X, U1, QU, B, CT, Qc, Rinv, 0.5*tau, info, reverse=.true., NL=T0)
@@ -346,39 +377,39 @@ module LightROM_RiccatiSolvers
       end if
       
       ! Copy updated low-rank factors to output
-      call mat_copy(X%U, U1)
+      call copy_basis(X%U, U1)
                
       return
-   end subroutine G_forward_map_riccati
+   end subroutine G_forward_map_riccati_rdp
 
-   subroutine K_step_riccati(X, U1, QU, B, CT, Qc, Rinv, tau, info, reverse, NL)
-      class(abstract_sym_low_rank_state),  intent(inout) :: X
+   subroutine K_step_riccati_rdp(X, U1, QU, B, CT, Qc, Rinv, tau, info, reverse, NL)
+      class(abstract_sym_low_rank_state_rdp),intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_vector),             intent(out)    :: U1(:)
+      class(abstract_vector_rdp),            intent(out)    :: U1(:)
       !! Intermediate low-rank factor.
-      class(abstract_vector),             intent(inout)  :: QU(:)
+      class(abstract_vector_rdp),            intent(inout)  :: QU(:)
       !! Precomputed application of the inhomogeneity.
-      class(abstract_vector),              intent(in)    :: B(:)
+      class(abstract_vector_rdp),            intent(in)     :: B(:)
       !! System input.
-      class(abstract_vector),              intent(in)    :: CT(:)
+      class(abstract_vector_rdp),            intent(in)     :: CT(:)
       !! System output.
-      real(kind=wp),                      intent(in)     :: Qc(:,:)
+      real(wp),                              intent(in)     :: Qc(:,:)
       !! Measurement weights.
-      real(kind=wp),                      intent(in)     :: Rinv(:,:)
+      real(wp),                              intent(in)     :: Rinv(:,:)
       !! Inverse of the actuation weights.
-      real(kind=wp),                      intent(in)     :: tau
+      real(wp),                              intent(in)     :: tau
       !! Time step.
-      integer,                            intent(out)    :: info
+      integer,                               intent(out)    :: info
       !! Information flag.
-      logical, optional,                  intent(in)     :: reverse
+      logical, optional,                     intent(in)     :: reverse
       !! For Strang splitting: Determine if we are in forward or reverse branch
-      class(abstract_vector), optional,   intent(in)     :: NL(:)
+      class(abstract_vector_rdp), optional,  intent(in)     :: NL(:)
       !! Precomputed non-linear term.
 
       ! Internal variables
-      integer,                            allocatable    :: perm(:)   ! Permutation vector
-      integer                                            :: rk
-      logical                                            :: reverse_order
+      integer,                               allocatable    :: perm(:)   ! Permutation vector
+      integer                                               :: rk
+      logical                                               :: reverse_order
 
       ! Optional arguments
       reverse_order = optval(reverse, .false.)
@@ -389,59 +420,63 @@ module LightROM_RiccatiSolvers
       if (.not. allocated(Uwrk0)) allocate(Uwrk0(1:rk), source=X%U(1)); 
       if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk)); 
       allocate(perm(1:rk)); perm = 0
-      call mat_zero(Uwrk0); Swrk0 = 0.0_wp
+      call zero_basis(Uwrk0); Swrk0 = 0.0_wp
 
       ! Constant part --> QU
       if (.not. reverse_order) then
          ! compute QU and pass to S step
-         call apply_outerproduct_w(QU, X%U, CT, Qc)
+         call apply_outerprod_w(QU, X%U, CT, Qc)
       end if
 
       ! Non-linear part --> Uwrk0
-      call mat_mult(U1, X%U, X%S)                              ! K0 = U0 @ S0
+      block
+      class(abstract_vector_rdp), allocatable :: Xwrk(:)
+      call linear_combination(Xwrk, X%U, X%S)                       ! K0 = U0 @ S0
+      call copy_basis(U1, Xwrk)
+      end block
       if (.not.present(NL)) then
-         call apply_p_outerproduct_w(Swrk0, X%U, U1, B, Rinv)  ! (U0.T) @ B @ R^(-1) @ B.T @ K0
-         call mat_mult(Uwrk0, U1, Swrk0)                       ! K0 @ Swrk0
+         call apply_premult_outerprod_w(Swrk0, X%U, U1, B, Rinv)  ! (U0.T) @ B @ R^(-1) @ B.T @ K0
+         call linear_combination(Uwrk0, U1, Swrk0)                ! K0 @ Swrk0
       else  ! non-linear term precomputed
-         call mat_copy(Uwrk0, NL)
+         call copy_basis(Uwrk0, NL)
       end if
       
       ! Combine to form G( K @ U.T ) @ U --> Uwrk0
-      call mat_axpby(Uwrk0, -1.0_wp, QU, 1.0_wp)
+      call axpby_basis(Uwrk0, -1.0_wp, QU, 1.0_wp)
 
       ! Construct intermediate solution U1
-      call mat_axpby(U1, 1.0_wp, Uwrk0, tau)                   ! K0 + tau*Kdot
+      call axpby_basis(U1, 1.0_wp, Uwrk0, tau)                           ! K0 + tau*Kdot
 
       ! Orthonormalize in-place
-      call qr_factorization(U1, Swrk0, perm, info, ifpivot = .true.)
-      call apply_permutation(Swrk0, perm, trans = .true.)
+      call qr(U1, Swrk0, perm, info)
+      call apply_inverse_permutation_matrix(Swrk0, perm)
       X%S = Swrk0
 
       return
-   end subroutine K_step_riccati
+   end subroutine K_step_riccati_rdp
 
-   subroutine S_step_riccati(X, U1, QU, B, CT, Qc, Rinv, tau, info, reverse, NL)
-      class(abstract_sym_low_rank_state), intent(inout) :: X
+   subroutine S_step_riccati_rdp(X, U1, QU, B, CT, Qc, Rinv, tau, info, reverse, NL)
+      class(abstract_sym_low_rank_state_rdp),intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_vector),             intent(in)    :: U1(:)
+      class(abstract_vector_rdp),            intent(in)    :: U1(:)
       !! Intermediate low-rank factor.
-      class(abstract_vector),             intent(inout) :: QU(:)
+      class(abstract_vector_rdp),            intent(inout) :: QU(:)
       !! Precomputed application of the inhomogeneity.
-      class(abstract_vector),              intent(in)    :: B(:)
+      class(abstract_vector_rdp),            intent(in)    :: B(:)
       !! System input.
-      class(abstract_vector),              intent(in)    :: CT(:)
+      class(abstract_vector_rdp),            intent(in)    :: CT(:)
       !! System output.
-      real(kind=wp),                      intent(in)    :: Qc(:,:)
+      real(wp),                              intent(in)    :: Qc(:,:)
       !! Measurement weights.
-      real(kind=wp),                      intent(in)    :: Rinv(:,:)
+      real(wp),                              intent(in)    :: Rinv(:,:)
       !! Inverse of the actuation weights.
-      real(kind=wp),                      intent(in)    :: tau
+      real(wp),                              intent(in)    :: tau
       !! Time step.
-      integer,                            intent(out)   :: info
+      integer,                               intent(out)   :: info
       !! Information flag.
-      logical, optional,                  intent(in)    :: reverse
+      logical, optional,                     intent(in)    :: reverse
       !! For Strang splitting: Determine if we are in forward or reverse branch
-      class(abstract_vector), optional,   intent(in)    :: NL(:)
+      class(abstract_vector_rdp), optional,  intent(in)    :: NL(:)
       !! Precomputed non-linear term.
 
       ! Internal variables
@@ -461,47 +496,47 @@ module LightROM_RiccatiSolvers
       ! Constant part --> Swrk0
       if (reverse_order) then
          ! Compute QU and pass to K step
-         call apply_outerproduct_w(QU, X%U, CT, Qc)
+         call apply_outerprod_w(QU, X%U, CT, Qc)
       endif
-      call mat_mult(Swrk0, U1, QU)
+      call innerprod_matrix(Swrk0, U1, QU)
 
       ! Non-linear part --> Swrk1
       if (.not.present(NL)) then
-         call apply_p_outerproduct_w(Swrk1, X%U, U1, B, Rinv)    !       U0.T @ B @ R^(-1) @ B.T @ U1
-         Swrk1 = matmul(X%S, matmul(Swrk1, X%S))                 ! S0 @ (U0.T @ B @ R^(-1) @ B.T @ U1) @ S0
+         call apply_premult_outerprod_w(Swrk1, X%U, U1, B, Rinv) !       U0.T @ B @ R^(-1) @ B.T @ U1
+         Swrk1 = matmul(X%S, matmul(Swrk1, X%S))                            ! S0 @ (U0.T @ B @ R^(-1) @ B.T @ U1) @ S0
       else ! Non-linear term precomputed
-         call mat_mult(Swrk1, U1, NL)
+         call innerprod_matrix(Swrk1, U1, NL)
       end if
 
       ! Combine to form -U1.T @ G( U1 @ S @ U0.T ) @ U0
-      call mat_axpby(Swrk0, -1.0_wp, Swrk1, 1.0_wp)
+      Swrk0 = Swrk1 - Swrk0
 
       ! Construct intermediate coefficient matrix
-      call mat_axpby(X%S, 1.0_wp, Swrk0, tau)
+      X%S = X%S + tau*Swrk0
 
       return
-   end subroutine S_step_riccati
+   end subroutine S_step_riccati_rdp
 
-   subroutine L_step_riccati(X, U1, B, CT, Qc, Rinv, tau, info)
-      class(abstract_sym_low_rank_state), intent(inout) :: X
+   subroutine L_step_riccati_rdp(X, U1, B, CT, Qc, Rinv, tau, info)
+      class(abstract_sym_low_rank_state_rdp),intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_vector),             intent(in)    :: U1(:)
+      class(abstract_vector_rdp),            intent(in)    :: U1(:)
       !! Intermediate low-rank factor.
-      class(abstract_vector),             intent(in)    :: B(:)
+      class(abstract_vector_rdp),            intent(in)    :: B(:)
       !! System input.
-      class(abstract_vector),             intent(in)    :: CT(:)
+      class(abstract_vector_rdp),            intent(in)    :: CT(:)
       !! System output.
-      real(kind=wp),                      intent(in)    :: Qc(:,:)
+      real(wp),                              intent(in)    :: Qc(:,:)
       !! Measurement weights.
-      real(kind=wp),                      intent(in)    :: Rinv(:,:)
+      real(wp),                              intent(in)    :: Rinv(:,:)
       !! Inverse of the actuation weights.
-      real(kind=wp),                      intent(in)    :: tau
+      real(wp),                              intent(in)    :: tau
       !! Time step.
-      integer,                            intent(out)   :: info
+      integer,                               intent(out)   :: info
       !! Information flag.
 
       ! Internal variables
-      integer                                           :: rk
+      integer                                              :: rk
 
       info = 0
 
@@ -509,27 +544,27 @@ module LightROM_RiccatiSolvers
       if (.not. allocated(Uwrk0)) allocate(Uwrk0(1:rk), source=X%U(1))
       if (.not. allocated(Uwrk1)) allocate(Uwrk1(1:rk), source=X%U(1))
       if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk)) 
-      call mat_zero(Uwrk0); call mat_zero(Uwrk1); Swrk0 = 0.0_wp
+      call zero_basis(Uwrk0); call zero_basis(Uwrk1); Swrk0 = 0.0_wp
 
-      call mat_mult(Uwrk1, X%U, transpose(X%S))               ! L0.T                                    U0 @ S.T
+      call linear_combination(Uwrk1, X%U, transpose(X%S))       ! L0.T                                    U0 @ S.T
 
       ! Constant part --> Uwrk0
-      call apply_outerproduct_w(Uwrk0, U1, CT, Qc)
+      call apply_outerprod_w(Uwrk0, U1, CT, Qc)
 
       ! Non-linear part --> U
-      call apply_p_outerproduct_w(Swrk0, U1, Uwrk1, B, Rinv)  !               U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T
-      call mat_mult(X%U, Uwrk1, Swrk0)                        ! (U0 @ S.T) @ (U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T)
+      call apply_premult_outerprod_w(Swrk0, U1, Uwrk1, B, Rinv) !               U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T
+      call linear_combination(X%U, Uwrk1, Swrk0)                ! (U0 @ S.T) @ (U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T)
 
       ! Combine to form U1.T @ G( U1.T@L.T )
-      call mat_axpby(Uwrk0, 1.0_wp, X%U, -1.0_wp)
+      call axpby_basis(Uwrk0, 1.0_wp, X%U, -1.0_wp)
 
       ! Construct solution L1.T
-      call mat_axpby(Uwrk1, 1.0_wp, Uwrk0, tau)               ! L0.T + tau*Ldot.T
+      call axpby_basis(Uwrk1, 1.0_wp, Uwrk0, tau)                      ! L0.T + tau*Ldot.T
 
       ! Update coefficient matrix
-      call mat_mult(X%S, Uwrk1, U1)
+      call innerprod_matrix(X%S, Uwrk1, U1)
 
       return
-   end subroutine L_step_riccati
+   end subroutine L_step_riccati_rdp
 
-end module lightROM_RiccatiSolvers
+end module LightROM_RiccatiSolvers

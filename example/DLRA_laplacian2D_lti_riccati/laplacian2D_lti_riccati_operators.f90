@@ -2,7 +2,8 @@ module Laplacian2D_LTI_Riccati_Operators
    use Laplacian2D_LTI_Riccati_Base
    !> LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov_utils
+   use LightKrylov, only : wp => dp
+   use LightKrylov_Utils
    !> Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
@@ -16,7 +17,7 @@ module Laplacian2D_LTI_Riccati_Operators
    !-----     LAPLACE OPERATOR    -----
    !-----------------------------------
 
-   type, extends(abstract_linop), public :: laplace_operator
+   type, extends(abstract_linop_rdp), public :: laplace_operator
    contains
       private
       procedure, pass(self), public :: matvec  => direct_matvec_laplace
@@ -26,7 +27,7 @@ module Laplacian2D_LTI_Riccati_Operators
 contains
 
    function CARE(X,A,Q,BRinvBT) result(Y)
-      real(kind=wp), dimension(n,n) :: X, A, Q, BRinvBT, Y
+      real(wp), dimension(n,n) :: X, A, Q, BRinvBT, Y
       Y = matmul(transpose(A), X) + matmul(X, A) + Q - matmul(X, matmul(BRinvBT, X))
    end function CARE
 
@@ -34,11 +35,11 @@ contains
 
    subroutine direct_matvec_laplace(self, vec_in, vec_out)
       !> Linear Operator.
-      class(laplace_operator),intent(in)  :: self
+      class(laplace_operator),    intent(in)  :: self
       !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
+      class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
+      class(abstract_vector_rdp), intent(out) :: vec_out
       select type(vec_in)
       type is (state_vector)
          select type(vec_out)
@@ -55,7 +56,7 @@ contains
 
    subroutine build_operator(A)
       !! Build the two-dimensional Laplace operator explicitly
-      real(kind=wp), intent(out) :: A(N,N)
+      real(wp), intent(out) :: A(N,N)
       integer i, j, k
 
       A = -4.0_wp/dx2*eye(N)
@@ -76,9 +77,9 @@ contains
    subroutine laplacian(vec_out, vec_in)
       
       !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: vec_in
+      real(wp), dimension(:), intent(in)  :: vec_in
       !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: vec_out
+      real(wp), dimension(:), intent(out) :: vec_out
 
       !> Internal variables.
       integer             :: i, j, in
@@ -116,16 +117,16 @@ contains
    subroutine laplacian_mat(flat_mat_out, flat_mat_in, transpose)
    
       !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: flat_mat_in
+      real(wp), dimension(:), intent(in)  :: flat_mat_in
       !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: flat_mat_out
+      real(wp), dimension(:), intent(out) :: flat_mat_out
       !> Transpose
       logical, optional :: transpose
       logical           :: trans
       
       !> Internal variables.
       integer :: j
-      real(kind=wp), dimension(N,N) :: mat, dmat
+      real(wp), dimension(N,N) :: mat, dmat
       
       !> Deal with optional argument
       trans = optval(transpose,.false.)

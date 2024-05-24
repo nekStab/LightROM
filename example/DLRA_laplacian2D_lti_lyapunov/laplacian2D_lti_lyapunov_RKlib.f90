@@ -5,6 +5,7 @@ module Laplacian2D_LTI_Lyapunov_RKlib
    use rklib_module
    !> LightKrylov for linear algebra.
    use LightKrylov
+   use LightKrylov, only : wp => dp
    !> Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval

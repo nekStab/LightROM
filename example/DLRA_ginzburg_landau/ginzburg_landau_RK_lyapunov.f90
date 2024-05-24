@@ -1,9 +1,11 @@
 module Ginzburg_Landau_RK_Lyapunov
    ! LightKrylov for linear algebra.
    use LightKrylov
+   use LightKrylov, only : wp => dp
    use LightKrylov_utils, only : assert_shape
    ! LightROM
    use LightROM_AbstractLTIsystems
+   use LightROM_Utils ! zero_basis for now
    ! Ginzburg Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators
@@ -21,8 +23,8 @@ module Ginzburg_Landau_RK_Lyapunov
    !-----     LIGHTKRYLOV VECTOR TYPE     -----
    !-------------------------------------------
 
-   type, extends(abstract_vector), public :: state_matrix
-      real(kind=wp) :: state(N**2) = 0.0_wp
+   type, extends(abstract_vector_rdp), public :: state_matrix
+      real(wp) :: state(N**2) = 0.0_wp
    contains
       private
       procedure, pass(self), public :: zero => matrix_zero
@@ -36,8 +38,8 @@ module Ginzburg_Landau_RK_Lyapunov
    !-----     RK LYAPUNOV     -----
    !-------------------------------
 
-   type, extends(abstract_linop), public :: RK_lyapunov
-      real(kind=wp) :: tau ! Integration time.
+   type, extends(abstract_linop_rdp), public :: RK_lyapunov
+      real(wp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec => direct_solver_lyap
@@ -48,17 +50,17 @@ contains
 
    subroutine CALE(res_flat, x_flat, Q_flat, adjoint)
       ! residual
-      real(kind=wp),                 intent(out) :: res_flat(:)
+      real(wp),                 intent(out) :: res_flat(:)
       ! solution
-      real(kind=wp),                 intent(in)  :: x_flat(:)
+      real(wp),                 intent(in)  :: x_flat(:)
       ! inhomogeneity
-      real(kind=wp),                 intent(in)  :: Q_flat(:)
+      real(wp),                 intent(in)  :: Q_flat(:)
       !> Adjoint
       logical, optional :: adjoint
       logical           :: adj
 
       ! internals
-      real(kind=wp),   dimension(N**2) :: x_tmp, AX_flat, XAH_flat
+      real(wp),   dimension(N**2) :: x_tmp, AX_flat, XAH_flat
 
       !> Deal with optional argument
       adj  = optval(adjoint,.false.)
@@ -74,20 +76,20 @@ contains
 
    subroutine CARE(res_flat, x_flat, CTQcC_flat, BRinvBT_mat, adjoint)
       ! residual
-      real(kind=wp),                 intent(out) :: res_flat(:)
+      real(wp),                 intent(out) :: res_flat(:)
       ! solution
-      real(kind=wp),                 intent(in)  :: x_flat(:)
+      real(wp),                 intent(in)  :: x_flat(:)
       ! inhomogeneity
-      real(kind=wp),                 intent(in)  :: CTQcC_flat(:)
+      real(wp),                 intent(in)  :: CTQcC_flat(:)
       ! inhomogeneity
-      real(kind=wp),                 intent(in)  :: BRinvBT_mat(:,:)
+      real(wp),                 intent(in)  :: BRinvBT_mat(:,:)
       !> Adjoint
       logical, optional :: adjoint
       logical           :: adj
 
       ! internals
-      real(kind=wp),   dimension(N**2) :: x_tmp, AX_flat, XAH_flat, NL_flat
-      real(kind=wp),   dimension(N,N)  :: x_mat
+      real(wp),   dimension(N**2) :: x_tmp, AX_flat, XAH_flat, NL_flat
+      real(wp),   dimension(N,N)  :: x_mat
 
       !> Deal with optional argument
       adj  = optval(adjoint,.false.)
@@ -111,9 +113,9 @@ contains
       return
    end subroutine matrix_zero
 
-   real(kind=wp) function matrix_dot(self, vec) result(alpha)
-      class(state_matrix)   , intent(in) :: self
-      class(abstract_vector), intent(in) :: vec
+   real(wp) function matrix_dot(self, vec) result(alpha)
+      class(state_matrix),        intent(in) :: self
+      class(abstract_vector_rdp), intent(in) :: vec
       select type(vec)
       type is(state_matrix)
          alpha = dot_product(self%state, weight_mat*vec%state)
@@ -123,15 +125,15 @@ contains
 
    subroutine matrix_scal(self, alpha)
       class(state_matrix), intent(inout) :: self
-      real(kind=wp)      , intent(in)    :: alpha
+      real(wp),            intent(in)    :: alpha
       self%state = self%state * alpha
       return
    end subroutine matrix_scal  
 
    subroutine matrix_axpby(self, alpha, vec, beta)
-      class(state_matrix)   , intent(inout) :: self
-      class(abstract_vector), intent(in)    :: vec
-      real(kind=wp)         , intent(in)    :: alpha, beta
+      class(state_matrix),        intent(inout) :: self
+      class(abstract_vector_rdp), intent(in)    :: vec
+      real(wp)         , intent(in)    :: alpha, beta
       select type(vec)
       type is(state_matrix)
          self%state = alpha*self%state + beta*vec%state
@@ -144,7 +146,7 @@ contains
       logical, optional,   intent(in)    :: ifnorm
       ! internals
       logical :: normalize
-      real(kind=wp) :: alpha
+      real(wp) :: alpha
       normalize = optval(ifnorm, .true.)
       call random_number(self%state)
       if (normalize) then
@@ -157,9 +159,9 @@ contains
    subroutine GL_mat(flat_mat_out, flat_mat_in, adjoint, transpose)
       
       !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: flat_mat_in
+      real(wp), dimension(:), intent(in)  :: flat_mat_in
       !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: flat_mat_out
+      real(wp), dimension(:), intent(out) :: flat_mat_out
       !> Adjoint
       logical, optional :: adjoint
       logical           :: adj
@@ -168,7 +170,7 @@ contains
       
       !> Internal variables.
       integer :: j
-      real(kind=wp), dimension(N,N) :: mat, dmat
+      real(wp), dimension(N,N) :: mat, dmat
       
       !> Deal with optional argument
       adj   = optval(adjoint,.false.)
@@ -214,14 +216,14 @@ contains
       ! Time-integrator.
       class(rk_class), intent(inout)             :: me
       ! Current time.
-      real(kind=wp),   intent(in)                :: t
+      real(wp),        intent(in)                :: t
       ! State vector.
-      real(kind=wp),   dimension(:), intent(in)  :: x_flat
+      real(wp),        dimension(:), intent(in)  :: x_flat
       ! Time-derivative.
-      real(kind=wp),   dimension(:), intent(out) :: f_flat
+      real(wp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(kind=wp),   dimension(N**2) :: x_tmp, AX_flat, XAH_flat
+      real(wp),        dimension(N**2) :: x_tmp, AX_flat, XAH_flat
 
       f_flat = 0.0_wp; AX_flat = 0.0_wp; XAH_flat = 0.0_wp; x_tmp = 0.0_wp
       ! A @ X
@@ -240,14 +242,14 @@ contains
       ! Time-integrator.
       class(rk_class), intent(inout)             :: me
       ! Current time.
-      real(kind=wp),   intent(in)                :: t
+      real(wp),        intent(in)                :: t
       ! State vector.
-      real(kind=wp),   dimension(:), intent(in)  :: x_flat
+      real(wp),        dimension(:), intent(in)  :: x_flat
       ! Time-derivative.
-      real(kind=wp),   dimension(:), intent(out) :: f_flat
+      real(wp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(kind=wp),   dimension(N**2) :: x_tmp, AHX_flat, XA_flat
+      real(wp),        dimension(N**2) :: x_tmp, AHX_flat, XA_flat
 
       f_flat = 0.0_wp; AHX_flat = 0.0_wp; XA_flat = 0.0_wp; x_tmp = 0.0_wp
       ! A.T @ X
@@ -268,11 +270,11 @@ contains
 
    subroutine direct_solver_lyap(self, vec_in, vec_out)
       ! Linear Operator.
-      class(rk_lyapunov),      intent(in)  :: self
+      class(rk_lyapunov),          intent(in)  :: self
       ! Input vector.
-      class(abstract_vector),  intent(in)  :: vec_in
+      class(abstract_vector_rdp),  intent(in)  :: vec_in
       ! Output vector.
-      class(abstract_vector),  intent(out) :: vec_out
+      class(abstract_vector_rdp),  intent(out) :: vec_out
 
       ! Time-integrator.
       type(rks54_class) :: prop
@@ -293,11 +295,11 @@ contains
 
    subroutine adjoint_solver_lyap(self, vec_in, vec_out)
       ! Linear Operator.
-      class(rk_lyapunov),      intent(in)  :: self
+      class(rk_lyapunov),          intent(in)  :: self
       ! Input vector.
-      class(abstract_vector),  intent(in)  :: vec_in
+      class(abstract_vector_rdp),  intent(in)  :: vec_in
       ! Output vector.
-      class(abstract_vector),  intent(out) :: vec_out
+      class(abstract_vector_rdp),  intent(out) :: vec_out
 
       ! Time-integrator.
       type(rks54_class) :: prop
@@ -322,8 +324,8 @@ contains
 
    subroutine get_state_mat(mat_out, state_in)
       !! Utility function to transfer data from a state vector to a real array
-      real(kind=wp),          intent(out) :: mat_out(:,:)
-      class(abstract_vector), intent(in)  :: state_in(:)
+      real(wp),                   intent(out) :: mat_out(:,:)
+      class(abstract_vector_rdp), intent(in)  :: state_in(:)
       ! internal variables
       mat_out = 0.0_wp
       select type (state_in)
@@ -336,13 +338,13 @@ contains
 
    subroutine set_state_mat(state_out, mat_in)
       !! Utility function to transfer data from a real array to a state vector
-      class(abstract_vector), intent(out) :: state_out(:)
-      real(kind=wp),          intent(in)  :: mat_in(:,:)
+      class(abstract_vector_rdp), intent(out) :: state_out(:)
+      real(wp),                   intent(in)  :: mat_in(:,:)
       ! internal variables
       select type (state_out)
       type is (state_matrix)
          call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
-         call mat_zero(state_out)
+         call zero_basis(state_out)
          state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
       end select
       return
@@ -350,8 +352,8 @@ contains
 
    subroutine init_rand_mat(state, ifnorm)
       !! Utility function to initialize a state vector with random data
-      class(abstract_vector), intent(inout)  :: state(:)
-      logical, optional,      intent(in)     :: ifnorm
+      class(abstract_vector_rdp), intent(inout)  :: state(:)
+      logical, optional,          intent(in)     :: ifnorm
       ! internal variables
       integer :: k, kdim
       logical :: normalize
