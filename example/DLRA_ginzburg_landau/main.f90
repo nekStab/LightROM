@@ -102,8 +102,8 @@ program demo
    call svd(S0(:,1:rk_X0), U_svd(:,1:rk_X0), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
    S0 = diag(S_svd)
    block
-   class(abstract_vector_rdp), allocatable :: Xwrk(:)
-   call linear_combination(Xwrk, Utmp, U_svd); call copy_basis(U0, Xwrk)
+      class(abstract_vector_rdp), allocatable :: Xwrk(:)
+      call linear_combination(Xwrk, Utmp, U_svd); call copy_basis(U0, Xwrk)
    end block
    !call linear_combination(U0, Utmp, U_svd)
 

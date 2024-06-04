@@ -355,13 +355,13 @@ module LightROM_RiccatiSolvers
             call L_step_riccati(X, U1,     B, CT, Qc, Rinv,     tau, info)
             ! Compute Gamma = 0.5*(T0 @ (U1.T @ U0) + Tt @ (U1.T @ Ut))
             block
-            class(abstract_vector_rdp), allocatable :: Xwrk(:)
-            call zero_basis(QU); Swrk0 = 0.0_wp                           ! we use QU as a scratch array
-            call innerprod_matrix(Swrk0, X%U, U0)
-            call linear_combination(Xwrk, T0, Swrk0); call copy_basis(QU, Xwrk)
-            call innerprod_matrix(Swrk0, X%U, Ut)
-            call linear_combination(Xwrk, Tt, Swrk0); call copy_basis(T0, Xwrk) ! overwrite T0 with Gamma
-            call axpby_basis(T0, 0.5_wp, QU, 0.5_wp)
+               class(abstract_vector_rdp), allocatable :: Xwrk(:)
+               call zero_basis(QU); Swrk0 = 0.0_wp                           ! we use QU as a scratch array
+               call innerprod_matrix(Swrk0, X%U, U0)
+               call linear_combination(Xwrk, T0, Swrk0); call copy_basis(QU, Xwrk)
+               call innerprod_matrix(Swrk0, X%U, Ut)
+               call linear_combination(Xwrk, Tt, Swrk0); call copy_basis(T0, Xwrk) ! overwrite T0 with Gamma
+               call axpby_basis(T0, 0.5_wp, QU, 0.5_wp)
             end block
             ! Update X to most recent value
             call copy_basis(X%U, U1)
@@ -430,9 +430,9 @@ module LightROM_RiccatiSolvers
 
       ! Non-linear part --> Uwrk0
       block
-      class(abstract_vector_rdp), allocatable :: Xwrk(:)
-      call linear_combination(Xwrk, X%U, X%S)                       ! K0 = U0 @ S0
-      call copy_basis(U1, Xwrk)
+         class(abstract_vector_rdp), allocatable :: Xwrk(:)
+         call linear_combination(Xwrk, X%U, X%S)                       ! K0 = U0 @ S0
+         call copy_basis(U1, Xwrk)
       end block
       if (.not.present(NL)) then
          call apply_premult_outerprod_w(Swrk0, X%U, U1, B, Rinv)  ! (U0.T) @ B @ R^(-1) @ B.T @ K0

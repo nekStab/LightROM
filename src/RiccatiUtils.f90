@@ -56,9 +56,9 @@ contains
       end do
       call innerprod_matrix(wrk, B, U)
       block
-      class(abstract_vector_rdp), allocatable :: Xwrk(:)
-      call linear_combination(Xwrk, B, matmul(W, wrk))
-      call copy_basis(Z, Xwrk)
+         class(abstract_vector_rdp), allocatable :: Xwrk(:)
+         call linear_combination(Xwrk, B, matmul(W, wrk))
+         call copy_basis(Z, Xwrk)
       end block
    
       return   
@@ -103,9 +103,9 @@ contains
 
       call apply_premult_outerprod_w(Swrk, X%U, K, B, W)  ! (U.T) @ B @ R^(-1) @ B.T @ K
       block
-      class(abstract_vector_rdp), allocatable :: Xwrk(:)
-      call linear_combination(Xwrk, K, Swrk)                 ! K @ Swrk
-      call copy_basis(N, Xwrk)
+         class(abstract_vector_rdp), allocatable :: Xwrk(:)
+         call linear_combination(Xwrk, K, Swrk)                 ! K @ Swrk
+         call copy_basis(N, Xwrk)
       end block
 
       return

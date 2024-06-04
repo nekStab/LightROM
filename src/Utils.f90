@@ -14,7 +14,7 @@ module LightROM_Utils
    public :: ROM_Petrov_Galerkin_Projection
    public :: ROM_Galerkin_Projection
 
-   public :: zero_basis, sqrtm, sval
+   public :: zero_basis, sqrtm
 
    interface zero_basis
       module procedure zero_basis_rdp
@@ -22,10 +22,6 @@ module LightROM_Utils
 
    interface sqrtm
       module procedure sqrtm_rdp
-   end interface
-
-   interface sval
-      module procedure sval_rdp
    end interface
 
    interface Balancing_Transformation
@@ -44,7 +40,7 @@ contains
 
    subroutine zero_basis_rdp(X)
       class(abstract_vector_rdp), intent(inout) :: X(:)
-      integer :: I
+      integer :: i
       do i = 1, size(X)
          call X(i)%zero()
       end do
@@ -52,9 +48,9 @@ contains
       return
    end subroutine
 
-   subroutine sqrtm_rdp(sqrtX, X)
+   subroutine sqrtm_rdp(sqrtmX, X)
       real(dp), intent(in)  :: X(:,:)
-      real(dp), intent(out) :: sqrtX(size(X,1),size(X,1))
+      real(dp), intent(out) :: sqrtmX(size(X,1),size(X,1))
       ! internals
       real(dp) :: lambda(size(X,1))
       real(dp) :: V(size(X,1), size(X,1))
@@ -70,22 +66,25 @@ contains
       ! Perform eigenvalue decomposition
       call eigh(X, V, lambda)
 
+      ! Check if the matrix is positive definite (up to tol)
+      do i = 1, size(lambda)
+         if (abs(lambda(i)) .gt. 1e-12_wp) then
+            if (lambda(i) .gt. 0.0_wp) then
+               lambda(i) = sqrt(lambda(i))
+            else
+               write(*,*) "Error: Input matrix is not positive definite to tolerance"
+               STOP
+            end if
+         else
+            lambda(i) = sqrt(abs(lambda(i)))
+            write(*,*) "Warning: Input matrix is singular to tolerance"
+         end if
+      end do
+
       ! Reconstruct the square root matrix
-      sqrtX = matmul(V, matmul(diag(sqrt(lambda)), transpose(V)))  
+      sqrtmX = matmul(V, matmul(diag(lambda), transpose(V)))  
 
       return
-   end subroutine
-
-   subroutine sval_rdp(X, svals)
-      real(dp), intent(in) :: X(:,:)
-      real(dp)             :: svals(min(size(X, 1), size(X, 2)))
-      ! internals
-      real(dp)             :: U(size(X, 1), size(X, 1))
-      real(dp)             :: VT(size(X, 2), size(X, 2))
-  
-      ! Perform SVD
-      call svd(X, U, svals, VT)
-    
    end subroutine
 
    subroutine Balancing_Transformation_rdp(T, S, Tinv, Xc, Yo)
@@ -138,11 +137,11 @@ contains
          Sigma(i) = 1/sqrt(S(i))
       enddo
       block
-      class(abstract_vector_rdp), allocatable :: Xwrk(:)
-      call linear_combination(Xwrk, Yo(1:rkmin), matmul(W(1:rkmin,1:rkmin), diag(Sigma)))
-      call copy_basis(T(1:rkmin), Xwrk)
-      call linear_combination(Xwrk, Xc(1:rkmin), matmul(V(1:rkmin,1:rkmin), diag(Sigma)))
-      call copy_basis(Tinv(1:rkmin), Xwrk)
+         class(abstract_vector_rdp), allocatable :: Xwrk(:)
+         call linear_combination(Xwrk, Yo(1:rkmin), matmul(W(1:rkmin,1:rkmin), diag(Sigma)))
+         call copy_basis(T(1:rkmin), Xwrk)
+         call linear_combination(Xwrk, Xc(1:rkmin), matmul(V(1:rkmin,1:rkmin), diag(Sigma)))
+         call copy_basis(Tinv(1:rkmin), Xwrk)
       end block
 
       return

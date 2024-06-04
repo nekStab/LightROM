@@ -355,9 +355,9 @@ module LightROM_LyapunovSolvers
       Swrk = 0.0_wp
       allocate(perm(1:rk)); perm = 0
       block
-      class(abstract_vector_rdp), allocatable :: Xwrk(:)
-      call linear_combination(Xwrk, X%U, X%S)             ! K0
-      call copy_basis(U1, Xwrk)
+         class(abstract_vector_rdp), allocatable :: Xwrk(:)
+         call linear_combination(Xwrk, X%U, X%S)             ! K0
+         call copy_basis(U1, Xwrk)
       end block
       call apply_outerprod(BBTU, B, X%U)   ! Kdot
       ! Construct intermediate solution U1
