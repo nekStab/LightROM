@@ -131,8 +131,8 @@ contains
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-!change!                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
-!change!                                                                     & exptA=exptA, iftrans=.false., ifverb=.false.)
+                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
+                                                                        & exptA=exptA, iftrans=.false., ifverb=.false.)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
@@ -225,8 +225,8 @@ contains
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-!change!                  call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, &
-!change!                                                                     & exptA=exptA, iftrans=.true., ifverb=.false.)
+                  call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, & 
+                                                                        & exptA=exptA, iftrans=.true., ifverb=.false.)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
@@ -401,8 +401,8 @@ contains
             ! run integrator
             etime = 0.0_wp
             call system_clock(count=clock_start)     ! Start Timer
-!change!            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
-!change!                                                               & exptA=exptA, iftrans=.false., ifverb=.false.)
+            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
+                                                                  & exptA=exptA, iftrans=.false., ifverb=.false.)
             call system_clock(count=clock_stop)      ! Stop Timer
             etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
@@ -468,8 +468,8 @@ contains
             ! run integrator
             etime = 0.0_wp
             call system_clock(count=clock_start)     ! Start Timer
-!change!            call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, &
-!change!                                                               & exptA=exptA, iftrans=.true., ifverb=.false.)
+            call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, &
+                                                                  & exptA=exptA, iftrans=.true., ifverb=.false.)
             call system_clock(count=clock_stop)      ! Stop Timer
             etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
@@ -507,9 +507,9 @@ contains
       Swrk = 0.0_wp
       call sqrtm(Swrk(1:rk,1:rk), X%S)
       block
-      class(abstract_vector_rdp), allocatable :: Xwrk(:)
-      call linear_combination(Xwrk, X%U, Swrk(1:rk,1:rk))
-      call copy_basis(Utmp, Xwrk)
+         class(abstract_vector_rdp), allocatable :: Xwrk(:)
+         call linear_combination(Xwrk, X%U, Swrk(1:rk,1:rk))
+         call copy_basis(Utmp, Xwrk)
       end block
       !call linear_combination(Utmp, X%U, Swrk(1:rk,1:rk))
       call get_state(U0_in(:,1:rk), Utmp)
@@ -521,9 +521,9 @@ contains
       Swrk = 0.0_wp
       call sqrtm(Swrk(1:rk,1:rk), Y%S)
       block
-      class(abstract_vector_rdp), allocatable :: Xwrk(:)
-      call linear_combination(Xwrk, Y%U, Swrk(1:rk,1:rk))
-      call copy_basis(Utmp, Xwrk)
+         class(abstract_vector_rdp), allocatable :: Xwrk(:)
+         call linear_combination(Xwrk, Y%U, Swrk(1:rk,1:rk))
+         call copy_basis(Utmp, Xwrk)
       end block
       !call linear_combination(Utmp, Y%U, Swrk(1:rk,1:rk))
       call get_state(U0_in(:,1:rk), Utmp)
@@ -627,9 +627,9 @@ contains
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-!change!                  call numerical_low_rank_splitting_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, &
-!change!                                                                     & Tend, tau, torder, info, &
-!change!                                                                     & exptA=exptA, iftrans=.false., ifverb=verb)
+                  call numerical_low_rank_splitting_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, &
+                                                                     & Tend, tau, torder, info, &
+                                                                     & exptA=exptA, iftrans=.false., ifverb=verb)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
@@ -914,8 +914,8 @@ contains
                nsteps = nint(Tend/tau)
                ! run integrator
                call system_clock(count=clock_start)     ! Start Timer
-!change!             !call numerical_low_rank_splitting_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, torder, info, &
-!change!             !                                                      & exptA=exptA, iftrans=.false., ifverb=.false.)
+               call numerical_low_rank_splitting_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, torder, info, &
+                                                                     & exptA=exptA, iftrans=.false., ifverb=.false.)
                call system_clock(count=clock_stop)      ! Stop Timer
                etime = real(clock_stop-clock_start)/real(clock_rate)
                ! Reconstruct solution
