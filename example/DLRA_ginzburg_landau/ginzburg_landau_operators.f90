@@ -2,7 +2,7 @@ module Ginzburg_Landau_Operators
    ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only : wp => dp
-   use LightKrylov_utils, only : assert_shape
+   use LightKrylov_utils, only : assert_shape, svd
    ! LightROM
    use LightROM_AbstractLTIsystems
    ! Ginzburg Landau
@@ -14,7 +14,7 @@ module Ginzburg_Landau_Operators
    implicit none
 
    private
-   public :: exptA, direct_GL, adjoint_GL
+   public :: exptA, direct_GL, adjoint_GL, sval
 
    !-----------------------------------------------
    !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
@@ -368,7 +368,7 @@ contains
             select type (A)
             type is (exponential_prop)
                ! set integration time
-               A%tau = tau
+               !A%tau = tau
                if (transpose) then
                   call A%rmatvec(vec_in, vec_out)
                else
@@ -427,5 +427,17 @@ contains
       end if
       return
    end subroutine initialize_lti_system
+
+   subroutine sval(X, svals)
+      real(wp), intent(in) :: X(:,:)
+      real(wp)             :: svals(min(size(X, 1), size(X, 2)))
+      ! internals
+      real(wp)             :: U(size(X, 1), size(X, 1))
+      real(wp)             :: VT(size(X, 2), size(X, 2))
+  
+      ! Perform SVD
+      call svd(X, U, svals, VT)
+    
+   end subroutine
 
 end module Ginzburg_Landau_Operators

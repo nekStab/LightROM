@@ -11,7 +11,7 @@ module Laplacian2D_LTI_Riccati_Operators
    implicit none
 
    ! operator
-   public :: CARE, build_operator, laplacian, laplacian_mat
+   public :: CARE, build_operator, laplacian, laplacian_mat, sval
 
    !-----------------------------------
    !-----     LAPLACE OPERATOR    -----
@@ -150,5 +150,17 @@ contains
        
       return
    end subroutine laplacian_mat
+
+   subroutine sval(X, svals)
+      real(wp), intent(in) :: X(:,:)
+      real(wp)             :: svals(min(size(X, 1), size(X, 2)))
+      ! internals
+      real(wp)             :: U(size(X, 1), size(X, 1))
+      real(wp)             :: VT(size(X, 2), size(X, 2))
+  
+      ! Perform SVD
+      call svd(X, U, svals, VT)
+    
+   end subroutine
 
 end module Laplacian2D_LTI_Riccati_Operators
