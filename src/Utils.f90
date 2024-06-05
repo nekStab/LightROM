@@ -3,8 +3,9 @@ module LightROM_Utils
    use LightKrylov, only : dp, wp => dp
    use LightKrylov_AbstractVectors
    use LightKrylov_Utils
+   ! LightROM
    use LightROM_AbstractLTIsystems
-
+   ! stdlib
    use stdlib_linalg, only : eye, diag, is_symmetric
    use stdlib_optval, only : optval
    implicit none 
@@ -13,16 +14,6 @@ module LightROM_Utils
    public :: Balancing_Transformation
    public :: ROM_Petrov_Galerkin_Projection
    public :: ROM_Galerkin_Projection
-
-   public :: zero_basis, sqrtm
-
-   interface zero_basis
-      module procedure zero_basis_rdp
-   end interface
-
-   interface sqrtm
-      module procedure sqrtm_rdp
-   end interface
 
    interface Balancing_Transformation
       module procedure Balancing_Transformation_rdp
@@ -37,55 +28,6 @@ module LightROM_Utils
    end interface
 
 contains
-
-   subroutine zero_basis_rdp(X)
-      class(abstract_vector_rdp), intent(inout) :: X(:)
-      integer :: i
-      do i = 1, size(X)
-         call X(i)%zero()
-      end do
-
-      return
-   end subroutine
-
-   subroutine sqrtm_rdp(sqrtmX, X)
-      real(dp), intent(in)  :: X(:,:)
-      real(dp), intent(out) :: sqrtmX(size(X,1),size(X,1))
-      ! internals
-      real(dp) :: lambda(size(X,1))
-      real(dp) :: V(size(X,1), size(X,1))
-      logical :: symmetric
-      integer :: i
-
-      ! Check if the matrix is symmetric
-      if (.not. is_symmetric(X)) then
-        write(*,*) "Error: Input matrix is not symmetric"
-        STOP
-      end if
-
-      ! Perform eigenvalue decomposition
-      call eigh(X, V, lambda)
-
-      ! Check if the matrix is positive definite (up to tol)
-      do i = 1, size(lambda)
-         if (abs(lambda(i)) .gt. 1e-12_wp) then
-            if (lambda(i) .gt. 0.0_wp) then
-               lambda(i) = sqrt(lambda(i))
-            else
-               write(*,*) "Error: Input matrix is not positive definite to tolerance"
-               STOP
-            end if
-         else
-            lambda(i) = sqrt(abs(lambda(i)))
-            write(*,*) "Warning: Input matrix is singular to tolerance"
-         end if
-      end do
-
-      ! Reconstruct the square root matrix
-      sqrtmX = matmul(V, matmul(diag(lambda), transpose(V)))  
-
-      return
-   end subroutine
 
    subroutine Balancing_Transformation_rdp(T, S, Tinv, Xc, Yo)
       !! Computes the the biorthogonal balancing transformation \( \mathbf{T}, \mathbf{T}^{-1} \) from the
