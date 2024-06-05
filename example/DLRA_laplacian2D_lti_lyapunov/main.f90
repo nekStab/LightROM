@@ -1,23 +1,25 @@
 program demo
-   use LightKrylov
-   use LightKrylov, only : wp => dp
-   use LightKrylov_ExpmLib
-   use LightKrylov_Utils
-
-   use LightROM_AbstractLTIsystems
-   use LightROM_Utils
-
-   use LightROM_LyapunovSolvers
-   use LightROM_LyapunovUtils
-
-   use Laplacian2D_LTI_Lyapunov_Base
-   use Laplacian2D_LTI_Lyapunov_Operators
-   use Laplacian2D_LTI_Lyapunov_RKlib
-
+   ! Standard Library
    use stdlib_optval, only : optval 
    use stdlib_linalg, only : eye
    use stdlib_math, only : all_close, logspace
    use stdlib_io_npy, only : save_npy
+   ! LightKrylov for linear algebra
+   use LightKrylov
+   use LightKrylov, only : wp => dp
+   use LightKrylov_ExpmLib
+   use LightKrylov_Utils
+   ! LightROM
+   use LightROM_AbstractLTIsystems
+   use LightROM_Utils
+   use LightROM_LyapunovSolvers
+   use LightROM_LyapunovUtils
+   ! Laplacian
+   use Laplacian2D_LTI_Lyapunov_Base
+   use Laplacian2D_LTI_Lyapunov_Operators
+   use Laplacian2D_LTI_Lyapunov_RKlib
+   use Laplacian2D_LTI_Lyapunov_Utils
+   
    implicit none
 
    !----------------------------------------------------------

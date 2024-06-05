@@ -1,25 +1,18 @@
 module Ginzburg_Landau_Base
+   ! Standard Library.
+   use stdlib_optval, only : optval
    ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only: wp => dp
-   use LightKrylov_AbstractVectors ! zero_basis
-   use LightKrylov_Utils, only : assert_shape
    ! LightROM
-   use LightROM_AbstractLTIsystems
-   use LightROM_Utils   ! zero_basis for now
-   ! Standard Library.
-   use stdlib_math, only : linspace
-   use stdlib_optval, only : optval
-   use stdlib_linalg, only : eye
+   use LightROM_AbstractLTIsystems ! LR_state
    implicit none
 
    private
-   public :: nx, dx
+   public :: L, nx, dx
    public :: nu, gamma, mu_0, c_mu, mu_2, mu
    public :: rk_b, x_b, s_b, rk_c, x_c, s_c
    public :: B, CT, weight, weight_mat
-   public :: initialize_parameters
-   public :: set_state, get_state, init_rand
    public :: N, BBTW_flat, CTCW_flat
    public :: Qc, Rinv, CTQcCW_mat, BRinvBTW_mat
 
@@ -93,70 +86,6 @@ module Ginzburg_Landau_Base
 
 contains
 
-   !--------------------------------------------------------------
-   !-----     CONSTRUCT THE MESH AND PHYSICAL PARAMETERS     -----
-   !--------------------------------------------------------------
-
-   subroutine initialize_parameters()
-      implicit none
-      ! Mesh array.
-      real(wp), allocatable :: x(:)
-      real(wp)              :: x2(1:2*nx)
-      real(wp)              :: tmpv(N, 2)
-      integer               :: i
-
-      ! Construct mesh.
-      x = linspace(-L/2, L/2, nx+2)
-      dx = x(2)-x(1)
-
-      ! Construct mu(x)
-      mu(:) = (mu_0 - c_mu**2) + (mu_2 / 2.0_wp) * x(2:nx+1)**2
-
-      ! Define integration weights
-      weight     = dx
-      weight_mat = dx
-
-      ! Construct B & C
-      ! B = [ [ Br, -Bi ], [ Bi, Br ] ]
-      ! B = [ [ Cr, -Ci ], [ Ci, Cr ] ]
-      ! where Bi = Ci = 0
-
-      ! actuator is a Guassian centered just upstream of branch I
-      ! column 1
-      x2       = 0.0_wp
-      x2(1:nx) = x(2:nx+1)
-      B(1)%state = 0.5*exp(-((x2 - x_b)/s_b)**2)*sqrt(weight)
-      ! column 2
-      x2            = 0.0_wp
-      x2(nx+1:2*nx) = x(2:nx+1)
-      B(2)%state = 0.5*exp(-((x2 - x_b)/s_b)**2)*sqrt(weight)
-
-      ! the sensor is a Gaussian centered at branch II
-      ! column 1
-      x2       = 0.0_wp
-      x2(1:nx) = x(2:nx+1)
-      CT(1)%state = 0.5*exp(-((x2 - x_c)/s_c)**2)*sqrt(weight)
-      ! column 2
-      x2            = 0.0_wp
-      x2(nx+1:2*nx) = x(2:nx+1)
-      CT(2)%state = 0.5*exp(-((x2 - x_c)/s_c)**2)*sqrt(weight)
-
-      ! Note that we have included the integration weights into the actuator/sensor definitions
-
-      ! RK lyap & riccati
-      Qc   = eye(rk_c)
-      Rinv = eye(rk_b)
-      tmpv = 0.0_wp
-      call get_state(tmpv(:,1:rk_b), B(1:rk_b))
-      BBTW_flat(1:N**2)     = reshape(matmul(tmpv, transpose(tmpv)), shape(BBTW_flat))
-      BRinvBTW_mat(1:N,1:N) = matmul(matmul(tmpv, Rinv), transpose(tmpv))
-      call get_state(tmpv(:,1:rk_c), CT(1:rk_c))
-      CTCW_flat(1:N**2)     = reshape(matmul(tmpv, transpose(tmpv)), shape(CTCW_flat))
-      CTQcCW_mat(1:N,1:N)   = matmul(matmul(tmpv, Qc), transpose(tmpv))
-
-      return
-   end subroutine initialize_parameters
-
    !=========================================================
    !=========================================================
    !=====                                               =====
@@ -218,64 +147,6 @@ contains
       endif
       return
    end subroutine rand
-
-   !----------------------------------------------
-   !-----     UTILITIES FOR STATE_VECTORS    -----
-   !----------------------------------------------
-
-   subroutine get_state(mat_out, state_in)
-      !! Utility function to transfer data from a state vector to a real array
-      real(wp),                   intent(out) :: mat_out(:,:)
-      class(abstract_vector_rdp), intent(in)  :: state_in(:)
-      ! internal variables
-      integer :: k, kdim
-      mat_out = 0.0_wp
-      select type (state_in)
-      type is (state_vector)
-         kdim = size(state_in)
-         call assert_shape(mat_out, (/ 2*nx, kdim /), 'get_state -> state_vector', 'mat_out')
-         do k = 1, kdim
-            mat_out(:,k) = state_in(k)%state
-         end do
-      end select
-      return
-   end subroutine get_state
-
-   subroutine set_state(state_out, mat_in)
-      !! Utility function to transfer data from a real array to a state vector
-      class(abstract_vector_rdp), intent(out) :: state_out(:)
-      real(wp),                   intent(in)  :: mat_in(:,:)
-      ! internal variables
-      integer       :: k, kdim
-      select type (state_out)
-      type is (state_vector)
-         kdim = size(state_out)
-         call assert_shape(mat_in, (/ 2*nx, kdim /), 'set_state -> state_vector', 'mat_in')
-         call zero_basis(state_out)
-         do k = 1, kdim
-            state_out(k)%state = mat_in(:,k)
-         end do
-      end select
-      return
-   end subroutine set_state
-
-   subroutine init_rand(state, ifnorm)
-      !! Utility function to initialize a state vector with random data
-      class(abstract_vector_rdp), intent(inout)  :: state(:)
-      logical, optional,          intent(in)     :: ifnorm
-      ! internal variables
-      integer :: k, kdim
-      logical :: normalize
-      normalize = optval(ifnorm,.true.)
-      select type (state)
-      type is (state_vector)
-         kdim = size(state)
-         do k = 1, kdim
-            call state(k)%rand(ifnorm = normalize)
-         end do
-      end select
-      return
-   end subroutine init_rand
 
    !------------------------------------------------------
    !-----     TYPE BOUND PROCEDURES FOR LR STATES    -----

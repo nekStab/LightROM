@@ -1,15 +1,15 @@
 module Laplacian2D_LTI_Lyapunov_RKlib
-   use Laplacian2D_LTI_Lyapunov_Base
-   use laplacian2D_LTI_Lyapunov_Operators
-   !> RKLIB module for time integration.
-   use rklib_module
-   !> LightKrylov for linear algebra.
-   use LightKrylov
-   use LightKrylov, only : wp => dp
-   !> Standard Library.
+   ! Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
-   use stdlib_linalg, only : eye
+   ! RKLIB module for time integration.
+   use rklib_module
+   ! LightKrylov for linear algebra.
+   use LightKrylov
+   use LightKrylov, only : wp => dp
+   ! Laplacian
+   use Laplacian2D_LTI_Lyapunov_Base
+   use laplacian2D_LTI_Lyapunov_Operators
    implicit none
 
    private

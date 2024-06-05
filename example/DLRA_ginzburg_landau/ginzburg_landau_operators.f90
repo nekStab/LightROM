@@ -1,22 +1,20 @@
 module Ginzburg_Landau_Operators
+   ! Standard Library.
+   use stdlib_optval, only : optval
+   ! RKLIB module for time integration.
+   use rklib_module
    ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only : wp => dp
-   use LightKrylov_AbstractVectors ! zero_basis
-   use LightKrylov_utils, only : assert_shape, svd
+   use LightKrylov_utils, only : assert_shape
    ! LightROM
-   use LightROM_AbstractLTIsystems
+   use LightROM_AbstractLTIsystems ! abstract_lti_system
    ! Ginzburg Landau
-   use Ginzburg_Landau_Base
-   ! RKLIB module for time integration.
-   use rklib_module
-   ! Standard Library.
-   use stdlib_optval, only : optval
-   use stdlib_linalg, only : diag
+   use Ginzburg_Landau_Base   
    implicit none
 
    private
-   public :: exptA, direct_GL, adjoint_GL, sval, generate_random_initial_condition
+   public :: exptA, direct_GL, adjoint_GL
 
    !-----------------------------------------------
    !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
@@ -429,64 +427,5 @@ contains
       end if
       return
    end subroutine initialize_lti_system
-
-   subroutine sval(X, svals)
-      real(wp), intent(in) :: X(:,:)
-      real(wp)             :: svals(min(size(X, 1), size(X, 2)))
-      ! internals
-      real(wp)             :: U(size(X, 1), size(X, 1))
-      real(wp)             :: VT(size(X, 2), size(X, 2))
-  
-      ! Perform SVD
-      call svd(X, U, svals, VT)
-    
-   end subroutine
-
-   subroutine generate_random_initial_condition(U, S, rk)
-      class(state_vector),   intent(out) :: U(:)
-      real(wp),              intent(out) :: S(:,:)
-      integer,               intent(in)  :: rk
-      ! internals
-      class(state_vector),   allocatable :: Utmp(:)
-      integer,               allocatable :: perm(:)
-      ! SVD
-      real(wp)                           :: U_svd(rk,rk)
-      real(wp)                           :: S_svd(rk)
-      real(wp)                           :: V_svd(rk,rk)
-      integer                            :: i, info
-
-      if (size(U) < rk) then
-         write(*,*) 'Input krylov basis size incompatible with requested rank', rk
-         STOP 1
-      else
-         call zero_basis(U)
-         do i = 1,rk
-            call U(i)%rand(.false.)
-         end do
-      end if
-      if (size(S,1) < rk) then
-         write(*,*) 'Input coefficient matrix size incompatible with requested rank', rk
-         STOP 1
-      else if (size(S,1) /= size(S,2)) then
-         write(*,*) 'Input coefficient matrix must be square.'
-         STOP 2
-      else
-         S = 0.0_wp
-      end if
-      ! perform QR
-      allocate(perm(1:rk)); perm = 0
-      allocate(Utmp(1:rk), source=U(1:rk))
-      call qr(Utmp, S, perm, info, verbosity=.false.)
-      if (info /= 0) write(*,*) '  [generate_random_initial_condition] Info: Colinear vectors detected in QR, column ', info
-      ! perform SVD
-      call svd(S(:,1:rk), U_svd(:,1:rk), S_svd(1:rk), V_svd(1:rk,1:rk))
-      S = diag(S_svd)
-      block
-         class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, Utmp, U_svd)
-         call copy_basis(U, Xwrk)
-      end block
-      
-   end subroutine
 
 end module Ginzburg_Landau_Operators

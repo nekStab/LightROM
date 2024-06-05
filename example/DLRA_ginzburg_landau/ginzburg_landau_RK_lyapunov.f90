@@ -1,24 +1,18 @@
 module Ginzburg_Landau_RK_Lyapunov
+   ! Standard Library.
+   use stdlib_optval, only : optval
+   ! RKLIB module for time integration.
+   use rklib_module
    ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only : wp => dp
-   use LightKrylov_AbstractVectors ! zero_basis
-   use LightKrylov_Utils, only : assert_shape
-   ! LightROM
-   use LightROM_AbstractLTIsystems
-   use LightROM_Utils ! zero_basis for now
    ! Ginzburg Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators
-   ! RKLIB module for time integration.
-   use rklib_module
-   ! Standard Library.
-   use stdlib_optval, only : optval
    implicit none
 
    private
-   public :: CALE, CARE, GL_mat
-   public :: get_state_mat, set_state_mat, init_rand
+   public :: GL_mat
 
    !-------------------------------------------
    !-----     LIGHTKRYLOV VECTOR TYPE     -----
@@ -48,63 +42,6 @@ module Ginzburg_Landau_RK_Lyapunov
    end type RK_lyapunov
 
 contains
-
-   subroutine CALE(res_flat, x_flat, Q_flat, adjoint)
-      ! residual
-      real(wp),                 intent(out) :: res_flat(:)
-      ! solution
-      real(wp),                 intent(in)  :: x_flat(:)
-      ! inhomogeneity
-      real(wp),                 intent(in)  :: Q_flat(:)
-      !> Adjoint
-      logical, optional :: adjoint
-      logical           :: adj
-
-      ! internals
-      real(wp),   dimension(N**2) :: x_tmp, AX_flat, XAH_flat
-
-      !> Deal with optional argument
-      adj  = optval(adjoint,.false.)
-
-      res_flat = 0.0_wp; AX_flat = 0.0_wp; XAH_flat = 0.0_wp; x_tmp = 0.0_wp
-      call GL_mat( AX_flat, x_flat, adjoint = adj, transpose = .false.)
-      x_tmp    = reshape(transpose(reshape(x_flat,   (/ N,N /))), shape(x_flat))
-      call GL_mat(XAH_flat, x_tmp,  adjoint = adj, transpose = .true. )
-      ! construct Lyapunov equation
-      res_flat = AX_flat + XAH_flat + Q_flat
-
-   end subroutine CALE
-
-   subroutine CARE(res_flat, x_flat, CTQcC_flat, BRinvBT_mat, adjoint)
-      ! residual
-      real(wp),                 intent(out) :: res_flat(:)
-      ! solution
-      real(wp),                 intent(in)  :: x_flat(:)
-      ! inhomogeneity
-      real(wp),                 intent(in)  :: CTQcC_flat(:)
-      ! inhomogeneity
-      real(wp),                 intent(in)  :: BRinvBT_mat(:,:)
-      !> Adjoint
-      logical, optional :: adjoint
-      logical           :: adj
-
-      ! internals
-      real(wp),   dimension(N**2) :: x_tmp, AX_flat, XAH_flat, NL_flat
-      real(wp),   dimension(N,N)  :: x_mat
-
-      !> Deal with optional argument
-      adj  = optval(adjoint,.false.)
-
-      res_flat = 0.0_wp; AX_flat = 0.0_wp; XAH_flat = 0.0_wp; x_tmp = 0.0_wp
-      call GL_mat( AX_flat, x_flat, adjoint = adj, transpose = .false.)
-      x_mat = reshape(x_flat, (/ N,N /))
-      x_tmp = reshape(transpose(x_mat), shape(x_flat))
-      call GL_mat(XAH_flat, x_tmp,  adjoint = adj, transpose = .true. )
-      NL_flat = reshape(matmul(x_mat, matmul(BRinvBTW_mat, x_mat)), shape(NL_flat))
-      ! construct Lyapunov equation
-      res_flat = AX_flat + XAH_flat + CTQcC_flat + NL_flat
-
-   end subroutine CARE
 
    !-----     TYPE-BOUND PROCEDURE FOR MATRICES     -----
 
@@ -318,55 +255,5 @@ contains
       end select
       return
    end subroutine adjoint_solver_lyap
-
-   !-----------------------------------------------
-   !-----     UTILITIES FOR STATE_MATRICES    -----
-   !-----------------------------------------------
-
-   subroutine get_state_mat(mat_out, state_in)
-      !! Utility function to transfer data from a state vector to a real array
-      real(wp),                   intent(out) :: mat_out(:,:)
-      class(abstract_vector_rdp), intent(in)  :: state_in(:)
-      ! internal variables
-      mat_out = 0.0_wp
-      select type (state_in)
-      type is (state_matrix)
-         call assert_shape(mat_out, (/ N, N /), 'get_state -> state_matrix', 'mat_out')
-         mat_out = reshape(state_in(1)%state, (/ N, N /))
-      end select
-      return
-   end subroutine get_state_mat
-
-   subroutine set_state_mat(state_out, mat_in)
-      !! Utility function to transfer data from a real array to a state vector
-      class(abstract_vector_rdp), intent(out) :: state_out(:)
-      real(wp),                   intent(in)  :: mat_in(:,:)
-      ! internal variables
-      select type (state_out)
-      type is (state_matrix)
-         call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
-         call zero_basis(state_out)
-         state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
-      end select
-      return
-   end subroutine set_state_mat
-
-   subroutine init_rand_mat(state, ifnorm)
-      !! Utility function to initialize a state vector with random data
-      class(abstract_vector_rdp), intent(inout)  :: state(:)
-      logical, optional,          intent(in)     :: ifnorm
-      ! internal variables
-      integer :: k, kdim
-      logical :: normalize
-      normalize = optval(ifnorm,.true.)
-      select type (state)
-      type is (state_matrix)
-         kdim = size(state)
-         do k = 1, kdim
-            call state(k)%rand(ifnorm = normalize)
-         end do
-      end select
-      return
-   end subroutine init_rand_mat
 
 end module Ginzburg_Landau_RK_Lyapunov

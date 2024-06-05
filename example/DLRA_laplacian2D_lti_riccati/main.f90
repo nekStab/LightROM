@@ -1,25 +1,28 @@
 program demo
+   ! Standard Library
+   use stdlib_optval, only : optval 
+   use stdlib_linalg, only : eye, diag
+   use stdlib_math, only : all_close, logspace
+   use stdlib_io_npy, only : save_npy
+   ! LightKrylov for Linear Algebra
    use LightKrylov
    use LightKrylov, only : wp => dp
    use LightKrylov_AbstractVectors
    use LightKrylov_ExpmLib
    use LightKrylov_Utils
-
+   ! LightROM
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
-   
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
    use LightROM_RiccatiSolvers
-
+   ! Laplacian
    use Laplacian2D_LTI_Riccati_Base
    use Laplacian2D_LTI_Riccati_Operators
    use Laplacian2D_LTI_Riccati_RKlib
+   use Laplacian2D_LTI_Riccati_Utils
 
-   use stdlib_optval, only : optval 
-   use stdlib_linalg, only : eye, diag
-   use stdlib_math, only : all_close, logspace
-   use stdlib_io_npy, only : save_npy
+   
    implicit none
 
    ! DLRA
