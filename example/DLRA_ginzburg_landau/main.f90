@@ -47,10 +47,10 @@ program demo
    type(lti_system)                          :: LTI
 
    ! Initial condition
-   real(wp)                                :: U0_in(2*nx, rkmax)
-   real(wp)                                :: S0(rkmax,rkmax)
-   type(state_vector),     allocatable       :: U0(:)
-   type(state_vector),     allocatable       :: Utmp(:)
+   type(state_vector)                        :: U0(1:rkmax)
+   real(wp)                                  :: S0(rkmax,rkmax)
+   ! matrix
+   real(wp)                                  :: U0_in(2*nx, rkmax)
    
    ! OUTPUT
    real(wp)                                  :: U_out(2*nx,rkmax)
@@ -64,11 +64,6 @@ program demo
    integer                                   :: i, j, k, irep, nrep, istep, nsteps
    integer,                allocatable       :: perm(:)
    real(wp)                                  :: Tmax, etime
-
-   ! SVD
-   real(wp)  :: U_svd(rk_X0,rk_X0)
-   real(wp)  :: S_svd(rk_X0)
-   real(wp)  :: V_svd(rk_X0,rk_X0)
 
    logical        :: ifsave, ifload, ifverb, iflogs
    
@@ -91,21 +86,9 @@ program demo
    call LTI%initialize_lti_system(A, prop, B, CT)
 
    ! Define initial condition of the form X0 + U0 @ S0 @ U0.T SPD 
-   if (verb) write(*,*) 'Define initial condition'
-   allocate(Utmp(1:rk_X0)); allocate(U0(1:rk_X0))
-   call random_number(U_out)
-   U_out(nx+1:2*nx,:) = 0.0_wp
-   call set_state(Utmp, U_out)
-   S0 = 0.0_wp
-   allocate(perm(1:rk_X0)); perm = 0
-   call qr(Utmp, S0, perm, info)
-   call svd(S0(:,1:rk_X0), U_svd(:,1:rk_X0), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
-   S0 = diag(S_svd)
-   block
-      class(abstract_vector_rdp), allocatable :: Xwrk(:)
-      call linear_combination(Xwrk, Utmp, U_svd); call copy_basis(U0, Xwrk)
-   end block
-   !call linear_combination(U0, Utmp, U_svd)
+   if (verb) write(*,*) '    Define initial condition'
+   call generate_random_initial_condition(U0, S0, rk_X0)
+   call get_state(U_out, U0)
 
    !----------------------------------
    !
@@ -134,7 +117,7 @@ program demo
    !
    !----------------------------------
 
-   run_test = .true.
+   run_test = .false.
    if (run_test) then
       nrk  = 6; allocate(rkv(1:nrk));   rkv  = (/ 6, 10, 12, 14, 20, 40 /)
       ntau = 5; allocate(tauv(1:ntau)); tauv = (/ 1.0, 0.1, 0.01, 0.001, 0.0001 /)

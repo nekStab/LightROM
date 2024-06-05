@@ -2,6 +2,7 @@ module laplacian2D_LTI_Lyapunov_Base
    !> LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only : wp => dp
+   use LightKrylov_AbstractVectors ! zero_basis
    use LightKrylov_Utils, only : assert_shape
 
    use LightROM_AbstractLTIsystems
@@ -30,6 +31,16 @@ module laplacian2D_LTI_Lyapunov_Base
    real(wp),      parameter :: dx = L/nx    !> Grid size.
    real(wp),      parameter :: dx2= dx**2   !> Grid size.
    integer,       parameter :: rk_b = 5     !> rank of the RHS
+
+   !-------------------------------------------------------
+   !-----     LIGHTKRYLOV SYM LOW RANK STATE TYPE     -----
+   !-------------------------------------------------------
+
+   type, extends(abstract_sym_low_rank_state_rdp), public :: LR_state
+   contains
+      private
+      procedure, pass(self), public :: initialize_LR_state
+   end type LR_state
 
    !-------------------------------------------
    !-----     LIGHTKRYLOV VECTOR TYPE     -----
@@ -63,23 +74,6 @@ module laplacian2D_LTI_Lyapunov_Base
 
    type(state_vector)       :: B(rk_b)
    real(wp)                 :: BBT(N**2)
-
-   !-----------------------------------------------
-   !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
-   !-----------------------------------------------
-
-   type, extends(abstract_lti_system_rdp), public :: lti_system
-   end type lti_system
-
-   !-------------------------------------------------------
-   !-----     LIGHTKRYLOV SYM LOW RANK STATE TYPE     -----
-   !-------------------------------------------------------
-
-   type, extends(abstract_sym_low_rank_state_rdp), public :: LR_state
-   contains
-      private
-      procedure, pass(self), public :: set_LR_state
-   end type LR_state
 
 contains
 
@@ -275,17 +269,27 @@ contains
    !-----     UTILITIES FOR SYM LOW RANK REPRESENTATION    -----
    !------------------------------------------------------------
 
-   subroutine set_LR_state(self, U, S)
-      class(LR_state), intent(inout) :: self
-      real(wp),        intent(in)    :: U(:,:)
-      real(wp),        intent(in)    :: S(:,:)
-      ! internals
-      integer :: rk
-      rk = size(U,2)
-      call assert_shape(S, (/ rk, rk /), 'set_LR_state', 'S')
-      call set_state(self%U, U)
-      self%S = S
+   subroutine initialize_LR_state(self, U, S, rk)
+      class(LR_state),            intent(inout) :: self
+      class(abstract_vector_rdp), intent(in)    :: U(:)
+      real(wp),                   intent(in)    :: S(:,:)
+      integer,                    intent(in)    :: rk
+
+      if (rk > size(U)) then
+         write(*,*) 'Input state rank is lower than the chosen rank! Abort.'
+         STOP 1
+         ! this could be improved by initialising extra columns with random vectors
+         ! orthonormalize these against the existing columns of U and set the corresponding
+         ! entries in S to 0.
+      end if
+
+      select type (U)
+      type is (state_vector)
+         allocate(self%U(1:rk), source=U(1:rk))
+         allocate(self%S(1:rk,1:rk)); 
+         self%S(1:rk,1:rk) = S(1:rk,1:rk) 
+      end select
       return
-   end subroutine set_LR_state
+   end subroutine initialize_LR_state
 
 end module laplacian2D_LTI_Lyapunov_Base

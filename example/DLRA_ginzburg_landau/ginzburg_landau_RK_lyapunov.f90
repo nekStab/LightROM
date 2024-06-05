@@ -2,7 +2,8 @@ module Ginzburg_Landau_RK_Lyapunov
    ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only : wp => dp
-   use LightKrylov_utils, only : assert_shape
+   use LightKrylov_AbstractVectors ! zero_basis
+   use LightKrylov_Utils, only : assert_shape
    ! LightROM
    use LightROM_AbstractLTIsystems
    use LightROM_Utils ! zero_basis for now

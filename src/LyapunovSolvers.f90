@@ -287,9 +287,10 @@ module LightROM_LyapunovSolvers
       do i = 1, rk
          call exptA(Uwrk, A, X%U(i), tau, info, trans)
          call X%U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
-      enddo
+      end do
       ! Reorthonormalize in-place
-      call qr(X%U, R, perm, info)
+      call qr(X%U, R, perm, info, verbosity=.false.)
+      if (info /= 0) write(*,*) '  [M_forward_map_rdp] Info: Colinear vectors detected in QR, column ', info
       ! Update low-rank fcators
       call apply_inverse_permutation_matrix(R, perm)
       ! Update coefficient matrix
@@ -363,7 +364,8 @@ module LightROM_LyapunovSolvers
       ! Construct intermediate solution U1
       call axpby_basis(U1, 1.0_wp, BBTU, tau)   ! K0 + tau*Kdot
       ! Orthonormalize in-place
-      call qr(U1, Swrk, perm, info)
+      call qr(U1, Swrk, perm, info, verbosity=.false.)
+      if (info /= 0) write(*,*) '  [K_step_lyapunov_rdp] Info: Colinear vectors detected in QR, column ', info
       call apply_inverse_permutation_matrix(Swrk, perm)
       X%S = Swrk
 

@@ -1,17 +1,33 @@
 module Laplacian2D_LTI_Riccati_Operators
    use Laplacian2D_LTI_Riccati_Base
-   !> LightKrylov for linear algebra.
+   ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only : wp => dp
+   use LightKrylov_AbstractVectors
    use LightKrylov_Utils
-   !> Standard Library.
+   ! LightROM
+   use LightROM_AbstractLTIsystems
+   use LightROM_Utils    ! for zero_basis for now
+   ! Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
-   use stdlib_linalg, only : eye
+   use stdlib_linalg, only : eye, diag
    implicit none
 
    ! operator
-   public :: CARE, build_operator, laplacian, laplacian_mat, sval
+   public :: build_operator, laplacian, laplacian_mat, exptA
+   ! utils
+   public :: CARE, sval, generate_random_initial_condition
+
+   !-----------------------------------------------
+   !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
+   !-----------------------------------------------
+
+   type, extends(abstract_lti_system_rdp), public :: lti_system
+   contains
+      private
+      procedure, pass(self), public :: initialize_lti_system
+   end type lti_system
 
    !-----------------------------------
    !-----     LAPLACE OPERATOR    -----
@@ -151,6 +167,90 @@ contains
       return
    end subroutine laplacian_mat
 
+   !--------------------------------------
+   !-----     EXP(tA) SUBROUTINE     -----
+   !--------------------------------------
+
+   subroutine exptA(vec_out, A, vec_in, tau, info, trans)
+      !! Subroutine for the exponential propagator that conforms with the abstract interface
+      !! defined in expmlib.f90
+      class(abstract_vector_rdp),  intent(out)   :: vec_out
+      !! Output vector
+      class(abstract_linop_rdp),   intent(inout) :: A
+      !! Linear operator
+      class(abstract_vector_rdp),  intent(in)    :: vec_in
+      !! Input vector.
+      real(wp),                    intent(in)    :: tau
+      !! Integration horizon
+      integer,                     intent(out)   :: info
+      !! Information flag
+      logical, optional,           intent(in)    :: trans
+      logical                                    :: transpose
+      !! Direct or Adjoint?
+
+      ! optional argument
+      transpose = optval(trans, .false.)
+
+      ! time integrator
+      select type (vec_in)
+      type is (state_vector)
+         select type (vec_out)
+         type is (state_vector)
+            select type (A)
+            type is (laplace_operator)
+               call k_exptA(vec_out, A, vec_in, tau, info, transpose)
+            end select
+         end select
+      end select
+
+   end subroutine exptA
+
+   !--------------------------------------------------------
+   !-----     TYPE BOUND PROCEDURES FOR LTI SYSTEMS    -----
+   !--------------------------------------------------------
+
+   subroutine initialize_lti_system(self, A, B, CT, D)
+      class(lti_system),           intent(inout) :: self
+      class(abstract_linop_rdp),   intent(in)    :: A
+      class(abstract_vector_rdp),  intent(in)    :: B(:)
+      class(abstract_vector_rdp),  intent(in)    :: CT(:)
+      real(wp),          optional, intent(in)    :: D(:,:)
+
+      ! internal variables
+      integer                                :: rk_b, rk_c
+
+      ! Operator
+      select type (A)
+      type is (laplace_operator)
+         allocate(self%A, source=A)
+      end select
+      ! Input
+      select type (B)
+      type is (state_vector)
+         rk_b = size(B)
+         allocate(self%B(1:rk_b), source=B(1:rk_b))
+      end select
+      ! Output
+      select type (CT)
+         type is (state_vector)
+         rk_c = size(CT)
+         allocate(self%CT(1:rk_c), source=CT(1:rk_c))
+      end select
+      ! Throughput
+      allocate(self%D(1:rk_c, 1:rk_b))
+      if (present(D)) then
+         call assert_shape(D, (/ rk_c, rk_b /), 'initialize_lti_system', 'D')
+         self%D = D
+      else
+         self%D = 0.0_wp
+      end if
+      return
+   end subroutine initialize_lti_system
+
+   !-----------------------------
+   !-----     UTILITIES     -----
+   !-----------------------------
+
    subroutine sval(X, svals)
       real(wp), intent(in) :: X(:,:)
       real(wp)             :: svals(min(size(X, 1), size(X, 2)))
@@ -161,6 +261,53 @@ contains
       ! Perform SVD
       call svd(X, U, svals, VT)
     
+   end subroutine
+
+   subroutine generate_random_initial_condition(U, S, rk)
+      class(state_vector),   intent(out) :: U(:)
+      real(wp),              intent(out) :: S(:,:)
+      integer,               intent(in)  :: rk
+      ! internals
+      class(state_vector),   allocatable :: Utmp(:)
+      integer,               allocatable :: perm(:)
+      ! SVD
+      real(wp)                           :: U_svd(rk,rk)
+      real(wp)                           :: S_svd(rk)
+      real(wp)                           :: V_svd(rk,rk)
+      integer                            :: i, info
+
+      if (size(U) < rk) then
+         write(*,*) 'Input krylov basis size incompatible with requested rank', rk
+         STOP 1
+      else
+         call zero_basis(U)
+         do i = 1,rk
+            call U(i)%rand(.false.)
+         end do
+      end if
+      if (size(S,1) < rk) then
+         write(*,*) 'Input coefficient matrix size incompatible with requested rank', rk
+         STOP 1
+      else if (size(S,1) /= size(S,2)) then
+         write(*,*) 'Input coefficient matrix must be square.'
+         STOP 2
+      else
+         S = 0.0_wp
+      end if
+      ! perform QR
+      allocate(perm(1:rk)); perm = 0
+      allocate(Utmp(1:rk), source=U(1:rk))
+      call qr(Utmp, S, perm, info, verbosity=.false.)
+      if (info /= 0) write(*,*) '  [generate_random_initial_condition] Info: Colinear vectors detected in QR, column ', info
+      ! perform SVD
+      call svd(S(:,1:rk), U_svd(:,1:rk), S_svd(1:rk), V_svd(1:rk,1:rk))
+      S = diag(S_svd)
+      block
+         class(abstract_vector_rdp), allocatable :: Xwrk(:)
+         call linear_combination(Xwrk, Utmp, U_svd)
+         call copy_basis(U, Xwrk)
+      end block
+      
    end subroutine
 
 end module Laplacian2D_LTI_Riccati_Operators

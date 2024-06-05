@@ -448,7 +448,8 @@ module LightROM_RiccatiSolvers
       call axpby_basis(U1, 1.0_wp, Uwrk0, tau)                           ! K0 + tau*Kdot
 
       ! Orthonormalize in-place
-      call qr(U1, Swrk0, perm, info)
+      call qr(U1, Swrk0, perm, info, verbosity=.false.)
+      if (info /= 0) write(*,*) '  [K_step_riccati_rdp] Info: Colinear vectors detected in QR, column ', info
       call apply_inverse_permutation_matrix(Swrk0, perm)
       X%S = Swrk0
 
