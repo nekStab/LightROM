@@ -5,7 +5,6 @@ module Laplacian2D_LTI_Lyapunov_RKlib
    ! RKLIB module for time integration.
    use rklib_module
    ! LightKrylov for linear algebra.
-   use LightKrylov
    use LightKrylov, only : wp => dp
    ! Laplacian
    use Laplacian2D_LTI_Lyapunov_Base

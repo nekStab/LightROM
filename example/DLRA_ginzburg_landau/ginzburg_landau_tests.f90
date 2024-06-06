@@ -866,7 +866,7 @@ contains
          end if
          X_out = matmul( U0_mat, matmul( S0, transpose(U0_mat ) ) )
          ! Set initial condition for RK
-         call set_state_mat(X_mat(1:1), X_out)
+         call set_state(X_mat(1:1), X_out)
          write(*,'(A10,A26,A26,A26,A20)') 'RKlib:','Tend','|| X_RK ||_2/N', '|| res ||_2/N','Elapsed time'
          write(*,*) '         ------------------------------------------------------------------------'
          do irep = 1, nrep
@@ -875,10 +875,10 @@ contains
             call RK_propagator%matvec(X_mat(1), X_mat(2))
             call system_clock(count=clock_stop)      ! Stop Timer
             ! recover output
-            call get_state_mat(X_RKlib(:,:,irep), X_mat(2:2))
+            call get_state(X_RKlib(:,:,irep), X_mat(2:2))
             call CALE(res_flat, reshape(X_RKlib(:,:,irep), shape(res_flat)), BBTW_flat, .false.)
             ! replace input
-            call set_state_mat(X_mat(1:1), X_RKlib(:,:,irep))
+            call set_state(X_mat(1:1), X_RKlib(:,:,irep))
             write(*,'(I10,F26.4,E26.8,E26.8,F18.4," s")') irep, irep*Tend, norm2(X_RKlib(:,:,irep))/N, norm2(res_flat)/N, &
                            & real(clock_stop-clock_start)/real(clock_rate)
             if (if_save_npy) then

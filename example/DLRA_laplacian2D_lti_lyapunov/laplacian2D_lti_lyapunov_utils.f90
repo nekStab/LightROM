@@ -2,12 +2,13 @@ module Laplacian2D_LTI_Lyapunov_Utils
    ! Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
-   use stdlib_linalg, only : eye
+   use stdlib_linalg, only : eye, diag
    ! RKLIB module for time integration.
    use rklib_module
    ! LightKrylov for linear algebra.
-   use LightKrylov
    use LightKrylov, only : wp => dp
+   use LightKrylov_AbstractVectors ! linear_combination
+   use LightKrylov_Utils, only : svd
    ! Laplacian
    use Laplacian2D_LTI_Lyapunov_Base
    use laplacian2D_LTI_Lyapunov_Operators
@@ -132,10 +133,7 @@ contains
          write(*,*) 'Input krylov basis size incompatible with requested rank', rk
          STOP 1
       else
-         call zero_basis(U)
-         do i = 1,rk
-            call U(i)%rand(.false.)
-         end do
+         call init_rand(U, .false.)
       end if
       if (size(S,1) < rk) then
          write(*,*) 'Input coefficient matrix size incompatible with requested rank', rk

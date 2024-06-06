@@ -158,10 +158,7 @@ contains
          write(*,*) 'Input krylov basis size incompatible with requested rank', rk
          STOP 1
       else
-         call zero_basis(U)
-         do i = 1,rk
-            call U(i)%rand(.false.)
-         end do
+         call init_rand(U, .false.)
       end if
       if (size(S,1) < rk) then
          write(*,*) 'Input coefficient matrix size incompatible with requested rank', rk

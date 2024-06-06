@@ -9,9 +9,7 @@ module Ginzburg_Landau_Utils
    use LightKrylov
    use LightKrylov, only : wp => dp
    use LightKrylov_AbstractVectors
-   use LightKrylov_Constants
-   use LightKrylov_Utils
-   use LightKrylov_ExpmLib
+   use LightKrylov_Utils, only : svd, assert_shape
    ! LightROM
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
@@ -33,7 +31,6 @@ module Ginzburg_Landau_Utils
    public :: initialize_parameters
    ! utilities for state_vectors
    public :: set_state, get_state, init_rand
-   public :: get_state_mat, set_state_mat, init_rand_mat
    ! initial conditions
    public :: generate_random_initial_condition
    ! logfiles
@@ -107,9 +104,9 @@ contains
       return
    end subroutine initialize_parameters
 
-   !----------------------------------------------
-   !-----     UTILITIES FOR STATE_VECTORS    -----
-   !----------------------------------------------
+   !--------------------------------------------------------------------
+   !-----     UTILITIES FOR STATE_VECTOR AND STATE MATRIX TYPES    -----
+   !--------------------------------------------------------------------
 
    subroutine get_state(mat_out, state_in)
       !! Utility function to transfer data from a state vector to a real array
@@ -121,10 +118,13 @@ contains
       select type (state_in)
       type is (state_vector)
          kdim = size(state_in)
-         call assert_shape(mat_out, (/ 2*nx, kdim /), 'get_state -> state_vector', 'mat_out')
+         call assert_shape(mat_out, (/ N, kdim /), 'get_state -> state_vector', 'mat_out')
          do k = 1, kdim
             mat_out(:,k) = state_in(k)%state
          end do
+      type is (state_matrix)
+         call assert_shape(mat_out, (/ N, N /), 'get_state -> state_matrix', 'mat_out')
+         mat_out = reshape(state_in(1)%state, (/ N, N /))
       end select
       return
    end subroutine get_state
@@ -138,11 +138,15 @@ contains
       select type (state_out)
       type is (state_vector)
          kdim = size(state_out)
-         call assert_shape(mat_in, (/ 2*nx, kdim /), 'set_state -> state_vector', 'mat_in')
+         call assert_shape(mat_in, (/ N, kdim /), 'set_state -> state_vector', 'mat_in')
          call zero_basis(state_out)
          do k = 1, kdim
             state_out(k)%state = mat_in(:,k)
          end do
+      type is (state_matrix)
+         call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
+         call zero_basis(state_out)
+         state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
       end select
       return
    end subroutine set_state
@@ -161,51 +165,6 @@ contains
          do k = 1, kdim
             call state(k)%rand(ifnorm = normalize)
          end do
-      end select
-      return
-   end subroutine init_rand
-
-   !-----------------------------------------------
-   !-----     UTILITIES FOR STATE_MATRICES    -----
-   !-----------------------------------------------
-
-   subroutine get_state_mat(mat_out, state_in)
-      !! Utility function to transfer data from a state vector to a real array
-      real(wp),                   intent(out) :: mat_out(:,:)
-      class(abstract_vector_rdp), intent(in)  :: state_in(:)
-      ! internal variables
-      mat_out = 0.0_wp
-      select type (state_in)
-      type is (state_matrix)
-         call assert_shape(mat_out, (/ N, N /), 'get_state -> state_matrix', 'mat_out')
-         mat_out = reshape(state_in(1)%state, (/ N, N /))
-      end select
-      return
-   end subroutine get_state_mat
-
-   subroutine set_state_mat(state_out, mat_in)
-      !! Utility function to transfer data from a real array to a state vector
-      class(abstract_vector_rdp), intent(out) :: state_out(:)
-      real(wp),                   intent(in)  :: mat_in(:,:)
-      ! internal variables
-      select type (state_out)
-      type is (state_matrix)
-         call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
-         call zero_basis(state_out)
-         state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
-      end select
-      return
-   end subroutine set_state_mat
-
-   subroutine init_rand_mat(state, ifnorm)
-      !! Utility function to initialize a state vector with random data
-      class(abstract_vector_rdp), intent(inout)  :: state(:)
-      logical, optional,          intent(in)     :: ifnorm
-      ! internal variables
-      integer :: k, kdim
-      logical :: normalize
-      normalize = optval(ifnorm,.true.)
-      select type (state)
       type is (state_matrix)
          kdim = size(state)
          do k = 1, kdim
@@ -213,7 +172,7 @@ contains
          end do
       end select
       return
-   end subroutine init_rand_mat
+   end subroutine init_rand
 
    !------------------------------------
    !-----     INITIAL CONDIIONS    -----
