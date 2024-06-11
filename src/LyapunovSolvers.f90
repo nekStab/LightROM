@@ -152,11 +152,11 @@ module LightROM_LyapunovSolvers
       !! Toggle verbosity
 
       ! Internal variables   
-      integer                                    :: istep, nsteps, iostep
-      real(wp)                                   :: T
-      logical                                    :: verbose
-      logical                                    :: trans
-      procedure(abstract_exptA_rdp), pointer     :: p_exptA => null()
+      integer                                               :: istep, nsteps, iostep
+      real(wp)                                              :: T
+      logical                                               :: verbose
+      logical                                               :: trans
+      procedure(abstract_exptA_rdp), pointer                :: p_exptA => null()
 
       ! Optional argument
       trans   = optval(iftrans, .false.)
@@ -270,11 +270,11 @@ module LightROM_LyapunovSolvers
       procedure(abstract_exptA_rdp)                         :: exptA
       !! Routine for computation of the exponential pabstract_vector),  ropagator (default: Krylov-based exponential operator).
       logical, optional,                      intent(in)    :: iftrans
+      logical                                               :: trans
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
 
       ! Internal variables
-      logical                                               :: trans
-      class(abstract_vector_rdp),             allocatable   :: Uwrk     ! scratch basis
+      class(abstract_vector_rdp),             allocatable   :: exptAU    ! scratch basis
       real(wp),                               allocatable   :: R(:,:)    ! QR coefficient matrix
       integer,                                allocatable   :: perm(:)   ! Permutation vector
       real(wp),                               allocatable   :: wrk(:,:)
@@ -289,10 +289,10 @@ module LightROM_LyapunovSolvers
       allocate(wrk(1:rk,1:rk)); wrk = 0.0_wp
 
       ! Apply propagator to initial basis
-      if (.not. allocated(Uwrk)) allocate(Uwrk, source=X%U(1)); call Uwrk%zero()
+      allocate(exptAU, source=X%U(1)); call exptAU%zero()
       do i = 1, rk
-         call exptA(Uwrk, A, X%U(i), tau, info, trans)
-         call X%U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
+         call exptA(exptAU, A, X%U(i), tau, info, trans)
+         call X%U(i)%axpby(0.0_wp, exptAU, 1.0_wp) ! overwrite old solution
       end do
       ! Reorthonormalize in-place
       call qr(X%U(1:rk), R, perm, info)
@@ -352,7 +352,6 @@ module LightROM_LyapunovSolvers
       !! Information flag.
 
       ! Internal variables
-      real(wp),                               allocatable   :: Swrk(:,:)
       integer,                                allocatable   :: perm(:)   ! Permutation vector
       integer                                               :: rk, rkmax
 
@@ -392,7 +391,6 @@ module LightROM_LyapunovSolvers
       !! Information flag.
 
       ! Internal variables
-      real(wp),                               allocatable   :: Swrk(:,:)
       integer                                               :: rk, rkmax
 
       info = 0
@@ -420,7 +418,6 @@ module LightROM_LyapunovSolvers
       !! Information flag.
 
       ! Internal variables
-      class(abstract_vector_rdp),             allocatable   :: Uwrk(:)
       integer                                               :: rk, rkmax
 
       info = 0
