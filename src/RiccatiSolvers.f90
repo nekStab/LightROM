@@ -13,7 +13,7 @@ module LightROM_RiccatiSolvers
    use Lightkrylov_BaseKrylov
    ! LightROM modules
    use LightROM_LyapunovUtils
-   use LightROM_LyapunovSolvers
+   use LightROM_LyapunovSolvers, only : M_forward_map
    use LightROM_RiccatiUtils
    use LightROM_AbstractLTIsystems
 
@@ -310,7 +310,7 @@ module LightROM_RiccatiSolvers
          call copy_basis(X%U, U0); X%S = S0
          ! Second order integration
          call G_forward_map_riccati(X,    B, CT, Qc, Rinv,     tau, info, ifpred=.false., &
-                                  & T0=T0, Tt=Tt, U0=U0, Ut=Ut
+                                  & T0=T0, Tt=Tt, U0=U0, Ut=Ut)
          call M_forward_map        (X, A,                  0.5*tau, info, exptA, trans)
       end select
 
@@ -370,7 +370,7 @@ module LightROM_RiccatiSolvers
                call innerprod_matrix(Swrk0, X%U, Ut)
                call linear_combination(Xwrk, Tt, Swrk0); call copy_basis(T0, Xwrk) ! overwrite T0 with Gamma
             end block
-            call mat_axpby(T0, 0.5_wp, QU, 0.5_wp)
+            call axpby_basis(T0, 0.5_wp, QU, 0.5_wp)
             ! Update X to most recent value
             call copy_basis(X%U, U1)
             ! reverse steps based on Gamma
