@@ -24,8 +24,11 @@ module LightROM_LyapunovSolvers
    class(abstract_vector_rdp),  allocatable   :: BBTU(:)
    real(wp),                    allocatable   :: Swrk(:,:)
 
+   ! module name
    private :: this_module
    character*128, parameter :: this_module = 'LightKrylov_LyapunovSolvers'
+   ! rank_reduction_lock
+   integer, private :: rk_reduction_lock
 
    public :: numerical_low_rank_splitting_lyapunov_integrator
    public :: M_forward_map
@@ -61,7 +64,7 @@ module LightROM_LyapunovSolvers
    contains
 
    subroutine numerical_low_rank_splitting_lyapunov_integrator_rdp(X, A, B, Tend, tau, torder, info, &
-                                                                    & exptA, iftrans, ifverb)
+                                                                    & exptA, iftrans, ifverb, ifrk, tol)
       !! Numerical integrator for the matrix-valued differential Lyapunov equation of the form
       !!
       !!    $$ \dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{B} \mathbf{B}^T $$
@@ -147,28 +150,39 @@ module LightROM_LyapunovSolvers
       procedure(abstract_exptA_rdp), optional               :: exptA
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
       logical,                       optional, intent(in)   :: iftrans
+      logical                                               :: trans
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
       logical,                       optional, intent(in)   :: ifverb
+      logical                                               :: verbose
       !! Toggle verbosity
+      logical,                       optional, intent(in)   :: ifrk
+      logical                                               :: rankadaptive
+      !! Toggle rank-adaptivity
+      real(wp),                      optional, intent(in)   :: tol
+      real(wp)                                              :: tolerance
+      !! tolerance for the smallest singular value (this value is only used if ifrk = .true.)
 
       ! Internal variables   
       integer                                               :: istep, nsteps, iostep
       real(wp)                                              :: T
-      logical                                               :: verbose
-      logical                                               :: trans
+      
       integer                                               :: mode
       procedure(abstract_exptA_rdp), pointer                :: p_exptA => null()
 
-      ! Optional argument
-      trans   = optval(iftrans, .false.)
-      verbose = optval(ifverb, .false.)
+      ! Optional arguments
+      trans        = optval(iftrans, .false.)
+      verbose      = optval(ifverb, .false.)
+      rankadaptive = optval(ifrk, .false.)
+      tolerance    = optval(tol, 1e-8_wp)
       if (present(exptA)) then
          p_exptA => exptA
       else
          p_exptA => k_exptA_rdp
-      endif
+      end if
 
-      T = 0.0_wp
+      ! Initialize
+      T                 = 0.0_wp
+      rk_reduction_lock = 0
 
       ! Compute number of steps
       nsteps = floor(Tend/tau)
@@ -197,7 +211,11 @@ module LightROM_LyapunovSolvers
 
       dlra : do istep = 1, nsteps
          ! dynamical low-rank approximation solver
-         call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, mode, info, p_exptA, trans)
+         if (rankadaptive) then
+            call DLRA_rank_adaptive_lyapunov_step_rdp(X, A, B, tau, mode, info, p_exptA, tol, trans)
+         else
+            call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, mode, info, p_exptA, trans)
+         end if
 
          T = T + tau
          ! here we can do some checks such as whether we have reached steady state
@@ -446,7 +464,7 @@ module LightROM_LyapunovSolvers
    !
    !-----------------------------
 
-   subroutine DLRA_rank_adaptive_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, iftrans, ifchk)
+   subroutine DLRA_rank_adaptive_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, tol, iftrans)
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_linop_rdp),              intent(inout) :: A
@@ -461,14 +479,23 @@ module LightROM_LyapunovSolvers
       !! Information flag
       procedure(abstract_exptA_rdp)                         :: exptA
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
+      real(wp),                               intent(in)    :: tol
+      !! tolerance for the smallest singular value
       logical,                      optional, intent(in)    :: iftrans
+      logical                                               :: trans
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
-      logical,                      optional, intent(in)    :: ifchk
-      !! Determine whether the adequacy of the current effective rank should be examined (SVD)
       
       ! Internal variables
-      integer                                               :: istep, nsteps
-      logical                                               :: trans
+      integer                                               :: istep, irk
+      logical                                               :: accept_step, found
+      real(wp),                               allocatable   :: coef(:,:)
+      real(wp)                                              :: norm
+      ! svd
+      real(wp),                               allocatable   :: svals(:)
+      real(wp),                               allocatable   :: U(:,:), VT(:,:)
+      character*128                                         :: msg
+
+      integer, parameter                                    :: max_step = 5  ! might not be needed
 
       ! Optional argument
       trans = optval(iftrans, .false.)
@@ -476,7 +503,80 @@ module LightROM_LyapunovSolvers
       ! run a regular step with rk + 1 ranks
       X%rk = X%rk + 1
       call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans)
-      ! compute singular values of X%S
+
+      accept_step = .false.
+      istep = 1
+      do while ( .not. accept_step .and. istep < max_step )
+         ! compute singular values of X%S
+         allocate(U(1:X%rk,1:X%rk)); allocate(svals(1:X%rk)); allocate(VT(1:X%rk,1:X%rk)); 
+         U = 0.0_wp; svals = 0.0_wp; VT = 0.0_wp
+         call svd(X%S(1:X%rk, 1:X%rk), U, svals, VT)
+         ! find singular value that falls below tolerance (if any)
+         found = .false.
+         tol_chk: do irk = 1, X%rk
+            if ( svals(irk) < tol ) then
+               found = .true.
+               exit tol_chk
+            end if
+         end do tol_chk
+         
+         ! choose action
+         if (.not. found) then ! none of the singular values is below tolerance
+            ! increase rank and run another step
+            if (X%rk == size(X%U)) then ! cannot increase rank without reallocating X%U and X%S
+               info = -2
+               write(msg, *) 'Tried to increase rank but rkmax is reached. Increase rkmax and restart!'
+               call logger%log_error('Rank increase', module=this_module, procedure='DLRA_rank_adaptive_lyapunov_step_rdp', &
+                                    & stat=info, errmsg=msg)
+            else
+               
+               X%rk = X%rk + 1
+               ! set coefficients to zero (for redundancy)
+               X%S(1:X%rk, X%rk) = 0.0_wp 
+               X%S(X%rk, 1:X%rk) = 0.0_wp
+               ! add random vector ...
+               call X%U(X%rk)%rand(.false.)
+               ! ... and orthonormalize
+               allocate(coef(X%rk,1)); coef = 0.0_wp
+               call innerprod_matrix(coef, X%U(1:X%rk-1), X%U(X%rk:X%rk))
+               block
+                  class(abstract_vector_rdp), allocatable :: proj(:)
+                  call linear_combination(proj, X%U(1:X%rk), coef)
+                  call X%U(X%rk)%sub(proj(1))
+               end block
+               call X%U(X%rk)%scal(1.0_wp / X%U(X%rk)%norm())
+
+               rk_reduction_lock = 10 ! avoid rank oscillations
+
+            end if
+         else ! the rank of the solution is sufficient
+
+            accept_step = .true.
+
+            if (irk /= X%rk .and. rk_reduction_lock == 0) then ! we should decrease the rank
+               ! decrease rank
+
+               ! rotate basis onto principal axes
+               block
+                  class(abstract_vector_rdp), allocatable :: Xwrk(:)
+                  call linear_combination(Xwrk, X%U(1:X%rk), U)
+                  call copy_basis(X%U(1:X%rk), Xwrk)
+               end block
+               X%S(1:X%rk, 1:X%rk) = diag(svals(1:X%rk))
+
+               X%rk = max(irk, X%rk - 2)  ! reduce by at most 2              
+
+            end if
+
+         end if ! found
+         istep = istep + 1
+      end do ! while .not. accept_step
+
+      ! decrease rk_reduction_lock
+      if (rk_reduction_lock > 0) rk_reduction_lock = rk_reduction_lock - 1
+      
+      ! reset to the rank of the approximation which we use outside of the integrator 
+      X%rk = X%rk - 1      
 
       return
    end subroutine DLRA_rank_adaptive_lyapunov_step_rdp
