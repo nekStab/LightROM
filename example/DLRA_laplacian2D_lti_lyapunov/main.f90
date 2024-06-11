@@ -1,23 +1,29 @@
 program demo
-   use LightKrylov
-   use LightKrylov_expmlib
-   use LightKrylov_utils
-
-   use LightROM_AbstractLTIsystems
-   use LightROM_utils
-
-   use LightROM_LyapunovSolvers
-   use LightROM_LyapunovUtils
-
-   use Laplacian2D_LTI_Lyapunov_Base
-   use Laplacian2D_LTI_Lyapunov_Operators
-   use Laplacian2D_LTI_Lyapunov_RKlib
-
+   ! Standard Library
    use stdlib_optval, only : optval 
    use stdlib_linalg, only : eye
    use stdlib_math, only : all_close, logspace
    use stdlib_io_npy, only : save_npy
+   ! LightKrylov for linear algebra
+   use LightKrylov
+   use LightKrylov, only : wp => dp
+   use LightKrylov_Logger
+   use LightKrylov_ExpmLib
+   use LightKrylov_Utils
+   ! LightROM
+   use LightROM_AbstractLTIsystems
+   use LightROM_Utils
+   use LightROM_LyapunovSolvers
+   use LightROM_LyapunovUtils
+   ! Laplacian
+   use Laplacian2D_LTI_Lyapunov_Base
+   use Laplacian2D_LTI_Lyapunov_Operators
+   use Laplacian2D_LTI_Lyapunov_RKlib
+   use Laplacian2D_LTI_Lyapunov_Utils
+
    implicit none
+
+   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Main'
 
    !----------------------------------------------------------
    !-----     LYAPUNOV EQUATION FOR LAPLACE OPERATOR     -----
@@ -25,7 +31,7 @@ program demo
 
    ! DLRA
    integer, parameter :: rkmax = 14
-   integer, parameter :: rk_X0 = 10
+   integer, parameter :: rk_X0 = 14
    logical, parameter :: verb  = .false.
    logical, parameter :: save  = .false.
    character*128      :: oname
@@ -43,11 +49,11 @@ program demo
 
    ! LTI system
    type(lti_system)                :: LTI
-   real(kind=wp), allocatable      :: D(:,:)
+   real(wp), allocatable           :: D(:,:)
    integer                         :: p
 
    ! Laplacian
-   type(laplace_operator),   allocatable :: A
+   type(laplace_operator), allocatable :: A
 
    ! LR representation
    type(LR_state)                  :: X
@@ -60,8 +66,10 @@ program demo
    real(wp)                        :: X_RKlib_ref(N,N)
 
    ! Initial condition
-   real(wp)                        :: U0(N, rkmax)
+   type(state_vector)              :: U0(rkmax)
    real(wp)                        :: S0(rkmax,rkmax)
+   ! Matrix
+   real(wp)                        :: U0_in(N,rkmax)
    real(wp)                        :: X0(N,N)
 
    ! OUTPUT
@@ -85,13 +93,11 @@ program demo
    real(wp)  :: T(N,N), Q(N,N), Z(N,N), Vdata(N,N), Wdata(N,N), Ydata(N,N)
    real(wp)  :: scale
    integer   :: isgn
-   ! SVD
-   real(wp)  :: U_svd(N,N)
-   real(wp)  :: S_svd(rkmax)
-   real(wp)  :: V_svd(rkmax,rkmax)
 
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
+
+   call logger%configure(level=error_level); write(*,*) 'Logging set to error_level.'
 
    call system_clock(count_rate=clock_rate)
 
@@ -121,25 +127,18 @@ program demo
    BBTdata = -matmul(Bdata(:,1:rk_b), transpose(Bdata(:,1:rk_b)))
    BBT(1:N**2) = -reshape(BBTdata, shape(BBT))
 
-   p = 1
+   ! Define LTI system
    LTI = lti_system()
-   allocate(LTI%A,         source=A)
-   allocate(LTI%B(1:rk_b), source=B(1:rk_b));
-   allocate(LTI%CT(1:p),   source=B(1)); call mat_zero(LTI%CT)
-   allocate(LTI%D(1:p,1:rk_b)); LTI%D = 0.0_wp
+   call LTI%initialize_lti_system(A, B, B)
+   call zero_basis(LTI%CT)
 
-   ! Define initial condition
-   call random_number(U0(:, 1:rk_X0))
-   ! Compute SVD to get low-rank representation
-   call svd(U0(:,1:rk_X0), U_svd(:,1:N), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
-   S0 = 0.0_wp
-   do i = 1,rk_X0
-      S0(i,i) = S_svd(i)
-   end do
-   U0(:,1:rk_X0) = U_svd(:,1:rk_X0)
+   ! Define initial condition of the form X0 + U0 @ S0 @ U0.T SPD 
+   if (verb) write(*,*) '    Define initial condition'
+   call generate_random_initial_condition(U0, S0, rk_X0)
+   call get_state(U_out, U0)
    
    ! Compute the full initial condition X0 = U_in @ S0 @ U_in.T
-   X0 = matmul( U0(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U0(:,1:rk_X0))))
+   X0 = matmul( U_out(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U_out(:,1:rk_X0))))
    
    !------------------
    ! COMPUTE EXACT SOLUTION OF THE LYAPUNOV EQUATION WITH LAPACK
@@ -175,6 +174,10 @@ program demo
    call system_clock(count=clock_stop)      ! Stop Timer
    write(*,'(A40,F10.4," s")') '--> X_ref.    Elapsed time:', real(clock_stop-clock_start)/real(clock_rate)
    write(*,*)
+
+   ! sanity check
+   X0 = CALE(Xref, Adata, BBT)
+   write(*,*) '    Direct problem:', norm2(X0)/N
 
    !------------------
    ! COMPUTE SOLUTION WITH RK FOR DIFFERENT INTEGRATION TIMES AND COMPARE TO STUART-BARTELS
@@ -230,9 +233,6 @@ program demo
       do i = 1, nrk
          rk = rkv(i)
 
-         allocate(U(1:rk)); call mat_zero(U)
-         allocate(X%U(1:rk), source=U(1:rk))
-         allocate(X%S(1:rk,1:rk))
          write(*,'(A10,I1)') ' torder = ', torder
 
          do j = ndt, 1, -1
@@ -240,7 +240,7 @@ program demo
             if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
 
             ! Reset input
-            call X%set_LR_state(U0(:,1:rk), S0(1:rk,1:rk))
+            call X%initialize_LR_state(U0, S0, rk)
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
@@ -255,16 +255,15 @@ program demo
                               & rk, torder, dt, Tend, &
                               & norm2(X_RKlib_ref - X_out)/N, &
                               & real(clock_stop-clock_start)/real(clock_rate)
+
+            deallocate(X%U)
+            deallocate(X%S)
          end do
 
          if (save) then
             write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
             call save_npy(oname, X_out)
          end if
-
-         deallocate(X%U);
-         deallocate(X%S);
-         deallocate(U);
 
       end do
    end do

@@ -181,12 +181,11 @@ module laplacian2D_LTI_Lyapunov_Base
    !-----     TYPE BOUND PROCEDURE FOR SYM LOW RANK REPRESENTATION    -----
    !-----------------------------------------------------------------------
 
-   subroutine initialize_LR_state(self, U, S, rk, rkmax)
+   subroutine initialize_LR_state(self, U, S, rk)
       class(LR_state),            intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: U(:)
       real(wp),                   intent(in)    :: S(:,:)
       integer,                    intent(in)    :: rk
-      integer, optional,          intent(in)    :: rkmax
 
       ! internals
       real(wp), allocatable :: R(:, :)
@@ -195,18 +194,11 @@ module laplacian2D_LTI_Lyapunov_Base
       n = size(U)
       call assert_shape(S, [n,n], "initialize_LR_state", "S")
 
-      ! optional size argument
-      if (present(rkmax)) then
-         self%rk = rkmax
-      else
-         self%rk = rk
-      end if
-
       select type (U)
       type is (state_vector)
          ! allocate & initialize
-         allocate(self%U(self%rk), source=U(1)); call zero_basis(self%U)
-         allocate(self%S(self%rk,self%rk)); self%S = 0.0_wp
+         allocate(self%U(rk), source=U(1)); call zero_basis(self%U)
+         allocate(self%S(rk,rk)); self%S = 0.0_wp
          ! copy inputs
          if (rk > n) then
             call copy_basis(self%U(1:n), U)
@@ -216,16 +208,63 @@ module laplacian2D_LTI_Lyapunov_Base
             self%S = S(1:rk,1:rk)
          end if
          ! top up basis with orthonormal columns if needed
-         if (self%rk > n) then
-            do i = n+1, self%rk
+         if (rk > n) then
+            do i = n+1, rk
                call self%U(i)%rand()
          end do
-            allocate(R(self%rk,self%rk)); R = 0.0_wp
+            allocate(R(rk,rk)); R = 0.0_wp
             call qr(self%U, R, info)
             call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
          end if
       end select
       return
    end subroutine initialize_LR_state
+
+!   subroutine initialize_LR_state(self, U, S, rk, rkmax)
+!      class(LR_state),            intent(inout) :: self
+!      class(abstract_vector_rdp), intent(in)    :: U(:)
+!      real(wp),                   intent(in)    :: S(:,:)
+!      integer,                    intent(in)    :: rk
+!      integer, optional,          intent(in)    :: rkmax
+!
+!      ! internals
+!      real(wp), allocatable :: R(:, :)
+!      integer :: i, n, info
+!
+!      n = size(U)
+!      call assert_shape(S, [n,n], "initialize_LR_state", "S")
+!
+!      ! optional size argument
+!      if (present(rkmax)) then
+!         self%rk = rkmax
+!      else
+!         self%rk = rk
+!      end if
+!
+!      select type (U)
+!      type is (state_vector)
+!         ! allocate & initialize
+!         allocate(self%U(self%rk), source=U(1)); call zero_basis(self%U)
+!         allocate(self%S(self%rk,self%rk)); self%S = 0.0_wp
+!         ! copy inputs
+!         if (rk > n) then
+!            call copy_basis(self%U(1:n), U)
+!            self%S(1:n,1:n) = S
+!         else
+!            call copy_basis(self%U, U(1:rk))
+!            self%S = S(1:rk,1:rk)
+!         end if
+!         ! top up basis with orthonormal columns if needed
+!         if (self%rk > n) then
+!            do i = n+1, self%rk
+!               call self%U(i)%rand()
+!         end do
+!            allocate(R(self%rk,self%rk)); R = 0.0_wp
+!            call qr(self%U, R, info)
+!            call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
+!         end if
+!      end select
+!      return
+!   end subroutine initialize_LR_state
 
 end module laplacian2D_LTI_Lyapunov_Base
