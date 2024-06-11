@@ -1,22 +1,39 @@
 module Laplacian2D_LTI_Riccati_Operators
-   use Laplacian2D_LTI_Riccati_Base
-   !> LightKrylov for linear algebra.
-   use LightKrylov
-   use LightKrylov_utils
-   !> Standard Library.
-   use stdlib_math, only : linspace
+   ! Standard Library.
    use stdlib_optval, only : optval
    use stdlib_linalg, only : eye
+   ! LightKrylov for linear algebra.
+   use LightKrylov
+   use LightKrylov, only : wp => dp
+   use LightKrylov_Utils ! svd
+   ! LightROM
+   use LightROM_AbstractLTIsystems ! abstract_lti_system
+   ! Laplacian
+   use Laplacian2D_LTI_Riccati_Base
+   
    implicit none
 
+   private :: this_module
    ! operator
-   public :: CARE, build_operator, laplacian, laplacian_mat
+   public  :: build_operator, laplacian, laplacian_mat, exptA
+
+   character*128, parameter :: this_module = 'Laplacian2D_LTI_Riccati_Operators'
+
+   !-----------------------------------------------
+   !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
+   !-----------------------------------------------
+
+   type, extends(abstract_lti_system_rdp), public :: lti_system
+   contains
+      private
+      procedure, pass(self), public :: initialize_lti_system
+   end type lti_system
 
    !-----------------------------------
    !-----     LAPLACE OPERATOR    -----
    !-----------------------------------
 
-   type, extends(abstract_linop), public :: laplace_operator
+   type, extends(abstract_linop_rdp), public :: laplace_operator
    contains
       private
       procedure, pass(self), public :: matvec  => direct_matvec_laplace
@@ -25,20 +42,15 @@ module Laplacian2D_LTI_Riccati_Operators
 
 contains
 
-   function CARE(X,A,Q,BRinvBT) result(Y)
-      real(kind=wp), dimension(n,n) :: X, A, Q, BRinvBT, Y
-      Y = matmul(transpose(A), X) + matmul(X, A) + Q - matmul(X, matmul(BRinvBT, X))
-   end function CARE
-
    !-----     TYPE-BOUND PROCEDURE FOR LAPLACE OPERATOR    -----
 
    subroutine direct_matvec_laplace(self, vec_in, vec_out)
       !> Linear Operator.
-      class(laplace_operator),intent(in)  :: self
+      class(laplace_operator),    intent(in)  :: self
       !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
+      class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
+      class(abstract_vector_rdp), intent(out) :: vec_out
       select type(vec_in)
       type is (state_vector)
          select type(vec_out)
@@ -55,7 +67,7 @@ contains
 
    subroutine build_operator(A)
       !! Build the two-dimensional Laplace operator explicitly
-      real(kind=wp), intent(out) :: A(N,N)
+      real(wp), intent(out) :: A(N,N)
       integer i, j, k
 
       A = -4.0_wp/dx2*eye(N)
@@ -76,9 +88,9 @@ contains
    subroutine laplacian(vec_out, vec_in)
       
       !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: vec_in
+      real(wp), dimension(:), intent(in)  :: vec_in
       !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: vec_out
+      real(wp), dimension(:), intent(out) :: vec_out
 
       !> Internal variables.
       integer             :: i, j, in
@@ -116,16 +128,16 @@ contains
    subroutine laplacian_mat(flat_mat_out, flat_mat_in, transpose)
    
       !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: flat_mat_in
+      real(wp), dimension(:), intent(in)  :: flat_mat_in
       !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: flat_mat_out
+      real(wp), dimension(:), intent(out) :: flat_mat_out
       !> Transpose
       logical, optional :: transpose
       logical           :: trans
       
       !> Internal variables.
       integer :: j
-      real(kind=wp), dimension(N,N) :: mat, dmat
+      real(wp), dimension(N,N) :: mat, dmat
       
       !> Deal with optional argument
       trans = optval(transpose,.false.)
@@ -149,5 +161,85 @@ contains
        
       return
    end subroutine laplacian_mat
+
+   !--------------------------------------
+   !-----     EXP(tA) SUBROUTINE     -----
+   !--------------------------------------
+
+   subroutine exptA(vec_out, A, vec_in, tau, info, trans)
+      !! Subroutine for the exponential propagator that conforms with the abstract interface
+      !! defined in expmlib.f90
+      class(abstract_vector_rdp),  intent(out)   :: vec_out
+      !! Output vector
+      class(abstract_linop_rdp),   intent(inout) :: A
+      !! Linear operator
+      class(abstract_vector_rdp),  intent(in)    :: vec_in
+      !! Input vector.
+      real(wp),                    intent(in)    :: tau
+      !! Integration horizon
+      integer,                     intent(out)   :: info
+      !! Information flag
+      logical, optional,           intent(in)    :: trans
+      logical                                    :: transpose
+      !! Direct or Adjoint?
+
+      ! optional argument
+      transpose = optval(trans, .false.)
+
+      ! time integrator
+      select type (vec_in)
+      type is (state_vector)
+         select type (vec_out)
+         type is (state_vector)
+            select type (A)
+            type is (laplace_operator)
+               call k_exptA(vec_out, A, vec_in, tau, info, transpose)
+            end select
+         end select
+      end select
+
+   end subroutine exptA
+
+   !--------------------------------------------------------
+   !-----     TYPE BOUND PROCEDURES FOR LTI SYSTEMS    -----
+   !--------------------------------------------------------
+
+   subroutine initialize_lti_system(self, A, B, CT, D)
+      class(lti_system),           intent(inout) :: self
+      class(abstract_linop_rdp),   intent(in)    :: A
+      class(abstract_vector_rdp),  intent(in)    :: B(:)
+      class(abstract_vector_rdp),  intent(in)    :: CT(:)
+      real(wp),          optional, intent(in)    :: D(:,:)
+
+      ! internal variables
+      integer                                :: rk_b, rk_c
+
+      ! Operator
+      select type (A)
+      type is (laplace_operator)
+         allocate(self%A, source=A)
+      end select
+      ! Input
+      select type (B)
+      type is (state_vector)
+         rk_b = size(B)
+         allocate(self%B(1:rk_b), source=B(1:rk_b))
+      end select
+      ! Output
+      select type (CT)
+         type is (state_vector)
+         rk_c = size(CT)
+         allocate(self%CT(1:rk_c), source=CT(1:rk_c))
+      end select
+      ! Throughput
+      allocate(self%D(1:rk_c, 1:rk_b))
+      if (present(D)) then
+         call assert_shape(D, (/ rk_c, rk_b /), 'initialize_lti_system', 'D')
+         self%D = D
+      else
+         self%D = 0.0_wp
+      end if
+      return
+   end subroutine initialize_lti_system
 
 end module Laplacian2D_LTI_Riccati_Operators
