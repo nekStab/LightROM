@@ -133,7 +133,7 @@ contains
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
-                  call dsval(X%S, vals)
+                  !call dsval(X%S, vals)
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Ttot
                      do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
@@ -227,7 +227,7 @@ contains
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
-                  call dsval(Y%S, vals)
+                  !call dsval(Y%S, vals)
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Ttot
                      do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
