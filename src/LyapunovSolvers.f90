@@ -156,6 +156,7 @@ module LightROM_LyapunovSolvers
       real(wp)                                              :: T
       logical                                               :: verbose
       logical                                               :: trans
+      integer                                               :: mode
       procedure(abstract_exptA_rdp), pointer                :: p_exptA => null()
 
       ! Optional argument
@@ -178,9 +179,25 @@ module LightROM_LyapunovSolvers
          iostep = 10
       endif
 
+      if ( torder .eq. 1 ) then 
+         mode = 1
+      else if ( torder .eq. 2 ) then
+         mode = 2
+      else if ( torder .gt. 2 ) then
+         write(*,*) "INFO : Time-integration order for the operator splitting of d > 2 &
+                     &requires adjoint solves and is not implemented."
+         write(*,*) "       Resetting torder = 2." 
+         info = 1
+         mode = 2
+      else 
+         write(*,*) "INFO : Invalid time-integration order specified."
+         info = -1
+         mode = 2
+      endif
+
       dlra : do istep = 1, nsteps
          ! dynamical low-rank approximation solver
-         call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, torder, info, p_exptA, trans)
+         call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, mode, info, p_exptA, trans)
 
          T = T + tau
          ! here we can do some checks such as whether we have reached steady state
@@ -202,7 +219,7 @@ module LightROM_LyapunovSolvers
    !-----     UTILITIES     -----
    !-----------------------------
 
-   subroutine numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, torder, info, exptA, iftrans)
+   subroutine numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, iftrans)
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_linop_rdp),              intent(inout) :: A
@@ -211,8 +228,8 @@ module LightROM_LyapunovSolvers
       !! Low-Rank inhomogeneity.
       real(wp),                               intent(in)    :: tau
       !! Time step.
-      integer,                                intent(in)    :: torder
-      !! Order of time integration. Only 1st (Lie splitting) and 2nd (Strang splitting) orders are implemented.
+      integer,                                intent(in)    :: mode
+      !! TIme integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) orders are implemented.
       integer,                                intent(out)   :: info
       !! Information flag
       procedure(abstract_exptA_rdp)                         :: exptA
@@ -221,29 +238,13 @@ module LightROM_LyapunovSolvers
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
       
       ! Internal variables
-      integer                                               :: istep, nsteps, integrator
+      integer                                               :: istep, nsteps
       logical                                               :: trans
 
       ! Optional argument
       trans = optval(iftrans, .false.)
 
-      if ( torder .eq. 1 ) then 
-         integrator = 1
-      else if ( torder .eq. 2 ) then
-         integrator = 2
-      else if ( torder .gt. 2 ) then
-         write(*,*) "INFO : Time-integration order for the operator splitting of d > 2 &
-                     &requires adjoint solves and is not implemented."
-         write(*,*) "       Resetting torder = 2." 
-         info = 1
-         integrator = 2
-      else 
-         write(*,*) "INFO : Invalid time-integration order specified."
-         info = -1
-         integrator = 2
-      endif
-
-      select case (integrator)
+      select case (mode)
       case (1)
          ! Lie-Trotter splitting
          call M_forward_map(         X, A, tau, info, exptA, trans)
@@ -323,7 +324,7 @@ module LightROM_LyapunovSolvers
 
       rk = X%rk
       rkmax = size(X%U)
-      if (.not. allocated(U1))   allocate(U1(1:rkmax),   source=X%U(1))
+      if (.not. allocated(U1))   allocate(U1(  1:rkmax), source=X%U(1))
       if (.not. allocated(BBTU)) allocate(BBTU(1:rkmax), source=X%U(1))
       call zero_basis(U1); call zero_basis(BBTU)
 
@@ -438,5 +439,46 @@ module LightROM_LyapunovSolvers
 
       return
    end subroutine L_step_lyapunov_rdp
+
+   !-----------------------------
+   !
+   !     RANK-ADAPTIVE PSI 
+   !
+   !-----------------------------
+
+   subroutine DLRA_rank_adaptive_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, iftrans, ifchk)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_linop_rdp),              intent(inout) :: A
+      !! Linear operator
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
+      !! Low-Rank inhomogeneity.
+      real(wp),                               intent(in)    :: tau
+      !! Time step.
+      integer,                                intent(in)    :: mode
+      !! TIme integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) orders are implemented.
+      integer,                                intent(out)   :: info
+      !! Information flag
+      procedure(abstract_exptA_rdp)                         :: exptA
+      !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
+      logical,                      optional, intent(in)    :: iftrans
+      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      logical,                      optional, intent(in)    :: ifchk
+      !! Determine whether the adequacy of the current effective rank should be examined (SVD)
+      
+      ! Internal variables
+      integer                                               :: istep, nsteps
+      logical                                               :: trans
+
+      ! Optional argument
+      trans = optval(iftrans, .false.)
+
+      ! run a regular step with rk + 1 ranks
+      X%rk = X%rk + 1
+      call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans)
+      ! compute singular values of X%S
+
+      return
+   end subroutine DLRA_rank_adaptive_lyapunov_step_rdp
 
 end module LightROM_LyapunovSolvers
