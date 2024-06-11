@@ -183,6 +183,7 @@ contains
          end do
       end do
 
+      STOP 1
       write(*,*) ''
       write(*,*) '--------------------'
       write(*,*) '   OBSERVABILITY'
