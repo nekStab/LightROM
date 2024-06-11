@@ -59,7 +59,7 @@ module LightROM_AbstractLTIsystems
       !> Coefficients
       real(wp),                   allocatable :: S(:, :)
       !> Current approximation rank
-      !integer                                 :: rk = 1
+      integer                                 :: rk = 1
    contains
    end type abstract_sym_low_rank_state_rdp
 

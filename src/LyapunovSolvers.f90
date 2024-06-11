@@ -283,26 +283,25 @@ module LightROM_LyapunovSolvers
       ! Optional argument
       trans = optval(iftrans, .false.)
 
-      rk = size(X%U)
+      rk = X%rk
       allocate(R(1:rk,1:rk));   R = 0.0_wp 
       allocate(perm(1:rk));     perm = 0
       allocate(wrk(1:rk,1:rk)); wrk = 0.0_wp
 
       ! Apply propagator to initial basis
-      if (.not. allocated(Uwrk)) allocate(Uwrk, source=X%U(1))
-      call Uwrk%zero()
+      if (.not. allocated(Uwrk)) allocate(Uwrk, source=X%U(1)); call Uwrk%zero()
       do i = 1, rk
          call exptA(Uwrk, A, X%U(i), tau, info, trans)
          call X%U(i)%axpby(0.0_wp, Uwrk, 1.0_wp) ! overwrite old solution
       end do
       ! Reorthonormalize in-place
-      call qr(X%U, R, perm, info, verbosity=.false.)
+      call qr(X%U(1:rk), R, perm, info)
       call check_info(info, 'qr_pivot', module=this_module, procedure='M_forward_map_rdp')
       ! Update low-rank fcators
       call apply_inverse_permutation_matrix(R, perm)
       ! Update coefficient matrix
-      wrk = matmul(X%S, transpose(R))
-      X%S = matmul(R, wrk)
+      wrk = matmul(X%S(1:rk,1:rk), transpose(R))
+      X%S(1:rk,1:rk) = matmul(R, wrk)
 
       return
    end subroutine M_forward_map_rdp
@@ -320,19 +319,20 @@ module LightROM_LyapunovSolvers
       ! Internal variables
       class(abstract_vector_rdp),             allocatable   :: U1(:)
       class(abstract_vector_rdp),             allocatable   :: BBTU(:)
-      integer                                               :: rk
+      integer                                               :: rk, rkmax
 
-      rk = size(X%U)
-      if (.not. allocated(U1))   allocate(U1(1:rk),   source=X%U(1))
-      if (.not. allocated(BBTU)) allocate(BBTU(1:rk), source=X%U(1))
+      rk = X%rk
+      rkmax = size(X%U)
+      if (.not. allocated(U1))   allocate(U1(1:rkmax),   source=X%U(1))
+      if (.not. allocated(BBTU)) allocate(BBTU(1:rkmax), source=X%U(1))
       call zero_basis(U1); call zero_basis(BBTU)
 
-      call K_step_lyapunov(X, U1, BBTU, B, tau, info)
-      call S_step_lyapunov(X, U1, BBTU,    tau, info)
-      call L_step_lyapunov(X, U1,       B, tau, info)
+      call K_step_lyapunov(X, U1(1:rk), BBTU(1:rk), B, tau, info)
+      call S_step_lyapunov(X, U1(1:rk), BBTU(1:rk),    tau, info)
+      call L_step_lyapunov(X, U1(1:rk),             B, tau, info)
       
       ! Copy updated low-rank factors to output
-      call copy_basis(X%U, U1)
+      call copy_basis(X%U(1:rk), U1(1:rk))
                
       return
    end subroutine G_forward_map_lyapunov_rdp
@@ -358,22 +358,23 @@ module LightROM_LyapunovSolvers
 
       info = 0
 
-      rk = size(X%U)
-      if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); Swrk = 0.0_wp
+      rk = X%rk
+      rkmax = size(X%U)
+      if (.not. allocated(Swrk)) allocate(Swrk(1:rkmax,1:rkmax)); Swrk = 0.0_wp
       allocate(perm(1:rk)); perm = 0
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, X%U, X%S)             ! K0
+         call linear_combination(Xwrk, X%U(1:rk), X%S(1:rk,1:rk))             ! K0
          call copy_basis(U1, Xwrk)
       end block
-      call apply_outerprod(BBTU, B, X%U)   ! Kdot
+      call apply_outerprod(BBTU, B, X%U(1:rk))   ! Kdot
       ! Construct intermediate solution U1
-      call axpby_basis(U1, 1.0_wp, BBTU, tau)   ! K0 + tau*Kdot
+      call axpby_basis(U1, 1.0_wp, BBTU(1:rk), tau)   ! K0 + tau*Kdot
       ! Orthonormalize in-place
-      call qr(U1, Swrk, perm, info, verbosity=.false.)
+      call qr(U1(1:rk), Swrk(1:rk,1:rk), perm, info)
       call check_info(info, 'qr_pivot', module=this_module, procedure='K_step_Lyapunov_rdp')
-      call apply_inverse_permutation_matrix(Swrk, perm)
-      X%S = Swrk
+      call apply_inverse_permutation_matrix(Swrk(1:rk,1:rk), perm)
+      X%S(1:rk,1:rk) = Swrk(1:rk,1:rk)
 
       return
    end subroutine K_step_lyapunov_rdp
@@ -392,16 +393,16 @@ module LightROM_LyapunovSolvers
 
       ! Internal variables
       real(wp),                               allocatable   :: Swrk(:,:)
-      integer                                               :: rk
+      integer                                               :: rk, rkmax
 
       info = 0
 
-      rk = size(X%U)
-      if (.not. allocated(Swrk)) allocate(Swrk(1:rk,1:rk)); Swrk = 0.0_wp
-      call innerprod_matrix(Swrk, U1, BBTU)          ! - Sdot
+      rk = X%rk
+      rkmax = size(X%U)
+      if (.not. allocated(Swrk)) allocate(Swrk(1:rkmax,1:rkmax)); Swrk = 0.0_wp
+      call innerprod_matrix(Swrk(1:rk,1:rk), U1, BBTU)          ! - Sdot
       ! Construct intermediate coefficient matrix
-      !call mat_axpby(X%S, 1.0_wp, Swrk, -tau)
-      X%S = X%S - tau*Swrk
+      X%S(1:rk,1:rk) = X%S(1:rk,1:rk) - tau*Swrk(1:rk,1:rk)
 
       return
    end subroutine S_step_lyapunov_rdp
@@ -420,23 +421,23 @@ module LightROM_LyapunovSolvers
 
       ! Internal variables
       class(abstract_vector_rdp),             allocatable   :: Uwrk(:)
-      integer                                               :: rk
+      integer                                               :: rk, rkmax
 
       info = 0
 
-      rk = size(X%U)
-      if (.not. allocated(Uwrk)) allocate(Uwrk(1:rk), source=X%U(1)); call zero_basis(Uwrk)
+      rk = X%rk
+      if (.not. allocated(Uwrk)) allocate(Uwrk(1:rkmax), source=X%U(1)); call zero_basis(Uwrk)
 
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, X%U, transpose(X%S))  ! L0.T
-         call copy_basis(Uwrk, Xwrk)
+         call linear_combination(Xwrk, X%U(1:rk), transpose(X%S(1:rk,1:rk)))  ! L0.T
+         call copy_basis(Uwrk(1:rk), Xwrk)
       end block
-      call apply_outerprod(X%U, B, U1)       ! Ldot.T
+      call apply_outerprod(X%U(1:rk), B, U1)       ! Ldot.T
       ! Construct solution L1.T
-      call axpby_basis(Uwrk, 1.0_wp, X%U, tau)
+      call axpby_basis(Uwrk(1:rk), 1.0_wp, X%U(1:rk), tau)
       ! Update coefficient matrix
-      call innerprod_matrix(X%S, Uwrk, U1)
+      call innerprod_matrix(X%S(1:rk,1:rk), Uwrk(1:rk), U1)
 
       return
    end subroutine L_step_lyapunov_rdp
