@@ -6,6 +6,7 @@ module LightROM_Utils
    use LightKrylov
    use LightKrylov, only : dp, wp => dp
    use LightKrylov_AbstractVectors
+   use LightKrylov_Utils, only : svd
    !use LightKrylov_Utils
    ! LightROM
    use LightROM_AbstractLTIsystems
@@ -16,6 +17,8 @@ module LightROM_Utils
    public :: Balancing_Transformation
    public :: ROM_Petrov_Galerkin_Projection
    public :: ROM_Galerkin_Projection
+   ! General utils
+   public :: svdvals
 
    interface Balancing_Transformation
       module procedure Balancing_Transformation_rdp
@@ -27,6 +30,10 @@ module LightROM_Utils
 
    interface ROM_Galerkin_Projection
       module procedure ROM_Galerkin_Projection_rdp
+   end interface
+
+   interface svdvals
+      module procedure svdvals_rdp
    end interface
 
 contains
@@ -175,5 +182,17 @@ contains
 
       return
    end subroutine ROM_Galerkin_Projection_rdp
+
+   subroutine svdvals_rdp(X, svals)
+      real(wp), intent(in) :: X(:,:)
+      real(wp)             :: svals(min(size(X, 1), size(X, 2)))
+      ! internals
+      real(wp)             :: U(size(X, 1), size(X, 1))
+      real(wp)             :: VT(size(X, 2), size(X, 2))
+  
+      ! Perform SVD
+      call svd(X, U, svals, VT)
+    
+   end subroutine
 
 end module LightROM_Utils
