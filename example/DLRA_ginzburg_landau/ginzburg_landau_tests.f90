@@ -840,7 +840,7 @@ contains
          X_mat_ref = U_load(1:N, 1:N)
       else
          ! Set random initial condition
-         call get_state(U0_mat(:,1:rk_X0), U0(1:rk))
+         call get_state(U0_mat(:,1:rk_X0), U0)
          X_out = matmul( U0_mat, matmul( S0, transpose(U0_mat ) ) )
          if (if_save_npy) then
             ! Save forcing RK
