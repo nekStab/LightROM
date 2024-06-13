@@ -369,7 +369,7 @@ contains
             select type (A)
             type is (exponential_prop)
                ! set integration time
-               !A%tau = tau
+               A%tau = tau
                if (transpose) then
                   call A%rmatvec(vec_in, vec_out)
                else
