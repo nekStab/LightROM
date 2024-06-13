@@ -152,8 +152,7 @@ contains
                   end if
                   lagsvd(1:rk) = vals
                   ! Reconstruct solution
-                  call get_state(U_out(:,1:rk), X%U(1:rk))
-                  X_out = matmul(U_out(:,1:rk), matmul(X%S(1:rk,1:rk), transpose(U_out(:,1:rk))))
+                  call reconstruct_solution(X_out, X)
                   Ttot = Ttot + Tend
                   call CALE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
                   write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
@@ -248,8 +247,7 @@ contains
                   lagsvd(1:rk) = vals
 
                   ! Reconstruct solution
-                  call get_state(U_out(:,1:rk), Y%U(1:rk))
-                  X_out = matmul(U_out(:,1:rk), matmul(Y%S(1:rk,1:rk), transpose(U_out(:,1:rk))))
+                  call reconstruct_solution(X_out, Y)
                   Ttot = Ttot + Tend
                   call CALE(res, reshape(X_out, shape(res)), CTCW_flat, .true.)
                   write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Yobs OUTPUT', &
@@ -405,8 +403,7 @@ contains
             etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
             ! Reconstruct solution
-            call get_state(U_out(:,1:rk), X%U(1:rk))
-            X_out = matmul(U_out(:,1:rk), matmul(X%S(1:rk,1:rk), transpose(U_out(:,1:rk))))
+            call reconstruct_solution(X_out, X)
             Ttot = Ttot + Tend
             call CALE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
             write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
@@ -472,8 +469,7 @@ contains
             etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
             ! Reconstruct solution
-            call get_state(U_out(:,1:rk), Y%U(1:rk))
-            X_out = matmul(U_out(:,1:rk), matmul(Y%S(1:rk,1:rk), transpose(U_out(:,1:rk))))
+            call reconstruct_solution(X_out, Y)
             Ttot = Ttot + Tend
             call CALE(res, reshape(X_out, shape(res)), CTCW_flat, .true.)
             write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Yobs OUTPUT', &
@@ -506,32 +502,30 @@ contains
       call sqrtm(X%S(1:rk,1:rk), Swrk(1:rk,1:rk), info)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, X%U, Swrk(1:rk,1:rk))
+         call linear_combination(Xwrk, X%U(1:rk), Swrk(1:rk,1:rk))
          call copy_basis(Utmp, Xwrk)
       end block
-      !call linear_combination(Utmp, X%U, Swrk(1:rk,1:rk))
       call get_state(U0_in(:,1:rk), Utmp)
       ! compute SVD of updated X%U
       call svd(U0_in(:,1:rk), U_svd(:,1:2*nx), S_svd(1:rk), V_svd(1:rk,1:rk))
-      call set_state(X%U, matmul(U_svd(:,1:rk), diag(S_svd(1:rk))))
+      call set_state(X%U(1:rk), matmul(U_svd(:,1:rk), diag(S_svd(1:rk))))
 
       ! compute sqrt of coefficient matrix Y%S and right-multiply it to Y%U
       Swrk = 0.0_wp
       call sqrtm(Y%S(1:rk,1:rk), Swrk(1:rk,1:rk), info)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, Y%U, Swrk(1:rk,1:rk))
+         call linear_combination(Xwrk, Y%U(1:rk), Swrk(1:rk,1:rk))
          call copy_basis(Utmp, Xwrk)
       end block
-      !call linear_combination(Utmp, Y%U, Swrk(1:rk,1:rk))
       call get_state(U0_in(:,1:rk), Utmp)
       ! compute SVD of updated Y%U
       call svd(U0_in(:,1:rk), U_svd(:,1:2*nx), S_svd(1:rk), V_svd(1:rk,1:rk)) 
-      call set_state(Y%U, matmul(U_svd(:,1:rk), diag(S_svd(1:rk))))   
+      call set_state(Y%U(1:rk), matmul(U_svd(:,1:rk), diag(S_svd(1:rk))))   
 
       ! compute balancing transformation based on SVD of Gramians
       allocate(T(1:rk), source=U0(1)); allocate(Tinv(1:rk), source=U0(1)); allocate(S(1:rk))
-      call Balancing_Transformation(T, S, Tinv, X%U, Y%U(1:rk))
+      call Balancing_Transformation(T, S, Tinv, X%U(1:rk), Y%U(1:rk))
       
       call ROM_Petrov_Galerkin_Projection(Ahat, Bhat, Chat, D, LTI, T, Tinv)
 
@@ -632,8 +626,7 @@ contains
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
                   ! Reconstruct solution
-                  call get_state(U_out(:,1:rk), X%U(1:rk))
-                  X_out = matmul(U_out(:,1:rk), matmul(X%S(1:rk,1:rk), transpose(U_out(:,1:rk))))
+                  call reconstruct_solution(X_out, X)
                   Ttot = Ttot + Tend
                   call CARE(res, reshape(X_out, shape(res)), reshape(CTQcCW_mat, shape(res)), BRinvBTW_mat, .false.)
                   write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Xricc OUTPUT', &
@@ -917,8 +910,7 @@ contains
                call system_clock(count=clock_stop)      ! Stop Timer
                etime = real(clock_stop-clock_start)/real(clock_rate)
                ! Reconstruct solution
-               call get_state(U_out(:,1:rk), X_state%U(1:rk))
-               X_out = matmul(U_out(:,1:rk), matmul(X_state%S(1:rk,1:rk), transpose(U_out(:,1:rk))))
+               call reconstruct_solution(X_out, X_state)
                write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E26.8,F18.4," s")') 1, 'Xctl OUTPUT', &
                                  & rk, torder, tau, nsteps, Tend, norm2(X_out - X_mat_ref)/N, etime
                if (verb) write(*,*) 'Total integration time (DLRA):', etime, 's'

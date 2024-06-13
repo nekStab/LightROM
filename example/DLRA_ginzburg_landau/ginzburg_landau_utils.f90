@@ -30,7 +30,7 @@ module Ginzburg_Landau_Utils
    ! mesh construction
    public  :: initialize_parameters
    ! utilities for state_vectors
-   public  :: set_state, get_state, init_rand
+   public  :: set_state, get_state, init_rand, reconstruct_solution
    ! initial conditions
    public  :: generate_random_initial_condition
    ! logfiles
@@ -175,6 +175,21 @@ contains
       end select
       return
    end subroutine init_rand
+
+   subroutine reconstruct_solution(X, LR_X)
+      real(wp),          intent(out) :: X(:,:)
+      type(LR_state),    intent(in)  :: LR_X
+      
+      ! internals
+      real(wp) :: wrk(N, LR_X%rk)
+
+      call assert_shape(X, (/ N, N /), 'reconstruct_solution', 'X')
+
+      call get_state(wrk, LR_X%U(1:LR_X%rk))
+      X = matmul(wrk, matmul(LR_X%S(1:LR_X%rk,1:LR_X%rk), transpose(wrk)))
+
+      return
+   end subroutine reconstruct_solution
 
    !------------------------------------
    !-----     INITIAL CONDIIONS    -----
