@@ -417,7 +417,7 @@ module LightROM_LyapunovSolvers
       rk = X%rk
       rkmax = size(X%U)
       if (.not. allocated(Swrk)) allocate(Swrk(1:rkmax,1:rkmax)); Swrk = 0.0_wp
-      call innerprod_matrix(Swrk(1:rk,1:rk), U1, BBTU)          ! - Sdot
+      call innerprod(Swrk(1:rk,1:rk), U1, BBTU)          ! - Sdot
       ! Construct intermediate coefficient matrix
       X%S(1:rk,1:rk) = X%S(1:rk,1:rk) - tau*Swrk(1:rk,1:rk)
 
@@ -453,7 +453,7 @@ module LightROM_LyapunovSolvers
       ! Construct solution L1.T
       call axpby_basis(Uwrk(1:rk), 1.0_wp, X%U(1:rk), tau)
       ! Update coefficient matrix
-      call innerprod_matrix(X%S(1:rk,1:rk), Uwrk(1:rk), U1)
+      call innerprod(X%S(1:rk,1:rk), Uwrk(1:rk), U1)
 
       return
    end subroutine L_step_lyapunov_rdp
@@ -538,7 +538,7 @@ module LightROM_LyapunovSolvers
                call X%U(X%rk)%rand(.false.)
                ! ... and orthonormalize
                allocate(coef(X%rk,1)); coef = 0.0_wp
-               call innerprod_matrix(coef, X%U(1:X%rk-1), X%U(X%rk:X%rk))
+               call innerprod(coef, X%U(1:X%rk-1), X%U(X%rk:X%rk))
                block
                   class(abstract_vector_rdp), allocatable :: proj(:)
                   call linear_combination(proj, X%U(1:X%rk), coef)

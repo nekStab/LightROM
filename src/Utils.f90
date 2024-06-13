@@ -74,7 +74,7 @@ contains
 
       ! compute inner product with Gramian bases and compte SVD
       allocate(LRCrossGramian(rkc,rko)); allocate(V(rko,rko)); allocate(W(rkc,rkc))
-      call innerprod_matrix(LRCrossGramian, Xc, Yo)
+      call innerprod(LRCrossGramian, Xc, Yo)
       call svd(LRCrossGramian, V, S, W)
 
       allocate(Sigma(rkmin))
@@ -139,9 +139,9 @@ contains
       do i = 1, rk
          call LTI%A%matvec(Tinv(i), Uwrk(i))
       end do
-      call innerprod_matrix(Ahat, T, Uwrk)
-      call innerprod_matrix(Bhat, T, LTI%B)
-      call innerprod_matrix(Cwrk, LTI%CT, Tinv)
+      call innerprod(Ahat, T, Uwrk)
+      call innerprod(Bhat, T, LTI%B)
+      call innerprod(Cwrk, LTI%CT, Tinv)
       Chat = transpose(Cwrk)
       D = LTI%D
 

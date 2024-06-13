@@ -52,7 +52,7 @@ contains
       call assert_shape(W, (/ p, p /), 'apply_outerprod_w_rdp', 'W')
 
       call zero_basis(Z)
-      call innerprod_matrix(wrk, B, U)
+      call innerprod(wrk, B, U)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, B, matmul(W, wrk))
@@ -76,8 +76,8 @@ contains
       call assert_shape(M, (/ size(UL), size(UR) /), 'apply_premult_outerprod_w_rdp', 'M')
       
       BTUR = 0.0_wp; ULTB = 0.0_wp; M = 0.0_wp
-      call innerprod_matrix(BTUR, B, UR)
-      call innerprod_matrix(ULTB, UL, B)
+      call innerprod(BTUR, B, UR)
+      call innerprod(ULTB, UL, B)
       
       M = matmul( ULTB, matmul( W, BTUR ) )
    

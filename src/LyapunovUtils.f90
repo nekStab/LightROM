@@ -33,7 +33,7 @@ module LightROM_LyapunovUtils
          real(wp),      allocatable :: wrk(:,:)
 
          allocate(wrk(1:size(A),1:size(B)))
-         call innerprod_matrix(wrk, A, B)
+         call innerprod(wrk, A, B)
          block
             class(abstract_vector_rdp), allocatable :: Xwrk(:)
             call linear_combination(Xwrk, A, wrk)

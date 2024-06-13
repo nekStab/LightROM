@@ -365,9 +365,9 @@ module LightROM_RiccatiSolvers
             call zero_basis(QU); Swrk0 = 0.0_wp                         ! we use QU as a scratch array
             block
                class(abstract_vector_rdp), allocatable :: Xwrk(:)
-               call innerprod_matrix(Swrk0, X%U, U0)
+               call innerprod(Swrk0, X%U, U0)
                call linear_combination(Xwrk, T0, Swrk0); call copy_basis(QU, Xwrk)
-               call innerprod_matrix(Swrk0, X%U, Ut)
+               call innerprod(Swrk0, X%U, Ut)
                call linear_combination(Xwrk, Tt, Swrk0); call copy_basis(T0, Xwrk) ! overwrite T0 with Gamma
             end block
             call axpby_basis(T0, 0.5_wp, QU, 0.5_wp)
@@ -511,14 +511,14 @@ module LightROM_RiccatiSolvers
          ! Compute QU and pass to K step
          call apply_outerprod_w(QU, X%U, CT, Qc)
       endif
-      call innerprod_matrix(Swrk0, U1, QU)
+      call innerprod(Swrk0, U1, QU)
 
       ! Non-linear part --> Swrk1
       if (.not.present(NL)) then
          call apply_premult_outerprod_w(Swrk1, X%U, U1, B, Rinv) !       U0.T @ B @ R^(-1) @ B.T @ U1
          Swrk1 = matmul(X%S, matmul(Swrk1, X%S))                 ! S0 @ (U0.T @ B @ R^(-1) @ B.T @ U1) @ S0
       else ! Non-linear term precomputed
-         call innerprod_matrix(Swrk1, U1, NL)
+         call innerprod(Swrk1, U1, NL)
       end if
 
       ! Combine to form -U1.T @ G( U1 @ S @ U0.T ) @ U0
@@ -582,7 +582,7 @@ module LightROM_RiccatiSolvers
       call axpby_basis(Uwrk1, 1.0_wp, Uwrk0, tau)               ! L0.T + tau*Ldot.T
 
       ! Update coefficient matrix
-      call innerprod_matrix(X%S, Uwrk1, U1)
+      call innerprod(X%S, Uwrk1, U1)
 
       return
    end subroutine L_step_riccati_rdp
