@@ -10,12 +10,11 @@ module Laplacian2D_LTI_Riccati_RKlib
    use LightKrylov, only : wp => dp
    !> Laplacian
    use Laplacian2D_LTI_Riccati_Base
-   use laplacian2D_LTI_Riccati_Operators
-   
-   
+   use laplacian2D_LTI_Riccati_Operators   
    implicit none
 
-   private
+   private :: this_module
+   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Base'
 
    !-----------------------------------------------
    !-----     EXPONENTIAL PROPAGATOR RKLIB    -----

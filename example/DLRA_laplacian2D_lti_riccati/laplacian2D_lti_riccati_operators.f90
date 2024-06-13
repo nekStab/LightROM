@@ -10,7 +10,6 @@ module Laplacian2D_LTI_Riccati_Operators
    use LightROM_AbstractLTIsystems ! abstract_lti_system
    ! Laplacian
    use Laplacian2D_LTI_Riccati_Base
-   
    implicit none
 
    private :: this_module

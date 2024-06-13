@@ -11,11 +11,11 @@ module Laplacian2D_LTI_Lyapunov_RKlib
    !> Laplacian
    use Laplacian2D_LTI_Lyapunov_Base
    use laplacian2D_LTI_Lyapunov_Operators
-   
-   
    implicit none
 
-   private
+   private :: this_module
+
+   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_RKLib'
 
    !-----------------------------------------------
    !-----     EXPONENTIAL PROPAGATOR RKLIB    -----

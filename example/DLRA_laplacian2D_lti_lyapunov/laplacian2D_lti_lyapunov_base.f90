@@ -17,7 +17,6 @@ module laplacian2D_LTI_Lyapunov_Base
    ! problem parameters
    public  :: N, nx, dx, dx2, L, rk_b, B, BBT
 
-   
    !------------------------------
    !-----     PARAMETERS     -----
    !------------------------------
@@ -73,7 +72,7 @@ module laplacian2D_LTI_Lyapunov_Base
    type(state_vector)       :: B(rk_b)
    real(wp)                 :: BBT(N**2)
 
-   contains
+contains
 
    !-----     TYPE-BOUND PROCEDURE FOR VECTORS     -----
 

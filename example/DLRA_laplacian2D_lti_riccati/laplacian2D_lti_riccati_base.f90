@@ -9,7 +9,6 @@ module Laplacian2D_LTI_Riccati_Base
    use LightKrylov_AbstractVectors
    ! LightROM
    use LightROM_AbstractLTIsystems ! LR_state
-
    implicit none
 
    private :: this_module
