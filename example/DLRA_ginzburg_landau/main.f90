@@ -120,7 +120,7 @@ program demo
    !
    !----------------------------------
 
-   run_test = .true.
+   run_test = .false.
    if (run_test) then
       !nrk  = 6; allocate(rkv(1:nrk));   rkv  = (/ 6, 10, 12, 14, 20, 40 /)
       !ntau = 5; allocate(tauv(1:ntau)); tauv = (/ 1.0, 0.1, 0.01, 0.001, 0.0001 /)

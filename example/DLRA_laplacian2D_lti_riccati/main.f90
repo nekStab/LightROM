@@ -21,7 +21,6 @@ program demo
    use Laplacian2D_LTI_Riccati_Operators
    use Laplacian2D_LTI_Riccati_RKlib
    use Laplacian2D_LTI_Riccati_Utils
-
    implicit none
 
    ! DLRA
