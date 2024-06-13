@@ -1,5 +1,6 @@
 module TestMatrices
   use LightKrylov
+  use LightKrylov, only : wp => dp
   use TestVector
   
   implicit none

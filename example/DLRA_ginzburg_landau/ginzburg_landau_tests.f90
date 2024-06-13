@@ -505,6 +505,7 @@ contains
          call linear_combination(Xwrk, X%U(1:rk), Swrk(1:rk,1:rk))
          call copy_basis(Utmp, Xwrk)
       end block
+      !call linear_combination(Utmp, X%U, Swrk(1:rk,1:rk))
       call get_state(U0_in(:,1:rk), Utmp)
       ! compute SVD of updated X%U
       call svd(U0_in(:,1:rk), U_svd(:,1:2*nx), S_svd(1:rk), V_svd(1:rk,1:rk))
@@ -518,6 +519,7 @@ contains
          call linear_combination(Xwrk, Y%U(1:rk), Swrk(1:rk,1:rk))
          call copy_basis(Utmp, Xwrk)
       end block
+      !call linear_combination(Utmp, Y%U, Swrk(1:rk,1:rk))
       call get_state(U0_in(:,1:rk), Utmp)
       ! compute SVD of updated Y%U
       call svd(U0_in(:,1:rk), U_svd(:,1:2*nx), S_svd(1:rk), V_svd(1:rk,1:rk)) 
@@ -838,7 +840,7 @@ contains
          X_mat_ref = U_load(1:N, 1:N)
       else
          ! Set random initial condition
-         call get_state(U0_mat(:,1:rk_X0), U0)
+         call get_state(U0_mat(:,1:rk_X0), U0(1:rk))
          X_out = matmul( U0_mat, matmul( S0, transpose(U0_mat ) ) )
          if (if_save_npy) then
             ! Save forcing RK

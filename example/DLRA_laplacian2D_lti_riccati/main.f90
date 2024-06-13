@@ -101,7 +101,7 @@ program demo
    ! Define LTI system
    LTI = lti_system()
    call LTI%initialize_lti_system(A, B, CT)
-
+   
    write(*,*)
    write(*,*) 'RICCATI EQUATION FOR THE 2D LAPLACE OPERATOR:'
    write(*,*)
@@ -246,7 +246,9 @@ program demo
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, Tend, dt, torder, info)
+            call numerical_low_rank_splitting_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
+                                                                  & Tend, dt, torder, info, &
+                                                                  & exptA=exptA, iftrans=.false., ifverb=verb)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution
@@ -417,7 +419,8 @@ program demo
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, Tend, dt, torder, info)
+            call numerical_low_rank_splitting_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, Tend, dt, torder, info, &
+                                                                & exptA=exptA, iftrans=.false., ifverb=verb)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution

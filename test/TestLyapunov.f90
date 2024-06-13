@@ -1,5 +1,6 @@
 module TestLyapunov
    use LightKrylov
+   use LightKrylov, only : wp => dp
    use TestVector
    use TestMatrices
    Use LightROM_LyapunovUtils

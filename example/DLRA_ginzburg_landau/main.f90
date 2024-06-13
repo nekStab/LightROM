@@ -131,9 +131,9 @@ program demo
       Tend = 1.0_wp
       nrep = 60
       ! run DLRA
-      ifsave = .true. ! save X and Y matrices to disk (LightROM/local)
-      ifverb = .true. ! verbosity
-      iflogs = .true. ! write logs with convergence and signular value evolution
+      ifsave = .false. ! save X and Y matrices to disk (LightROM/local)
+      ifverb = .false. ! verbosity
+      iflogs = .false. ! write logs with convergence and signular value evolution
       call run_DLRA_lyapunov_test(LTI, U0, S0, rkv, tauv, TOv, Tend, nrep, ifsave, ifverb, iflogs)
       deallocate(rkv)
       deallocate(tauv)

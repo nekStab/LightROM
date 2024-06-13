@@ -188,7 +188,7 @@ contains
          call self%scal(1.0/alpha)
       endif
       return
-   end subroutine matrix_rand
+   end subroutine matrix_rand  
 
    !-----------------------------------------------------------------------
    !-----     TYPE BOUND PROCEDURE FOR SYM LOW RANK REPRESENTATION    -----

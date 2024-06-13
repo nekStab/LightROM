@@ -20,7 +20,6 @@ program demo
    use Laplacian2D_LTI_Lyapunov_Operators
    use Laplacian2D_LTI_Lyapunov_RKlib
    use Laplacian2D_LTI_Lyapunov_Utils
-
    implicit none
 
    character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Main'
@@ -244,7 +243,8 @@ program demo
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, torder, info)
+            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, torder, info, &
+                                                   & exptA=exptA)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution

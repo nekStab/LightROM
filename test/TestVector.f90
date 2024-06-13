@@ -1,6 +1,7 @@
 module TestVector
   use LightKrylov
-  use stdlib_optval, only: optval
+  use LightKrylov, only : wp => dp
+  use stdlib_optval, only : optval
 
   implicit none
 

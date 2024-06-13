@@ -21,7 +21,7 @@ module Laplacian2D_LTI_Riccati_RKlib
    !-----     EXPONENTIAL PROPAGATOR RKLIB    -----
    !-----------------------------------------------
 
-   type, extends(abstract_linop), public :: rklib_exptA_laplacian
+   type, extends(abstract_linop_rdp), public :: rklib_exptA_laplacian
       real(wp) :: tau ! Integration time.
    contains
       private
@@ -29,7 +29,7 @@ module Laplacian2D_LTI_Riccati_RKlib
       procedure, pass(self), public :: rmatvec => direct_solver_vec                  ! dummy
    end type rklib_exptA_laplacian
 
-   type, extends(abstract_linop), public :: rklib_riccati_mat
+   type, extends(abstract_linop_rdp), public :: rklib_riccati_mat
       real(wp) :: tau ! Integration time.
    contains
       private
@@ -65,9 +65,9 @@ contains
       !> Linear Operator.
       class(rklib_exptA_laplacian), intent(in)  :: self
       !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
+      class(abstract_vector_rdp),   intent(in)  :: vec_in
       !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
+      class(abstract_vector_rdp),   intent(out) :: vec_out
 
       !> Time-integrator.
       type(rks54_class) :: prop
@@ -120,11 +120,11 @@ contains
 
    subroutine direct_solver_riccati_mat(self, vec_in, vec_out)
       !> Linear Operator.
-      class(rklib_riccati_mat), intent(in)  :: self
+      class(rklib_riccati_mat),   intent(in)  :: self
       !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
+      class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
+      class(abstract_vector_rdp), intent(out) :: vec_out
       !> Time-integrator.
       type(rks54_class) :: prop
       real(wp)          :: dt = 0.1_wp
