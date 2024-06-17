@@ -182,7 +182,6 @@ contains
          end do
       end do
 
-      STOP 1
       write(*,*) ''
       write(*,*) '--------------------'
       write(*,*) '   OBSERVABILITY'
@@ -933,5 +932,149 @@ contains
       end do
       
    end subroutine run_lyap_convergence_test
+
+   subroutine run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, Tend, nrep, ifsave, ifverb, iflogs)
+      ! LTI system
+      type(lti_system),              intent(inout) :: LTI
+      ! Initial condition
+      type(state_vector),            intent(in) :: U0(:)
+      real(wp),                      intent(in) :: S0(:,:)
+      ! vector of dt values
+      real(wp),                      intent(in) :: tauv(:)
+      ! vector of rank values
+      integer,                       intent(in) :: rkv(:)
+      ! vector of torders
+      integer,                       intent(in) :: TOv(:)
+      real(wp),                      intent(in) :: Tend
+      integer,                       intent(in) :: nrep
+      ! Optional
+      logical, optional,             intent(in) :: ifsave
+      logical                                   :: if_save_npy
+      logical, optional,             intent(in) :: ifverb
+      logical                                   :: verb
+      logical, optional,             intent(in) :: iflogs
+      logical                                   :: if_save_logs
+      
+      ! Internal variables
+      type(LR_state),     allocatable           :: X     ! Controllability
+      type(LR_state),     allocatable           :: Y     ! Observability
+      real(wp)                                  :: U_out(2*nx,rkmax)
+      real(wp)                                  :: X_out(2*nx,2*nx)
+      real(wp),           allocatable           :: vals(:)
+      real(wp)                                  :: sfro
+      real(wp)                                  :: tau, Ttot, etime, etime_tot
+      integer                                   :: i, j, k, ito, rk, irep, nsteps
+      integer                                   :: info, torder, iostatus
+      real(wp)                                  :: lagsvd(rkmax)
+      real(wp)                                  :: res(N**2)
+      character*128      :: oname
+      character*128      :: onameU
+      character*128      :: onameS
+      integer            :: clock_rate, clock_start, clock_stop
+
+      if_save_npy  = optval(ifsave, .false.)
+      verb         = optval(ifverb, .false.)
+      if_save_logs = optval(iflogs, .false.)
+
+      call system_clock(count_rate=clock_rate)
+
+      write(*,*) '------------------------'
+      write(*,*) '   RANK-ADAPTIVE DLRA'
+      write(*,*) '------------------------'
+      write(*,*) '    CONTROLLABILITY'
+      write(*,*) '------------------------'
+      write(*,*) ''
+
+      X = LR_state()
+      do ito = 1, size(TOv)
+         torder = TOv(ito)
+         do i = 1, size(rkv)
+            rk = rkv(i)
+            if (allocated(vals)) deallocate(vals)
+            allocate(vals(1:rk))
+            do j = 1, size(tauv)
+               tau = tauv(j)
+               ! Initialize low-rank representation with rank rk
+               if (verb) write(*,*) 'Initialize LR state, rk =', rk
+               call X%initialize_LR_state(U0, S0, rk, rkmax)
+               ! Reset time
+               Ttot = 0.0_wp
+               lagsvd = 0.0_wp
+               if (verb) write(*,*) 'Run DRLA'
+               if (if_save_logs) then
+                  write(oname,'("output_GL_X_norm__n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
+                  open(unit=iunit1, file=trim(basepath)//oname)
+                  call stamp_logfile_header(iunit1, 'Controllability Gramian', rk, tau, Tend, torder)
+                  write(iunit1,'(A16,A4,A10,A18,A18,A20)') 'DLRA:','  rk',' Tend','|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
+                  write(oname,'("output_GL_X_sigma_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
+                  open(unit=iunit2, file=trim(basepath)//oname)
+                  call stamp_logfile_header(iunit2, 'Controllability Gramian', rk, tau, Tend, torder)
+                  write(iunit2,*) 'DLRA: T    sigma_i    d(sigma-i)/sigma-1    d(sigma_i)/sigma_i    ||Sum(sigma_i)||_2'
+               end if
+               write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
+                                    & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
+               nsteps = nint(Tend/tau)
+               etime_tot = 0.0_wp
+               do irep = 1, nrep
+                  ! run integrator
+                  etime = 0.0_wp
+                  call system_clock(count=clock_start)     ! Start Timer
+                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
+                                                                        & exptA=exptA, iftrans=.false., &
+                                                                        & ifverb=.true., ifrk=.true.)
+                  call system_clock(count=clock_stop)      ! Stop Timer
+                  etime = etime + real(clock_stop-clock_start)/real(clock_rate)
+                  ! Compute LR basis spectrum
+                  call sval(X%S(1:rk,1:rk), vals)
+                  if (if_save_logs) then
+                     write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Ttot
+                     do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
+                     write (iunit2,'(A)', ADVANCE='NO') ' | '
+                     do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(1); end do
+                     write (iunit2,'(A)', ADVANCE='NO') ' | '
+                     do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(k); end do
+                     write (iunit2,'(A)', ADVANCE='NO') ' | '
+                     lagsvd(1:rk) = lagsvd(1:rk) - vals
+                     sfro = 0.0_wp
+                     do k = 1, rk
+                        sfro = sfro + lagsvd(k)**2
+                     end do
+                     sfro = sqrt(sfro)
+                     write(iunit2,'(E14.6)'), sfro           
+                  end if
+                  lagsvd(1:rk) = vals
+                  ! Reconstruct solution
+                  call reconstruct_solution(X_out, X)
+                  Ttot = Ttot + Tend
+                  call CALE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
+                  write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
+                                    & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
+                  if (if_save_logs) then
+                     write(iunit1,'(I4," ",A11,I6,F8.4,E18.8,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
+                                    & nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
+                  end if
+                  etime_tot = etime_tot + etime
+               end do
+               if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
+               if (if_save_logs) then
+                  write(iunit1,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit1)
+                  write(Iunit2,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit2)
+               end if
+               if (if_save_npy) then
+                  write(onameU,'("data_GLXY_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  write(onameS,'("data_GLXY_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
+                  if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
+                  call save_npy(trim(basepath)//onameS, X%S(1:rk,1:rk), iostatus)
+                  if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
+               end if
+               deallocate(X%U)
+               deallocate(X%S)
+            end do
+         end do
+      end do
+
+      return
+   end subroutine run_DLRA_rank_adaptive_test
 
 end module Ginzburg_Landau_Tests
