@@ -38,7 +38,7 @@ contains
       !! Computes the matrix product \( \mathbf{z} = \mathbf{B} \mathbf{W} \mathbf{B}^T \mathbf{u} \) 
       class(abstract_vector_rdp), intent(out)  :: z
       class(abstract_vector_rdp), intent(in)   :: u
-      class(abstract_vector_rdp), i      !call linear_combination(Utmp, X%U, Swrk(1:rk,1:rk))ntent(in)   :: B(:)
+      class(abstract_vector_rdp), intent(in)   :: B(:)
       real(wp),                   intent(in)   :: W(:,:)
       ! internals
       real(wp)                                 :: wrk(size(B))
