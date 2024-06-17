@@ -68,7 +68,7 @@ program demo
 
    logical        :: ifsave, ifload, ifverb, iflogs
    
-   call logger%configure(level=none_level)
+   call logger%configure(level=error_level, time_stamp=.false.)
    
    !----------------------------------
    !-----     INITIALIZATION     -----
@@ -200,6 +200,29 @@ program demo
       deallocate(rkv)
       deallocate(tauv)
    end if 
-!
+
+   !----------------------------------
+   !
+   ! RANK-ADAPTIVE DLRA LYAPUNOV
+   !
+   !----------------------------------
+
+   run_test = .true.
+   if (run_test) then
+      nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 6 /)
+      ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 0.1 /)
+      allocate(TOv(1)); TOv = (/ 1 /)
+      Tend = 60.0_wp
+      nrep = 1
+      ! run DLRA
+      ifsave = .false. ! save X and Y matrices to disk (LightROM/local)
+      ifverb = .false. ! verbosity
+      iflogs = .false. ! write logs with convergence and signular value evolution
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, Tend, nrep, ifsave, ifverb, iflogs)
+      deallocate(rkv)
+      deallocate(tauv)
+      deallocate(TOv)
+   end if 
+
    return
 end program demo
