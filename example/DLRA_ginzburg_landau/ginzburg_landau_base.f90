@@ -174,10 +174,10 @@ contains
 
       ! optional size argument
       if (present(rkmax)) then
-         self%rk = rkmax - 1
+         self%rk = rk - 1
          rka = rkmax
       else
-         self%rk  = rk
+         self%rk = rk
          rka = rk + 1
       end if
 
