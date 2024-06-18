@@ -1,13 +1,12 @@
 module LightROM_Utils
    ! stdlib
-   use stdlib_linalg, only : eye, diag, is_symmetric
+   use stdlib_linalg, only : eye, diag, svd, is_symmetric
    use stdlib_optval, only : optval
    ! LightKrylov for Linear Algebra
    use LightKrylov
    use LightKrylov, only : dp, wp => dp
    use LightKrylov_AbstractVectors
-   use LightKrylov_Utils, only : svd
-   !use LightKrylov_Utils
+   use LightKrylov_Utils, only : abstract_opts
    ! LightROM
    use LightROM_AbstractLTIsystems
    
@@ -29,6 +28,24 @@ module LightROM_Utils
    interface ROM_Galerkin_Projection
       module procedure ROM_Galerkin_Projection_rdp
    end interface
+
+   type, extends(abstract_opts), public :: dlra_opts
+      !! Rank-adpative (RA) dynamical low-rank approxinmation (DLRA) options.
+      integer :: mode = 1
+      !! Time integration mode. Only 1st order (Lie splitting - mode 1) and 
+      !! 2nd order (Strang splitting - mode 2) are implemented.
+      logical :: verbose = .false.
+      !! Verbosity control (default: `.false.`)
+      ! RANK-ADPATIVE SPECIFICS
+      logical :: if_rank_adaptive = .true.
+      !! Allow rank-adaptivity
+      real(wp) :: tol = 1e-6_wp
+      !! Tolerance on the extra singular value to determine rank-adaptation
+      logical :: use_err_est = .false.
+      !! Choose whether to base the tolerance on 'tol' or on the splitting error estimate
+      integer :: err_est_step = 10
+      !! Time step interval for recomputing the splitting error estimate (only of use_err_est = .true.)
+   end type
 
 contains
 
@@ -75,7 +92,7 @@ contains
       ! compute inner product with Gramian bases and compte SVD
       allocate(LRCrossGramian(rkc,rko)); allocate(V(rko,rko)); allocate(W(rkc,rkc))
       call innerprod(LRCrossGramian, Xc, Yo)
-      call svd(LRCrossGramian, V, S, W)
+      call svd(LRCrossGramian, S, V, W)
 
       allocate(Sigma(rkmin))
       do i = 1, rkmin

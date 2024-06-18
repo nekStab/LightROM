@@ -2,14 +2,14 @@ module Ginzburg_Landau_Utils
    ! Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
-   use stdlib_linalg, only : eye, diag
+   use stdlib_linalg, only : eye, diag, svd
    use stdlib_io_npy, only : save_npy, load_npy
    !use fortime
    ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only : wp => dp
    use LightKrylov_AbstractVectors
-   use LightKrylov_Utils, only : svd, assert_shape
+   use LightKrylov_Utils, only : assert_shape
    ! LightROM
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
@@ -36,7 +36,7 @@ module Ginzburg_Landau_Utils
    ! logfiles
    public  :: stamp_logfile_header
    ! misc
-   public  :: CALE, CARE, sval
+   public  :: CALE, CARE
 
    character*128, parameter :: this_module = 'Ginzburg_Landau_Utils'
 
@@ -232,7 +232,7 @@ contains
       call qr(Utmp, S, perm, info, verbosity=.false.)
       if (info /= 0) write(*,*) '  [generate_random_initial_condition] Info: Colinear vectors detected in QR, column ', info
       ! perform SVD
-      call svd(S(:,1:rk), U_svd(:,1:rk), S_svd(1:rk), V_svd(1:rk,1:rk))
+      call svd(S(:,1:rk), S_svd(1:rk), U_svd(:,1:rk), V_svd(1:rk,1:rk))
       S = diag(S_svd)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
@@ -344,18 +344,5 @@ contains
       res_flat = AX_flat + XAH_flat + CTQcC_flat + NL_flat
 
    end subroutine CARE
-
-   subroutine sval(X, svals)
-      real(wp), intent(in) :: X(:,:)
-      real(wp)             :: svals(min(size(X, 1), size(X, 2)))
-      ! internals
-      real(wp)             :: U(size(X, 1), size(X, 1))
-      real(wp)             :: VT(size(X, 2), size(X, 2))
-  
-      ! Perform SVD
-      call svd(X, U, svals, VT)
-    
-   end subroutine
-
 
 end module Ginzburg_Landau_Utils

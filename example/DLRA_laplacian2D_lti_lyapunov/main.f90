@@ -4,6 +4,7 @@ program demo
    use stdlib_linalg, only : eye
    use stdlib_math, only : all_close, logspace
    use stdlib_io_npy, only : save_npy
+   use stdlib_logger, only : error_level
    ! LightKrylov for linear algebra
    use LightKrylov
    use LightKrylov, only : wp => dp
@@ -95,6 +96,9 @@ program demo
 
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
+
+   ! DLRA opts
+   type(dlra_opts) :: opts
 
    call logger%configure(level=error_level); write(*,*) 'Logging set to error_level.'
 
@@ -242,9 +246,9 @@ program demo
             call X%initialize_LR_state(U0, S0, rk)
 
             ! run step
+            opts = dlra_opts(mode=torder, verbose=verb)
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, torder, info, &
-                                                   & exptA=exptA)
+            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, info, exptA=exptA, options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution

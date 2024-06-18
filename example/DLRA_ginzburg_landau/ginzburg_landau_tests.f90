@@ -1,7 +1,7 @@
 module Ginzburg_Landau_Tests
    ! Standard Library.
    use stdlib_optval, only : optval
-   use stdlib_linalg, only : diag
+   use stdlib_linalg, only : diag, svd, svdvals
    use stdlib_io_npy, only : save_npy, load_npy
    ! LightKrylov for linear algebra.
    use LightKrylov
@@ -81,6 +81,8 @@ contains
       character*128      :: onameU
       character*128      :: onameS
       integer            :: clock_rate, clock_start, clock_stop
+      ! DLRA opts
+      type(dlra_opts)                           :: opts
 
       if_save_npy  = optval(ifsave, .false.)
       verb         = optval(ifverb, .false.)
@@ -92,7 +94,6 @@ contains
       write(*,*) '----------------------'
       write(*,*) '   CONTROLLABILITY'
       write(*,*) '----------------------'
-      write(*,*) ''
 
       X = LR_state()
       do ito = 1, size(TOv)
@@ -124,16 +125,18 @@ contains
                                     & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
                nsteps = nint(Tend/tau)
                etime_tot = 0.0_wp
+               ! set solver options
+               opts = dlra_opts(mode=ito, verbose=verb)
                do irep = 1, nrep
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
-                                                                        & exptA=exptA, iftrans=.false., ifverb=.false.)
+                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
+                                                                        & exptA=exptA, iftrans=.false., options=opts)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
-                  call sval(X%S(1:rk,1:rk), vals)
+                  vals = svdvals(X%S(1:rk,1:rk))
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Ttot
                      do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
@@ -217,16 +220,18 @@ contains
                                     & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
                nsteps = nint(Tend/tau)
                etime_tot = 0.0_wp
+               ! set solver options
+               opts = dlra_opts(mode=ito, verbose=verb)
                do irep = 1, nrep
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, & 
-                                                                        & exptA=exptA, iftrans=.true., ifverb=.false.)
+                  call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, info, & 
+                                                                        & exptA=exptA, iftrans=.true., options=opts)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
-                  call sval(Y%S(1:rk,1:rk), vals)
+                  vals = svdvals(Y%S(1:rk,1:rk))
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Ttot
                      do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
@@ -344,6 +349,8 @@ contains
       character*128      :: onameS
       logical            :: existU, existS
       integer            :: clock_rate, clock_start, clock_stop
+      ! DLRA opts
+      type(dlra_opts)                           :: opts
 
       if_save_npy  = optval(ifsave, .false.)
       if_load_npy  = optval(ifload, .false.)
@@ -390,14 +397,16 @@ contains
          ! Reset time
          Ttot = 0.0_wp
          etime_tot = 0.0_wp
+         ! set solver options
+         opts = dlra_opts(mode=torder, verbose=verb)
          write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
                            & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
          do irep = 1, nrep
             ! run integrator
             etime = 0.0_wp
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
-                                                                  & exptA=exptA, iftrans=.false., ifverb=.false.)
+            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
+                                                                  & exptA=exptA, iftrans=.false., options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
             etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
@@ -456,14 +465,16 @@ contains
          ! Reset time
          Ttot = 0.0_wp
          etime_tot = 0.0_wp
+         ! set solver options
+         opts = dlra_opts(mode=torder, verbose=verb)
          write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
                                     & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
          do irep = 1, nrep
             ! run integrator
             etime = 0.0_wp
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, torder, info, &
-                                                                  & exptA=exptA, iftrans=.true., ifverb=.false.)
+            call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, info, &
+                                                                  & exptA=exptA, iftrans=.true., options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
             etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
@@ -507,7 +518,7 @@ contains
       !call linear_combination(Utmp, X%U, Swrk(1:rk,1:rk))
       call get_state(U0_in(:,1:rk), Utmp)
       ! compute SVD of updated X%U
-      call svd(U0_in(:,1:rk), U_svd(:,1:2*nx), S_svd(1:rk), V_svd(1:rk,1:rk))
+      call svd(U0_in(:,1:rk), S_svd(1:rk), U_svd(:,1:2*nx), V_svd(1:rk,1:rk))
       call set_state(X%U(1:rk), matmul(U_svd(:,1:rk), diag(S_svd(1:rk))))
 
       ! compute sqrt of coefficient matrix Y%S and right-multiply it to Y%U
@@ -521,7 +532,7 @@ contains
       !call linear_combination(Utmp, Y%U, Swrk(1:rk,1:rk))
       call get_state(U0_in(:,1:rk), Utmp)
       ! compute SVD of updated Y%U
-      call svd(U0_in(:,1:rk), U_svd(:,1:2*nx), S_svd(1:rk), V_svd(1:rk,1:rk)) 
+      call svd(U0_in(:,1:rk), S_svd(1:rk), U_svd(:,1:2*nx), V_svd(1:rk,1:rk))
       call set_state(Y%U(1:rk), matmul(U_svd(:,1:rk), diag(S_svd(1:rk))))   
 
       ! compute balancing transformation based on SVD of Gramians
@@ -589,6 +600,8 @@ contains
       character*128      :: onameU
       character*128      :: onameS
       integer            :: clock_rate, clock_start, clock_stop
+      ! DLRA opts
+      type(dlra_opts)                              :: opts
 
       if_save_npy  = optval(ifsave, .false.)
       verb         = optval(ifverb, .false.)
@@ -616,13 +629,15 @@ contains
                               & '|| X_DLRA ||_2', '|| res ||_2','Elapsed time'
                nsteps = nint(Tend/tau)
                etime_tot = 0.0_wp
+               ! set solver options
+               opts = dlra_opts(mode=torder, verbose=verb)
                do irep = 1, nrep
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, &
-                                                                     & Tend, tau, torder, info, &
-                                                                     & exptA=exptA, iftrans=.false., ifverb=verb)
+                  !call numerical_low_rank_splitting_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, &
+                  !                                                   & Tend, tau, info, &
+                  !                                                   & exptA=exptA, iftrans=.false., options=opts)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
 
@@ -788,6 +803,8 @@ contains
       ! timer
       integer            :: clock_rate, clock_start, clock_stop
       logical            :: existfile, load_data
+      ! DLRA opts
+      type(dlra_opts)                              :: opts
 
       if_save_npy  = optval(ifsave, .false.)
       verb         = optval(ifverb, .false.)
@@ -899,6 +916,8 @@ contains
             rk = rkv(i)
             do j = 1, size(tauv)
                tau = tauv(j)
+               ! set solver options
+               opts = dlra_opts(mode=ito, verbose=verb)
                ! Initialize low-rank representation with rank rk
                if (verb) write(*,*) 'Initialize LR state, rk =', rk
                call X_state%initialize_LR_state(U0, S0, rk)
@@ -906,8 +925,8 @@ contains
                nsteps = nint(Tend/tau)
                ! run integrator
                call system_clock(count=clock_start)     ! Start Timer
-               call numerical_low_rank_splitting_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, torder, info, &
-                                                                     & exptA=exptA, iftrans=.false., ifverb=.false.)
+               call numerical_low_rank_splitting_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, info, &
+                                                                     & exptA=exptA, iftrans=.false., options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
                etime = real(clock_stop-clock_start)/real(clock_rate)
                ! Reconstruct solution
@@ -971,6 +990,8 @@ contains
       character*128      :: onameU
       character*128      :: onameS
       integer            :: clock_rate, clock_start, clock_stop
+      ! DLRA opts
+      type(dlra_opts)                           :: opts
 
       if_save_npy  = optval(ifsave, .false.)
       verb         = optval(ifverb, .false.)
@@ -1015,17 +1036,19 @@ contains
                                     & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
                nsteps = nint(Tend/tau)
                etime_tot = 0.0_wp
+               ! set solver options
+               opts = dlra_opts(mode=ito, if_rank_adaptive=.true., tol=1e-6_wp, &
+                                 & use_err_est = .false., verbose=verb)
                do irep = 1, nrep
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, torder, info, &
-                                                                        & exptA=exptA, iftrans=.false., &
-                                                                        & ifverb=.true., ifrk=.true.)
+                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
+                                                                        & exptA=exptA, iftrans=.false., options=opts)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
-                  call sval(X%S(1:rk,1:rk), vals)
+                  vals = svdvals(X%S(1:rk,1:rk))
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Ttot
                      do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do

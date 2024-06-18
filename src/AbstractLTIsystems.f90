@@ -60,6 +60,8 @@ module LightROM_AbstractLTIsystems
       real(wp),                   allocatable :: S(:, :)
       !> Current approximation rank
       integer                                 :: rk = 1
+      !> Has rank been initialized? (for rank-adaptive DLRA)
+      logical                                 :: rank_is_initialised = .false.
    contains
    end type abstract_sym_low_rank_state_rdp
 

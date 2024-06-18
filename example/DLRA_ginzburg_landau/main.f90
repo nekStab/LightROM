@@ -4,6 +4,7 @@ program demo
    use stdlib_linalg, only : eye, diag
    use stdlib_math, only : all_close, logspace
    use stdlib_io_npy, only : save_npy, load_npy
+   use stdlib_logger, only : error_level, none_level
     ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only : wp => dp
@@ -212,8 +213,8 @@ program demo
       nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 6 /)
       ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 0.1 /)
       allocate(TOv(1)); TOv = (/ 1 /)
-      Tend = 60.0_wp
-      nrep = 1
+      Tend = 1.0_wp
+      nrep = 60
       ! run DLRA
       ifsave = .false. ! save X and Y matrices to disk (LightROM/local)
       ifverb = .false. ! verbosity

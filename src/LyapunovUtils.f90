@@ -1,12 +1,18 @@
 module LightROM_LyapunovUtils
+   ! LightKrylov
    use LightKrylov
    use LightKrylov, only: wp => dp
    use LightKrylov_Constants
    use LightKrylov_AbstractVectors
+   ! LightROM
+   use LightROM_AbstractLTIsystems
    
    implicit none
 
-   private
+   ! module name
+   private :: this_module
+   character*128, parameter :: this_module = 'LightROM_LyapunovUtils'
+
    ! Matrix operations for abstract vector types
    public :: apply_outerprod
 

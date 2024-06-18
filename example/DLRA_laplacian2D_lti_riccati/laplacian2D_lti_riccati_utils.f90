@@ -2,7 +2,7 @@ module Laplacian2D_LTI_Riccati_Utils
    ! Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
-   use stdlib_linalg, only : diag
+   use stdlib_linalg, only : diag, svd
    ! RKLIB module for time integration.
    use rklib_module
    ! LightKrylov for linear algebra.
@@ -23,7 +23,7 @@ module Laplacian2D_LTI_Riccati_Utils
    ! initial condition
    public  :: generate_random_initial_condition
    ! misc
-   public  :: CARE, sval
+   public  :: CARE
 
    character*128, parameter :: this_module = 'Laplacian2D_LTI_Riccati_Utils'
    
@@ -177,7 +177,7 @@ contains
       call qr(Utmp, S, perm, info, verbosity=.false.)
       if (info /= 0) write(*,*) '  [generate_random_initial_condition] Info: Colinear vectors detected in QR, column ', info
       ! perform SVD
-      call svd(S(:,1:rk), U_svd(:,1:rk), S_svd(1:rk), V_svd(1:rk,1:rk))
+      call svd(S(:,1:rk), S_svd(1:rk), U_svd(:,1:rk), V_svd(1:rk,1:rk))
       S = diag(S_svd)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
@@ -195,17 +195,5 @@ contains
       real(wp), dimension(n,n) :: X, A, Q, BRinvBT, Y
       Y = matmul(transpose(A), X) + matmul(X, A) + Q - matmul(X, matmul(BRinvBT, X))
    end function CARE
-
-   subroutine sval(X, svals)
-      real(wp), intent(in) :: X(:,:)
-      real(wp)             :: svals(min(size(X, 1), size(X, 2)))
-      ! internals
-      real(wp)             :: U(size(X, 1), size(X, 1))
-      real(wp)             :: VT(size(X, 2), size(X, 2))
-  
-      ! Perform SVD
-      call svd(X, U, svals, VT)
-    
-   end subroutine
 
 end module Laplacian2D_LTI_Riccati_Utils
