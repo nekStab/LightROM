@@ -17,7 +17,6 @@ module LightROM_RiccatiSolvers
    use LightROM_RiccatiUtils
    use LightROM_AbstractLTIsystems
 
-   
    implicit none
 
    ! global scratch arrays
@@ -34,7 +33,10 @@ module LightROM_RiccatiSolvers
    class(abstract_vector_rdp),  allocatable   :: Tt(:)
    real(wp),                    allocatable   :: S0(:,:)
 
-   private
+   private 
+   ! module name
+   private :: this_module
+   character*128, parameter :: this_module = 'LightKrylov_RiccatiSolvers'
    public :: numerical_low_rank_splitting_riccati_integrator
    public :: G_forward_map_riccati
    public :: K_step_riccati
@@ -63,7 +65,7 @@ module LightROM_RiccatiSolvers
 
    contains
 
-   subroutine numerical_low_rank_splitting_riccati_integrator_rdp(X, A, B, CT, Qc, Rinv, Tend, tau, torder, info, &
+   subroutine numerical_low_rank_splitting_riccati_integrator_rdp(X, A, B, CT, Qc, Rinv, Tend, tau, mode, info, &
                                                                & exptA, iftrans, ifverb)
       !! Numerical integrator for the matrix-valued differential Riccati equation of the form
       !!
@@ -132,44 +134,46 @@ module LightROM_RiccatiSolvers
       !! - Mena, H., Ostermann, A., Pfurtscheller, L.-M., Piazzola, C. (2018). "Numerical low-rank 
       !!   approximation of matrix differential equations", Journal of Computational and Applied Mathematics,
       !!   340, 602-614
-      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      class(abstract_sym_low_rank_state_rdp),  intent(inout) :: X
       !! Low-Rank factors of the solution.
-      class(abstract_linop_rdp),              intent(inout) :: A
+      class(abstract_linop_rdp),               intent(inout) :: A
       !! Linear operator.
-      class(abstract_vector_rdp),             intent(in)    :: B(:)
+      class(abstract_vector_rdp),              intent(in)    :: B(:)
       !! System input.
-      class(abstract_vector_rdp),             intent(in)    :: CT(:)
+      class(abstract_vector_rdp),              intent(in)    :: CT(:)
       !! System output.
-      real(wp),                               intent(in)    :: Qc(:,:)
+      real(wp),                                intent(in)    :: Qc(:,:)
       !! Measurement weights.
-      real(wp),                               intent(in)    :: Rinv(:,:)
+      real(wp),                                intent(in)    :: Rinv(:,:)
       !! Inverse of the actuation weights.
-      real(wp),                               intent(in)    :: Tend
+      real(wp),                                intent(in)    :: Tend
       !! Integration time horizon. 
-      real(wp),                               intent(inout) :: tau
+      real(wp),                                intent(inout) :: tau
       !! Desired time step. The avtual time-step will be computed such as to reach Tend in an integer number
       !! of steps.
-      integer,                                intent(in)    :: torder
+      integer,                                 intent(in)    :: mode
       !! Order of time integration. Only 1st (Lie splitting) and 2nd (Strang splitting) orders are implemented.
-      integer,                                intent(out)   :: info
+      integer,                                 intent(out)   :: info
       !! Information flag.
-      procedure(abstract_exptA_rdp), optional               :: exptA
+      procedure(abstract_exptA_rdp), optional                :: exptA
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
-      logical,                   optional,    intent(in)    :: iftrans
+      logical,                       optional, intent(in)    :: iftrans
+      logical                                                :: trans
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
-      logical,                   optional,    intent(in)    :: ifverb
+      logical,                       optional, intent(in)    :: ifverb
+      logical                                                :: verbose
       !! Toggle verbosity
 
       ! Internal variables   
       integer                                                :: istep, nsteps, iostep
       real(wp)                                               :: T
-      logical                                                :: verbose
-      logical                                                :: trans
+      character*128                                          :: msg
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
 
       ! Optional arguments
       trans = optval(iftrans, .false.)
       verbose = optval(ifverb, .false.)
+      
       if (present(exptA)) then
          p_exptA => exptA
       else
@@ -186,9 +190,19 @@ module LightROM_RiccatiSolvers
          iostep = 10
       endif
 
+      if ( mode > 2 ) then
+         write(msg, *) "Time-integration order for the operator splitting of d > 2 &
+                      & requires adjoint solves and is not implemented. Resetting torder = 2." 
+         call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+      else if ( mode < 1 ) then
+         write(msg, *) "Invalid time-integration order specified: ", mode
+         call stop_error(trim(msg), module=this_module, &
+                           & procedure='numerical_low_rank_splitting_lyapunov_integrator_rdp')
+      endif
+
       dlra : do istep = 1, nsteps
          ! dynamical low-rank approximation solver
-         call numerical_low_rank_splitting_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, torder, info, p_exptA, trans)
+         call numerical_low_rank_splitting_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, mode, info, p_exptA, trans)
 
          T = T + tau
          !> here we can do some checks such as whether we have reached steady state
@@ -218,7 +232,7 @@ module LightROM_RiccatiSolvers
    !-----     UTILITIES     -----
    !-----------------------------
 
-   subroutine numerical_low_rank_splitting_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, torder, info, exptA, iftrans)
+   subroutine numerical_low_rank_splitting_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, mode, info, exptA, iftrans)
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_linop_rdp),              intent(inout) :: A
@@ -233,7 +247,7 @@ module LightROM_RiccatiSolvers
       !! Inverse of the actuation weights.
       real(wp),                               intent(inout) :: tau
       !! Time step.
-      integer,                                intent(in)    :: torder
+      integer,                                intent(in)    :: mode
       !! Order of time integration. Only 1st (Lie splitting) and 2nd (Strang splitting) orders are implemented.
       integer,                                intent(out)   :: info
       !! Information flag.
@@ -243,29 +257,13 @@ module LightROM_RiccatiSolvers
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
 
       ! Internal variables
-      integer                                               :: istep, nsteps, integrator, rk
+      integer                                               :: istep, nsteps, rk
       logical                                               :: trans
 
       ! Optional argument
       trans = optval(iftrans, .false.)
 
-      if ( torder .eq. 1 ) then 
-         integrator = 1
-      else if ( torder .eq. 2 ) then
-         integrator = 2
-      else if ( torder .gt. 2 ) then
-         write(*,*) "INFO : Time-integration order for the operator splitting of d > 2 &
-                     &requires adjoint solves and is not implemented."
-         write(*,*) "       Resetting torder = 2." 
-         info = 1
-         integrator = 2
-      else 
-         write(*,*) "INFO : Invalid time-integration order specified."
-         info = -1
-         integrator = 2
-      endif
-
-      select case (integrator)
+      select case (mode)
       case (1) 
          ! Lie-Trotter splitting
          call M_forward_map        (X, A,                      tau, info, exptA, trans)
@@ -461,7 +459,7 @@ module LightROM_RiccatiSolvers
 
       ! Orthonormalize in-place
       call qr(U1, Swrk0, perm, info)
-      call check_info(info, 'qr_pivot', module='LightKrylov_RiccatiSolvers', procedure='K_step_Riccati_rdp')
+      call check_info(info, 'qr_pivot', module=this_module, procedure='K_step_Riccati_rdp')
       call apply_inverse_permutation_matrix(Swrk0, perm)
       X%S = Swrk0
 
