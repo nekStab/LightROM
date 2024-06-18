@@ -172,14 +172,7 @@ module LightROM_LyapunovSolvers
 
       ! Options
       if (present(options)) then
-         opts = dlra_opts( &
-                        mode             = options%mode, &
-                        if_rank_adaptive = options%if_rank_adaptive, &
-                        tol              = options%tol, &
-                        use_err_est      = options%use_err_est, &
-                        err_est_step     = options%err_est_step, &
-                        verbose          = options%verbose &
-                     )
+         opts = options
       else ! default
          opts = dlra_opts()
       end if
