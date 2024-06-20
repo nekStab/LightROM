@@ -5,14 +5,18 @@ module LightROM_Utils
    ! LightKrylov for Linear Algebra
    use LightKrylov
    use LightKrylov, only : dp, wp => dp
+   use LightKrylov_Logger, only : check_info
    use LightKrylov_AbstractVectors
+   use LightKrylov_BaseKrylov, only : orthogonalize_against_basis
    use LightKrylov_Utils, only : abstract_opts
    ! LightROM
    use LightROM_AbstractLTIsystems
    
    implicit none 
 
-   private
+   private :: this_module
+   character(len=*), parameter :: this_module = 'LightROM_Utils'
+
    public :: Balancing_Transformation
    public :: ROM_Petrov_Galerkin_Projection
    public :: ROM_Galerkin_Projection
@@ -27,6 +31,10 @@ module LightROM_Utils
 
    interface ROM_Galerkin_Projection
       module procedure ROM_Galerkin_Projection_rdp
+   end interface
+
+   interface project_onto_common_basis
+      module procedure project_onto_common_basis_rdp
    end interface
 
    type, extends(abstract_opts), public :: dlra_opts
@@ -193,5 +201,51 @@ contains
 
       return
    end subroutine ROM_Galerkin_Projection_rdp
+
+   subroutine project_onto_common_basis_rdp(UTV, VpTV, U, V)
+      !! Computes the common, orthonormal basis of the space spanned by the input Krylov bases \( [ \mathbf{U}, \mathbf{V} ] \)
+      !! by computing \( \mathbf{V_\perp} \) which is an orthonormal basis of \( \mathbf{V} \) lying in the orthogonal
+      !! complement of \( \mathbf{U} \) given by
+      !! \[
+      !!    \mathbf{V_\perp}, _ = \text{qr}( \mathbf{V} - \mathbf{U} \mathbf{U}^T \mathbf{V} )
+      !! \[
+      !!
+      !! NOTE: The orthonormality of \( \mathbf{U} \) is assumed and not checked.
+      !! 
+      !! The output is
+      !! \[
+      !!     \mathbf{U}^T \mathbf{V}, \qquad \text{and }  \qquad \mathbf{V_perp}^T \mathbf{V}
+      !!     \hat{\mathbf{D}} = \mathbf{D} .
+      !! \]
+      real(wp),                   allocatable, intent(out) :: UTV(:,:)
+      real(wp),                   allocatable, intent(out) :: VpTV(:,:)
+      class(abstract_vector_rdp),              intent(in)  :: U(:)
+      class(abstract_vector_rdp),              intent(in)  :: V(:)
+
+      ! internals
+      class(abstract_vector_rdp),             allocatable  :: Vp(:)
+      real(wp),                               allocatable  :: wrk(:,:)
+      integer :: ru, rv, r, info
+
+      ru = size(U)
+      rv = size(V)
+      r  = ru + rv
+
+      allocate(Vp(rv), source=V) ! Vp = V
+      allocate(UTV( ru,rv)); UTV  = 0.0_wp
+      allocate(VpTV(rv,rv)); VpTV = 0.0_wp
+
+      ! orthonormalize second basis against first
+      call orthogonalize_against_basis(Vp, U, info, if_chk_orthonormal=.false., beta=UTV)
+      call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='project_onto_common_basis_rdp')
+      allocate(wrk(rv,rv)); wrk = 0.0_wp
+      call qr(Vp, wrk, info)
+      call check_info(info, 'qr', module=this_module, procedure='project_onto_common_basis_rdp')
+
+      ! compute inner product between second basis and its orthonormalized version
+      call innerprod(VpTV, Vp, V)
+
+      return
+   end subroutine project_onto_common_basis_rdp
 
 end module LightROM_Utils

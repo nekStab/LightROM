@@ -27,8 +27,7 @@ LightKrylov = { path = "../LightKrylov" }
 #LightKrylov = { git = "https://github.com/nekStab/LightKrylov.git", branch = "dev"}
 
 [dev-dependencies]
-test-drive.git = "https://github.com/fortran-lang/test-drive"
-test-drive.tag = "v0.4.0"
+test-drive.git = "https://github.com/nekStab/test-drive"
 
 [[example]]
 
