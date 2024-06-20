@@ -37,15 +37,15 @@ module LightROM_RiccatiSolvers
    private 
    ! module name
    private :: this_module
-   character*128, parameter :: this_module = 'LightKrylov_RiccatiSolvers'
-   public :: numerical_low_rank_splitting_riccati_integrator
+   character*128, parameter :: this_module = 'LightROM_RiccatiSolvers'
+   public :: projector_splitting_DLRA_riccati_integrator
    public :: G_forward_map_riccati
    public :: K_step_riccati
    public :: S_step_riccati
    public :: L_step_riccati
 
-   interface numerical_low_rank_splitting_riccati_integrator
-      module procedure numerical_low_rank_splitting_riccati_integrator_rdp
+   interface projector_splitting_DLRA_riccati_integrator
+      module procedure projector_splitting_DLRA_riccati_integrator_rdp
    end interface
 
    interface G_forward_map_riccati
@@ -66,9 +66,9 @@ module LightROM_RiccatiSolvers
 
    contains
 
-   subroutine numerical_low_rank_splitting_riccati_integrator_rdp(X, A, B, CT, Qc, Rinv, Tend, tau, mode, info, &
+   subroutine projector_splitting_DLRA_riccati_integrator_rdp(X, A, B, CT, Qc, Rinv, Tend, tau, mode, info, &
                                                                & exptA, iftrans, options)
-      !! Numerical integrator for the matrix-valued differential Riccati equation of the form
+      !! Main driver for the numerical integrator for the matrix-valued differential Riccati equation of the form
       !!
       !!    $$\dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
       !!
@@ -80,51 +80,54 @@ module LightROM_RiccatiSolvers
       !!
       !!    $$\mathbf{0} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
       !!
-      !! The algorithm is based on three main ideas:
+      !! The algorithm is based on four main ideas:
       !!
-      !! - The operator splitting scheme proposed by Lubich & Oseledets (2014) that splits the 
-      !!   right-hand side of the differential equation into a linear stiff part that is solved
-      !!   explicitly and a possibly non-linear non-stiff part which is solved numerically. The
-      !!   two operators are then composed to obtain the integrator for the full Lyapunov equation.
-      !! - The Dynamic Low-Rank Approximation for the solution of general matrix differential 
-      !!   equations proposed by Nonnenmacher & Lubich (2007) which seeks to integrate only the
-      !!   leading low-rank factors of the solution to a large system by updating the matrix 
-      !!   factorization. The dynamical low-rank approximation scheme for the low-rank factors 
-      !!   of the solution is itself solved using a projector-splitting technique to cheaply 
-      !!   maintain orthonormality or the low-rank basis without explicit SVDs. 
-      !! - This algorithm has been applied to the Lyapunov and Riccati equations by Mena et al. 
-      !!   (2018) with improvements taking advantage of the symmetry of the problem/solution.
+      !! - Dynamic Low-Rank Approximation (DLRA). DLRA is a method for the solution of general matrix differential 
+      !!   equations proposed by Nonnenmacher & Lubich (2007) which seeks to integrate only the leading low-rank 
+      !!   factors of the solution to a large system by updating an appropriate matrix factorization. The time-integration
+      !!   is achieved by splitting the step into three sequential substeps, each updating a part of the factorization
+      !!   taking advantage of and maintaining the orthogonality of the left and right low-rank bases of the factorization.
+      !! - Projector-Splitting Integration (PSI). The projector-splitting scheme proposed by Lubich & Oseledets (2014) 
+      !!   for the solution of DLRA splits the right-hand side of the differential equation into a linear stiff part 
+      !!   that is integrated exactly and a (possibly non-linear) non-stiff part which is integrated numerically. 
+      !!   The two operators are then composed to obtain the integrator for the full differential equation.
+      !!   The advantage of the projector splitting integration is that it maintains orthonormality of the basis
+      !!   of the low-rank approximation to the solution without requiring SVDs of the full matrix.                                                                     
+      !! - The third element is the application of the general framework of projector-splitting integration for 
+      !!   dynamical low-rank approximation to the Riccati equations by Mena et al. (2018). As the solutions
+      !!   to the Riccati equation are by construction SPD, this fact can be taken advantage of to reduce the 
+      !!   computational cost of the integration and, in particular, doing away with one QR factorization per timestep
+      !!   while maintaining symmetry of the resulting matrix factorization.
+      !! - The final element is the addition of the capability of dyanmic rank adaptivity for the projector-splitting
+      !!   integrator proposed by Hochbruck et al. (2023). At the cost of integrating a supplementary solution vector, 
+      !!   the rank of the solution is dynamically adapted to ensure that the corresponding additional singular value
+      !!   stays below a chosen threshold.
       !!
       !! **Algorithmic Features**
       !! 
-      !! - Separate integration of the stiff inhomogeneous part of the Lyapunov equation and the
-      !!   non-stiff inhomogeneity
-      !! - Rank preserving time-integration that maintains orthonormality of the factorization
-      !!   basis
+      !! - Separate integration of the stiff inhomogeneous part of the Riccati equation and the non-stiff inhomogeneity
+      !! - Rank preserving time-integration that maintains orthonormality of the factorization basis
+      !! - Alternatively, dynamical rank-adaptivity based on the instantaneous singular values
       !! - The stiff part of the problem is solved using a time-stepper approach to approximate 
       !!   the action of the exponential propagator
       !!
       !! **Advantages**
       !!
-      !! - Rank of the approximate solution is user defined
-      !! - The timesteps of the stiff and non-stiff parts of the code are independent
+      !! - Rank of the approximate solution is user defined or chosen adaptively based on the solution
       !! - The integrator is adjoint-free
-      !! - The operator of the homogeneous part and the inhomogeneity are not needed explicitly
-      !!   i.e. the algorithm is amenable to solution using Krylov methods (in particular for 
-      !!   the solution of the stiff part of the problem)
-      !! - No SVDs are necessary for this alogorithm
-      !! - Lie and Strang splitting implemented allowing for first and second order integration
-      !!   in time
+      !! - The operator of the homogeneous part and the inhomogeneity are not needed explicitly i.e. the algorithm 
+      !! is amenable to solution using Krylov methods (in particular for the solution of the stiff part of the problem)
+      !! - No SVDs of the full solution are required for this algorithm
+      !! - Lie and Strang splitting implemented allowing for first and second order integration in time
       !!
       !! ** Limitations**
       !!
-      !! - Rank of the approximate solution is user defined. The appropriateness of this 
-      !!   approximation is not considered
-      !! - The current implementation does not require an adjoint integrator. This means that
-      !!   the temporal order of the basic operator splitting scheme is limited to 1 (Lie-Trotter
-      !!   splitting) or at most 2 (Strang splitting). Higher order integrators are possible, but 
-      !!   require at least some backward integration (via the adjoint) in BOTH parts of the splitting. 
-      !!   (see Sheng-Suzuki and Goldman-Kaper theorems)
+      !! - Rank of the approximate solution is user defined. The appropriateness of this approximation is not considered.
+      !!   This does not apply to the rank-adaptive version of the integrator.
+      !! - The current implementation does not require an adjoint integrator. This means that the temporal order of the 
+      !!   basic operator splitting scheme is limited to 1 (Lie-Trotter splitting) or at most 2 (Strang splitting). 
+      !!   Higher order integrators are possible, but require at least some backward integration (via the adjoint) 
+      !!   in BOTH parts of the splitting (see Sheng-Suzuki and Goldman-Kaper theorems).
       !!
       !! **References**
       !! 
@@ -135,6 +138,8 @@ module LightROM_RiccatiSolvers
       !! - Mena, H., Ostermann, A., Pfurtscheller, L.-M., Piazzola, C. (2018). "Numerical low-rank 
       !!   approximation of matrix differential equations", Journal of Computational and Applied Mathematics,
       !!   340, 602-614
+      !! - Hochbruck, M., Neher, M., Schrammer, S. (2023). "Rank-adaptive dynamical low-rank integrators for
+      !!   first-order and second-order matrix differential equations", BIT Numerical Mathematics 63:9
       class(abstract_sym_low_rank_state_rdp),  intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_linop_rdp),               intent(inout) :: A
@@ -166,7 +171,7 @@ module LightROM_RiccatiSolvers
       !! Options for solver configuration
 
       ! Internal variables   
-      integer                                                :: istep, nsteps, iostep
+      integer                                                :: istep, nsteps
       logical                                                :: verbose, converged
       real(wp)                                               :: T
       character*128                                          :: msg
@@ -198,11 +203,6 @@ module LightROM_RiccatiSolvers
       ! Compute number of steps
       nsteps = floor(Tend/tau)
 
-      iostep = nsteps/10
-      if ( iostep .eq. 0 ) then
-         iostep = 10
-      endif
-
       if ( opts%mode > 2 ) then
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
@@ -210,12 +210,12 @@ module LightROM_RiccatiSolvers
       else if ( opts%mode < 1 ) then
          write(msg, *) "Invalid time-integration order specified: ", opts%mode
          call stop_error(trim(msg), module=this_module, &
-                           & procedure='numerical_low_rank_splitting_lyapunov_integrator_rdp')
+                           & procedure='projector_splitting_DLRA_lyapunov_integrator_rdp')
       endif
 
       dlra : do istep = 1, nsteps
          ! dynamical low-rank approximation solver
-         call numerical_low_rank_splitting_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, opts%mode, info, p_exptA, trans)
+         call projector_splitting_DLRA_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, opts%mode, info, p_exptA, trans)
 
          T = T + tau
          !> here we can do some checks such as whether we have reached steady state
@@ -239,13 +239,15 @@ module LightROM_RiccatiSolvers
       if (allocated(S0)) deallocate(S0)
 
       return
-   end subroutine numerical_low_rank_splitting_riccati_integrator_rdp
+   end subroutine projector_splitting_DLRA_riccati_integrator_rdp
 
-   !-----------------------------
-   !-----     UTILITIES     -----
-   !-----------------------------
+   !-----------------------
+   !-----     PSI     -----
+   !-----------------------
 
-   subroutine numerical_low_rank_splitting_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, mode, info, exptA, iftrans)
+   subroutine projector_splitting_DLRA_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, mode, info, exptA, iftrans)
+      !! Driver for the time-stepper defining the splitting logic for each step of the the 
+      !! projector-splitting integrator
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_linop_rdp),              intent(inout) :: A
@@ -261,7 +263,8 @@ module LightROM_RiccatiSolvers
       real(wp),                               intent(inout) :: tau
       !! Time step.
       integer,                                intent(in)    :: mode
-      !! Order of time integration. Only 1st (Lie splitting) and 2nd (Strang splitting) orders are implemented.
+      !! Order of time integration. Only 1st (Lie splitting) and 2nd (Strang splitting) 
+      !! orders are implemented.
       integer,                                intent(out)   :: info
       !! Information flag.
       procedure(abstract_exptA_rdp), optional               :: exptA
@@ -327,9 +330,13 @@ module LightROM_RiccatiSolvers
 
       return
 
-   end subroutine numerical_low_rank_splitting_riccati_step_rdp
+   end subroutine projector_splitting_DLRA_riccati_step_rdp
 
    subroutine G_forward_map_riccati_rdp(X, B, CT, Qc, Rinv, tau, info, ifpred, T0, Tt, U0, Ut)
+      !! This subroutine computes the solution of the non-stiff non-linear part of the 
+      !! differential equation numerically using first-order explicit Euler.
+      !! The update of the full low-rank factorization requires three separate
+      !! steps called K, S, L.
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_vector_rdp),             intent(in)    :: B(:)

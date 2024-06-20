@@ -131,7 +131,7 @@ contains
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
+                  call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
                                                                         & exptA=exptA, iftrans=.false., options=opts)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
@@ -226,7 +226,7 @@ contains
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, info, & 
+                  call projector_splitting_DLRA_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, info, & 
                                                                         & exptA=exptA, iftrans=.true., options=opts)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
@@ -405,7 +405,7 @@ contains
             ! run integrator
             etime = 0.0_wp
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
+            call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
                                                                   & exptA=exptA, iftrans=.false., options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
             etime = etime + real(clock_stop-clock_start)/real(clock_rate)
@@ -473,7 +473,7 @@ contains
             ! run integrator
             etime = 0.0_wp
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, info, &
+            call projector_splitting_DLRA_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, info, &
                                                                   & exptA=exptA, iftrans=.true., options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
             etime = etime + real(clock_stop-clock_start)/real(clock_rate)
@@ -635,7 +635,7 @@ contains
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  !call numerical_low_rank_splitting_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, &
+                  !call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, &
                   !                                                   & Tend, tau, info, &
                   !                                                   & exptA=exptA, iftrans=.false., options=opts)
                   call system_clock(count=clock_stop)      ! Stop Timer
@@ -925,7 +925,7 @@ contains
                nsteps = nint(Tend/tau)
                ! run integrator
                call system_clock(count=clock_start)     ! Start Timer
-               call numerical_low_rank_splitting_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, info, &
+               call projector_splitting_DLRA_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, info, &
                                                                      & exptA=exptA, iftrans=.false., options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
                etime = real(clock_stop-clock_start)/real(clock_rate)
@@ -1043,7 +1043,7 @@ contains
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
+                  call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
                                                                         & exptA=exptA, iftrans=.false., options=opts)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)

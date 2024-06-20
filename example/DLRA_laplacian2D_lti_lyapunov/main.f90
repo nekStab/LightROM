@@ -248,7 +248,7 @@ program demo
             ! run step
             opts = dlra_opts(mode=torder, verbose=verb)
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, info, exptA=exptA, options=opts)
+            call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, info, exptA=exptA, options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution

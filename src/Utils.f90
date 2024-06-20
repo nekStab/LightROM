@@ -42,7 +42,8 @@ module LightROM_Utils
    end interface
 
    type, extends(abstract_opts), public :: dlra_opts
-      !! Rank-adpative (RA) dynamical low-rank approxinmation (DLRA) options.
+      !! Options container for the (rank-adaptive) projector-splitting dynalical low-rank approximation
+      !! integrator
       integer :: mode = 1
       !! Time integration mode. Only 1st order (Lie splitting - mode 1) and 
       !! 2nd order (Strang splitting - mode 2) are implemented. (default: 1)
@@ -130,8 +131,8 @@ contains
    end subroutine Balancing_Transformation_rdp
 
    subroutine ROM_Petrov_Galerkin_Projection_rdp(Ahat, Bhat, Chat, D, LTI, T, Tinv)
-      !! Computes the Reduced-Order of the input LTI dynamical system via Petrov-Galerkin projection using 
-      !! the biorthogonal projection bases \( \mathbf{V} \) and \( \mathbf{W} \) with 
+      !! Computes the Reduced-Order Model of the input LTI dynamical system via Petrov-Galerkin projection 
+      !! using the biorthogonal projection bases \( \mathbf{V} \) and \( \mathbf{W} \) with 
       !! \( \mathbf{W}^T \mathbf{V} = \mathbf{I} \).
       !! 
       !! Given an LTI system defined by the matrices \( \mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D}\), 
@@ -185,7 +186,7 @@ contains
    end subroutine ROM_Petrov_Galerkin_Projection_rdp
 
    subroutine ROM_Galerkin_Projection_rdp(Ahat, Bhat, Chat, D, LTI, T)
-      !! Computes the Reduced-Order of the input LTI dynamical system via Galerkin projection using 
+      !! Computes the Reduced-Order Model of the input LTI dynamical system via Galerkin projection using 
       !! the orthogonal projection basis \( \mathbf{V} \) with \( \mathbf{V}^T \mathbf{V} = \mathbf{I} \).
       !! 
       !! Given an LTI system defined by the matrices \( \mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D}\), 
@@ -215,11 +216,11 @@ contains
    end subroutine ROM_Galerkin_Projection_rdp
 
    subroutine project_onto_common_basis_rdp(UTV, VpTV, U, V)
-      !! Computes the common, orthonormal basis of the space spanned by the input Krylov bases \( [ \mathbf{U}, \mathbf{V} ] \)
-      !! by computing \( \mathbf{V_\perp} \) which is an orthonormal basis of \( \mathbf{V} \) lying in the orthogonal
-      !! complement of \( \mathbf{U} \) given by
+      !! Computes the common orthonormal basis of the space spanned by the union of the input Krylov bases 
+      !! \( [ \mathbf{U}, \mathbf{V} ] \) by computing \( \mathbf{V_\perp} \) as an orthonormal basis of 
+      !! \( \mathbf{V} \) lying in the orthogonal complement of \( \mathbf{U} \) given by
       !! \[
-      !!    \mathbf{V_\perp}, _ = \text{qr}( \mathbf{V} - \mathbf{U} \mathbf{U}^T \mathbf{V} )
+      !!    \mathbf{V_\perp}, R = \text{qr}( \mathbf{V} - \mathbf{U} \mathbf{U}^T \mathbf{V} )
       !! \[
       !!
       !! NOTE: The orthonormality of \( \mathbf{U} \) is assumed and not checked.
@@ -261,6 +262,7 @@ contains
    end subroutine project_onto_common_basis_rdp
 
    real(dp) function compute_norm(X) result(nrm)
+      !! This function computes the Frobenius norm of a low-rank approximation via an SVD of the (small) coefficient matrix
       class(abstract_sym_low_rank_state_rdp), intent(in) :: X
       !! Low-Rank factors of the solution.
       real(wp) :: s(X%rk)
@@ -269,6 +271,7 @@ contains
    end function compute_norm
 
    logical function is_converged(nrm, nrmX, opts) result(converged)
+      !! This function checks the convergence of the solution based on the (relative) increment norm
       real(wp),                   intent(in) :: nrm
       real(wp),         optional, intent(in) :: nrmX
       real(wp)                               :: nrmX_

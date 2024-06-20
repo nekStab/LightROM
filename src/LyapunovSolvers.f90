@@ -34,17 +34,17 @@ module LightROM_LyapunovSolvers
 
    ! module name
    private :: this_module
-   character*128, parameter :: this_module = 'LightKrylov_LyapunovSolvers'
+   character*128, parameter :: this_module = 'LightROM_LyapunovSolvers'
 
-   public :: numerical_low_rank_splitting_lyapunov_integrator
+   public :: projector_splitting_DLRA_lyapunov_integrator
    public :: M_forward_map
    public :: G_forward_map_lyapunov
    public :: K_step_lyapunov
    public :: S_step_lyapunov
    public :: L_step_lyapunov
 
-   interface numerical_low_rank_splitting_lyapunov_integrator
-      module procedure numerical_low_rank_splitting_lyapunov_integrator_rdp
+   interface projector_splitting_DLRA_lyapunov_integrator
+      module procedure projector_splitting_DLRA_lyapunov_integrator_rdp
    end interface
 
    interface M_forward_map
@@ -69,9 +69,9 @@ module LightROM_LyapunovSolvers
 
    contains
 
-   subroutine numerical_low_rank_splitting_lyapunov_integrator_rdp(X, A, B, Tend, tau, info, &
+   subroutine projector_splitting_DLRA_lyapunov_integrator_rdp(X, A, B, Tend, tau, info, &
                                                                     & exptA, iftrans, options)
-      !! Numerical integrator for the matrix-valued differential Lyapunov equation of the form
+      !! Main driver for the numerical integrator for the matrix-valued differential Lyapunov equation of the form
       !!
       !!    $$ \dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{B} \mathbf{B}^T $$
       !!
@@ -83,51 +83,54 @@ module LightROM_LyapunovSolvers
       !!
       !!    $$ \mathbf{0} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{B} \mathbf{B}^T $$
       !!
-      !! The algorithm is based on three main ideas:
+      !! The algorithm is based on four main ideas:
       !!
-      !! - The operator splitting scheme proposed by Lubich & Oseledets (2014) that splits the 
-      !!   right-hand side of the differential equation into a linear stiff part that is solved
-      !!   explicitly and a possibly non-linear non-stiff part which is solved numerically. The
-      !!   two operators are then composed to obtain the integrator for the full Lyapunov equation.
-      !! - The Dynamic Low-Rank Approximation for the solution of general matrix differential 
-      !!   equations proposed by Nonnenmacher & Lubich (2007) which seeks to integrate only the
-      !!   leading low-rank factors of the solution to a large system by updating the matrix 
-      !!   factorization. The dynamical low-rank approximation scheme for the low-rank factors 
-      !!   of the solution is itself solved using a projector-splitting technique to cheaply 
-      !!   maintain orthonormality or the low-rank basis without explicit SVDs. 
-      !! - This algorithm has been applied to the Lyapunov and Riccati equations by Mena et al. 
-      !!   (2018) with improvements taking advantage of the symmetry of the problem/solution.
+      !! - Dynamic Low-Rank Approximation (DLRA). DLRA is a method for the solution of general matrix differential 
+      !!   equations proposed by Nonnenmacher & Lubich (2007) which seeks to integrate only the leading low-rank 
+      !!   factors of the solution to a large system by updating an appropriate matrix factorization. The time-integration
+      !!   is achieved by splitting the step into three sequential substeps, each updating a part of the factorization
+      !!   taking advantage of and maintaining the orthogonality of the left and right low-rank bases of the factorization.
+      !! - Projector-Splitting Integration (PSI). The projector-splitting scheme proposed by Lubich & Oseledets (2014) 
+      !!   for the solution of DLRA splits the right-hand side of the differential equation into a linear stiff part 
+      !!   that is integrated exactly and a (possibly non-linear) non-stiff part which is integrated numerically. 
+      !!   The two operators are then composed to obtain the integrator for the full differential equation.
+      !!   The advantage of the projector splitting integration is that it maintains orthonormality of the basis
+      !!   of the low-rank approximation to the solution without requiring SVDs of the full matrix.                                                                     
+      !! - The third element is the application of the general framework of projector-splitting integration for 
+      !!   dynamical low-rank approximation to the Lyapunov equations by Mena et al. (2018). As the solutions
+      !!   to the Lyapunov equation are by construction SPD, this fact can be taken advantage of to reduce the 
+      !!   computational cost of the integration and, in particular, doing away with one QR factorization per timestep
+      !!   while maintaining symmetry of the resulting matrix factorization.
+      !! - The final element is the addition of the capability of dyanmic rank adaptivity for the projector-splitting
+      !!   integrator proposed by Hochbruck et al. (2023). At the cost of integrating a supplementary solution vector, 
+      !!   the rank of the solution is dynamically adapted to ensure that the corresponding additional singular value
+      !!   stays below a chosen threshold.
       !!
       !! **Algorithmic Features**
       !! 
-      !! - Separate integration of the stiff inhomogeneous part of the Lyapunov equation and the
-      !!   non-stiff inhomogeneity
-      !! - Rank preserving time-integration that maintains orthonormality of the factorization
-      !!   basis
+      !! - Separate integration of the stiff inhomogeneous part of the Lyapunov equation and the non-stiff inhomogeneity
+      !! - Rank preserving time-integration that maintains orthonormality of the factorization basis
+      !! - Alternatively, dynamical rank-adaptivity based on the instantaneous singular values
       !! - The stiff part of the problem is solved using a time-stepper approach to approximate 
       !!   the action of the exponential propagator
       !!
       !! **Advantages**
       !!
-      !! - Rank of the approximate solution is user defined
-      !! - The timesteps of the stiff and non-stiff parts of the code are independent
+      !! - Rank of the approximate solution is user defined or chosen adaptively based on the solution
       !! - The integrator is adjoint-free
-      !! - The operator of the homogeneous part and the inhomogeneity are not needed explicitly
-      !!   i.e. the algorithm is amenable to solution using Krylov methods (in particular for 
-      !!   the solution of the stiff part of the problem)
-      !! - No SVDs are necessary for this alogorithm
-      !! - Lie and Strang splitting implemented allowing for first and second order integration
-      !!   in time
+      !! - The operator of the homogeneous part and the inhomogeneity are not needed explicitly i.e. the algorithm 
+      !! is amenable to solution using Krylov methods (in particular for the solution of the stiff part of the problem)
+      !! - No SVDs of the full solution are required for this algorithm
+      !! - Lie and Strang splitting implemented allowing for first and second order integration in time
       !!
       !! ** Limitations**
       !!
-      !! - Rank of the approximate solution is user defined. The appropriateness of this 
-      !!   approximation is not considered
-      !! - The current implementation does not require an adjoint integrator. This means that
-      !!   the temporal order of the basic operator splitting scheme is limited to 1 (Lie-Trotter
-      !!   splitting) or at most 2 (Strang splitting). Higher order integrators are possible, but 
-      !!   require at least some backward integration (via the adjoint) in BOTH parts of the splitting. 
-      !!   (see Sheng-Suzuki and Goldman-Kaper theorems)
+      !! - Rank of the approximate solution is user defined. The appropriateness of this approximation is not considered.
+      !!   This does not apply to the rank-adaptive version of the integrator.
+      !! - The current implementation does not require an adjoint integrator. This means that the temporal order of the 
+      !!   basic operator splitting scheme is limited to 1 (Lie-Trotter splitting) or at most 2 (Strang splitting). 
+      !!   Higher order integrators are possible, but require at least some backward integration (via the adjoint) 
+      !!   in BOTH parts of the splitting (see Sheng-Suzuki and Goldman-Kaper theorems).
       !!
       !! **References**
       !! 
@@ -138,6 +141,8 @@ module LightROM_LyapunovSolvers
       !! - Mena, H., Ostermann, A., Pfurtscheller, L.-M., Piazzola, C. (2018). "Numerical low-rank 
       !!   approximation of matrix differential equations", Journal of Computational and Applied Mathematics,
       !!   340, 602-614
+      !! - Hochbruck, M., Neher, M., Schrammer, S. (2023). "Rank-adaptive dynamical low-rank integrators for
+      !!   first-order and second-order matrix differential equations", BIT Numerical Mathematics 63:9
       class(abstract_sym_low_rank_state_rdp),  intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_linop_rdp),               intent(inout) :: A
@@ -161,7 +166,7 @@ module LightROM_LyapunovSolvers
       !! Options for solver configuration
 
       ! Internal variables
-      integer                                                :: istep, nsteps, iostep, chkstep
+      integer                                                :: istep, nsteps, chkstep
       integer                                                :: rk_reduction_lock   ! 'timer' to disable rank reduction
       real(wp)                                               :: T                   ! simulation time
       real(wp)                                               :: nrm, nrmX           ! increment and solution norm
@@ -204,11 +209,6 @@ module LightROM_LyapunovSolvers
          call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
       end if
 
-      iostep = nsteps/10
-      if ( iostep .eq. 0 ) then
-         iostep = 10
-      endif
-
       if ( opts%mode > 2 ) then
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
@@ -216,7 +216,7 @@ module LightROM_LyapunovSolvers
       else if ( opts%mode < 1 ) then
          write(msg, *) "Invalid time-integration order specified: ", opts%mode
          call stop_error(trim(msg), module=this_module, &
-                           & procedure='numerical_low_rank_splitting_lyapunov_integrator_rdp')
+                           & procedure='projector_splitting_DLRA_lyapunov_integrator_rdp')
       endif
 
       ! determine initial rank if rank-adaptive
@@ -239,7 +239,7 @@ module LightROM_LyapunovSolvers
       dlra : do istep = 1, nsteps
          ! dynamical low-rank approximation solver
          if (opts%if_rank_adaptive) then
-            call DLRA_rank_adaptive_lyapunov_step_rdp(X, A, B, tau, opts%mode, info, rk_reduction_lock, & 
+            call rank_adaptive_PS_DLRA_lyapunov_step_rdp(X, A, B, tau, opts%mode, info, rk_reduction_lock, & 
                                                       & p_exptA, trans, verbose, tol)
             
             if ( opts%use_err_est ) then
@@ -257,7 +257,7 @@ module LightROM_LyapunovSolvers
             end if
             !
          else
-            call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, opts%mode, info,  & 
+            call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, opts%mode, info,  & 
                                                       & p_exptA, trans, verbose)
          end if
 
@@ -307,13 +307,15 @@ module LightROM_LyapunovSolvers
       if (allocated(BBTU)) deallocate(BBTU)
 
       return
-   end subroutine numerical_low_rank_splitting_lyapunov_integrator_rdp
+   end subroutine projector_splitting_DLRA_lyapunov_integrator_rdp
 
-   !-----------------------------
-   !-----     UTILITIES     -----
-   !-----------------------------
+   !-----------------------
+   !-----     PSI     -----
+   !-----------------------
 
-   subroutine numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, verbose)
+   subroutine projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, verbose)
+      !! Driver for the time-stepper defining the splitting logic for each step of the the 
+      !! projector-splitting integrator
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_linop_rdp),              intent(inout) :: A
@@ -323,7 +325,8 @@ module LightROM_LyapunovSolvers
       real(wp),                               intent(in)    :: tau
       !! Time step.
       integer,                                intent(in)    :: mode
-      !! TIme integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) orders are implemented.
+      !! TIme integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) 
+      !! orders are implemented.
       integer,                                intent(out)   :: info
       !! Information flag
       procedure(abstract_exptA_rdp)                         :: exptA
@@ -350,7 +353,7 @@ module LightROM_LyapunovSolvers
       end select
 
       return
-   end subroutine numerical_low_rank_splitting_lyapunov_step_rdp
+   end subroutine projector_splitting_DLRA_lyapunov_step_rdp
 
    !-----------------------------
    !
@@ -358,7 +361,8 @@ module LightROM_LyapunovSolvers
    !
    !-----------------------------
 
-   subroutine DLRA_rank_adaptive_lyapunov_step_rdp(X, A, B, tau, mode, info, rk_reduction_lock, exptA, trans, verbose, tol)
+   subroutine rank_adaptive_PS_DLRA_lyapunov_step_rdp(X, A, B, tau, mode, info, rk_reduction_lock, exptA, trans, verbose, tol)
+      !! Wrapper for projector_splitting_DLRA_lyapunov_step_rdp adding the logic for rank-adaptivity
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_linop_rdp),              intent(inout) :: A
@@ -368,7 +372,8 @@ module LightROM_LyapunovSolvers
       real(wp),                               intent(in)    :: tau
       !! Time step.
       integer,                                intent(in)    :: mode
-      !! Time integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) orders are implemented.
+      !! Time integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) 
+      !! orders are implemented.
       integer,                                intent(out)   :: info
       !! Information flag
       integer,                                intent(inout) :: rk_reduction_lock
@@ -403,7 +408,7 @@ module LightROM_LyapunovSolvers
       istep = 1
       do while ( .not. accept_step .and. istep < max_step )
          ! run a regular step
-         call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, verbose)
+         call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, verbose)
          ! compute singular values of X%S
          Usvd = 0.0_wp; ssvd = 0.0_wp; VTsvd = 0.0_wp
          call svd(X%S(:rk,:rk), ssvd(:rk), Usvd(:rk,:rk), VTsvd(:rk,:rk))
@@ -421,7 +426,7 @@ module LightROM_LyapunovSolvers
             ! increase rank and run another step
             if (rk == size(X%U)) then ! cannot increase rank without reallocating X%U and X%S
                write(msg, *) 'Cannot increase rank, rkmax is reached. Increase rkmax and restart!'
-               call stop_error(trim(msg), module=this_module, procedure='DLRA_rank_adaptive_lyapunov_step_rdp')
+               call stop_error(trim(msg), module=this_module, procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
             else
                if (verbose) then
                   write(msg,'(6X,A,I3)') '--> increase rank to ', rk + 1
@@ -437,7 +442,7 @@ module LightROM_LyapunovSolvers
                ! ... and orthonormalize
                call orthogonalize_against_basis(X%U(rk), X%U(:rk-1), info, if_chk_orthonormal=.false.)
                call check_info(info, 'orthogonalize_against_basis', module=this_module, &
-                                 & procedure='DLRA_rank_adaptive_lyapunov_step_rdp')
+                                 & procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
                call X%U(rk)%scal(1.0_wp / X%U(rk)%norm())
 
                rk_reduction_lock = 10 ! avoid rank oscillations
@@ -481,7 +486,7 @@ module LightROM_LyapunovSolvers
       X%rk = rk - 1      
 
       return
-   end subroutine DLRA_rank_adaptive_lyapunov_step_rdp
+   end subroutine rank_adaptive_PS_DLRA_lyapunov_step_rdp
 
    subroutine set_initial_rank(X, A, B, tau, mode, exptA, trans, tol, verbose, rk_init, nsteps)
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
@@ -535,7 +540,7 @@ module LightROM_LyapunovSolvers
       do while (.not. accept_rank .and. X%rk <= rkmax)
          ! run integrator
          do i = 1,n
-            call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, verbose)
+            call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, verbose)
          end do
 
          ! check if singular values are resolved
@@ -579,6 +584,11 @@ module LightROM_LyapunovSolvers
    end subroutine set_initial_rank
 
    subroutine compute_splitting_error(err_est, X, A, B, tau, mode, exptA, trans)
+      !! This function estimates the splitting error of the integrator as a function of the chosen timestep.
+      !! This error estimation can be integrated over time to give an estimate of the compound error due to 
+      !! the splitting approach.
+      !! This error can be used as a tolerance for the rank-adaptivity to ensure that the low-rank truncation 
+      !! error is smaller than the splitting error.
       real(wp),                               intent(out)   :: err_est
       !! Estimation of the splitting error
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
@@ -621,7 +631,7 @@ module LightROM_LyapunovSolvers
       allocate(Stmp(rx,rx)); Stmp = X%S(:rx,:rx)
 
       ! tau step
-      call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, verbose=.false.)
+      call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, verbose=.false.)
       ! save result
       allocate(U1(rx), source=X%U(:rx))
       allocate(S1(rx,rx)); S1 = X%S(:rx,:rx)
@@ -631,8 +641,8 @@ module LightROM_LyapunovSolvers
       X%S(:rx,:rx) = Stmp
 
       ! tau/2 steps
-      call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans, verbose=.false.)
-      call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans, verbose=.false.)
+      call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans, verbose=.false.)
+      call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans, verbose=.false.)
 
       ! compute common basis
       call project_onto_common_basis(V1, V2, U1(:rx), X%U(:rx))
@@ -660,6 +670,8 @@ module LightROM_LyapunovSolvers
    end subroutine compute_splitting_error
 
    subroutine compute_increment_norm(nrm, U, S, U_lag, S_lag)
+      !! This function computes the norm of the solution increment in a cheap way avoiding the
+      !! construction of the full low-rank solutions.
       real(wp),                               intent(out)   :: nrm
       !! Increment norm of current timestep
       class(abstract_vector_rdp),             intent(in)    :: U(:)
@@ -697,6 +709,8 @@ module LightROM_LyapunovSolvers
    end subroutine compute_increment_norm
 
    subroutine M_forward_map_rdp(X, A, tau, info, exptA, iftrans)
+      !! This subroutine computes the solution of the stiff linear part of the 
+      !! differential equation exactly using the matrix exponential.
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_linop_rdp),              intent(inout) :: A
@@ -745,6 +759,10 @@ module LightROM_LyapunovSolvers
    end subroutine M_forward_map_rdp
 
    subroutine G_forward_map_lyapunov_rdp(X, B, tau, info)
+      !! This subroutine computes the solution of the non-stiff part of the 
+      !! differential equation numerically using first-order explicit Euler.
+      !! The update of the full low-rank factorization requires three separate
+      !! steps called K, S, L.
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_vector_rdp),             intent(in)    :: B(:)

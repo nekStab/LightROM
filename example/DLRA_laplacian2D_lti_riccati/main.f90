@@ -15,7 +15,7 @@ program demo
    use LightROM_Utils
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
-   use LightROM_RiccatiSolvers, only : numerical_low_rank_splitting_riccati_integrator
+   use LightROM_RiccatiSolvers, only : projector_splitting_DLRA_riccati_integrator
    ! Laplacian
    use Laplacian2D_LTI_Riccati_Base
    use Laplacian2D_LTI_Riccati_Operators
@@ -251,7 +251,7 @@ program demo
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
+            call projector_splitting_DLRA_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
                                                                   & Tend, dt, torder, info, &
                                                                   & exptA=exptA, iftrans=.false., options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
@@ -427,7 +427,7 @@ program demo
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
+            call projector_splitting_DLRA_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
                                                                 & Tend, dt, torder, info, &
                                                                 & exptA=exptA, iftrans=.false., options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
