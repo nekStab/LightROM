@@ -12,6 +12,7 @@ module LightROM_RiccatiSolvers
    use LightKrylov_ExpmLib
    use Lightkrylov_BaseKrylov
    ! LightROM modules
+   use LightROM_Utils
    use LightROM_LyapunovUtils
    use LightROM_LyapunovSolvers, only : M_forward_map
    use LightROM_RiccatiUtils
@@ -66,7 +67,7 @@ module LightROM_RiccatiSolvers
    contains
 
    subroutine numerical_low_rank_splitting_riccati_integrator_rdp(X, A, B, CT, Qc, Rinv, Tend, tau, mode, info, &
-                                                               & exptA, iftrans, ifverb)
+                                                               & exptA, iftrans, options)
       !! Numerical integrator for the matrix-valued differential Riccati equation of the form
       !!
       !!    $$\dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
@@ -160,19 +161,29 @@ module LightROM_RiccatiSolvers
       logical,                       optional, intent(in)    :: iftrans
       logical                                                :: trans
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
-      logical,                       optional, intent(in)    :: ifverb
-      logical                                                :: verbose
-      !! Toggle verbosity
+      type(dlra_opts),               optional, intent(in)    :: options
+      type(dlra_opts)                                        :: opts
+      !! Options for solver configuration
 
       ! Internal variables   
       integer                                                :: istep, nsteps, iostep
+      logical                                                :: verbose, converged
       real(wp)                                               :: T
       character*128                                          :: msg
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
 
       ! Optional arguments
       trans = optval(iftrans, .false.)
-      verbose = optval(ifverb, .false.)
+
+      ! Options
+      if (present(options)) then
+         opts = options
+      else ! default
+         opts = dlra_opts()
+      end if
+
+      ! set tolerance and verbosity
+      verbose = opts%verbose
       
       if (present(exptA)) then
          p_exptA => exptA
@@ -180,7 +191,9 @@ module LightROM_RiccatiSolvers
          p_exptA => k_exptA_rdp
       endif
 
-      T = 0.0_wp
+      ! Initialize
+      T         = 0.0_wp
+      converged = .false.
 
       ! Compute number of steps
       nsteps = floor(Tend/tau)
@@ -190,23 +203,23 @@ module LightROM_RiccatiSolvers
          iostep = 10
       endif
 
-      if ( mode > 2 ) then
+      if ( opts%mode > 2 ) then
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
          call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-      else if ( mode < 1 ) then
-         write(msg, *) "Invalid time-integration order specified: ", mode
+      else if ( opts%mode < 1 ) then
+         write(msg, *) "Invalid time-integration order specified: ", opts%mode
          call stop_error(trim(msg), module=this_module, &
                            & procedure='numerical_low_rank_splitting_lyapunov_integrator_rdp')
       endif
 
       dlra : do istep = 1, nsteps
          ! dynamical low-rank approximation solver
-         call numerical_low_rank_splitting_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, mode, info, p_exptA, trans)
+         call numerical_low_rank_splitting_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, opts%mode, info, p_exptA, trans)
 
          T = T + tau
          !> here we can do some checks such as whether we have reached steady state
-         if ( mod(istep,iostep) .eq. 0 ) then
+         if ( mod(istep,opts%chkstep) .eq. 0 ) then
             if (verbose) then
                write(*, *) "INFO : ", ISTEP, " steps of DLRA computed. T = ",T
             endif
