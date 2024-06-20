@@ -1,6 +1,6 @@
 module LightROM_Utils
    ! stdlib
-   use stdlib_linalg, only : eye, diag, svd, is_symmetric
+   use stdlib_linalg, only : eye, diag, svd, svdvals, is_symmetric
    use stdlib_optval, only : optval
    ! LightKrylov for Linear Algebra
    use LightKrylov
@@ -17,6 +17,10 @@ module LightROM_Utils
    private :: this_module
    character(len=*), parameter :: this_module = 'LightROM_Utils'
 
+   public :: dlra_opts
+   public :: compute_norm
+   public :: is_converged
+   public :: project_onto_common_basis
    public :: Balancing_Transformation
    public :: ROM_Petrov_Galerkin_Projection
    public :: ROM_Galerkin_Projection
@@ -41,10 +45,18 @@ module LightROM_Utils
       !! Rank-adpative (RA) dynamical low-rank approxinmation (DLRA) options.
       integer :: mode = 1
       !! Time integration mode. Only 1st order (Lie splitting - mode 1) and 
-      !! 2nd order (Strang splitting - mode 2) are implemented.
+      !! 2nd order (Strang splitting - mode 2) are implemented. (default: 1)
       logical :: verbose = .false.
       !! Verbosity control (default: `.false.`)
+      integer :: chkstep = 10
+      !! Intervals at which convergence is checked
+      real(wp) :: inc_tol = 1e-6_wp
+      !! Tolerance on the increment norm for convergence (default: 1e-6)
+      logical :: relative_norm = .true.
+      !! Tolerance control: Check convergence for dX/X (true) or dX (false)? (default: .true.)
+      !
       ! RANK-ADPATIVE SPECIFICS
+      !
       logical :: if_rank_adaptive = .true.
       !! Allow rank-adaptivity
       real(wp) :: tol = 1e-6_wp
@@ -247,5 +259,45 @@ contains
 
       return
    end subroutine project_onto_common_basis_rdp
+
+   real(dp) function compute_norm(X) result(nrm)
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
+      !! Low-Rank factors of the solution.
+      real(wp) :: s(X%rk)
+      s = svdvals(X%S(:X%rk,:X%rk))
+      nrm = sqrt(sum(s**2))
+   end function compute_norm
+
+   logical function is_converged(nrm, nrmX, opts) result(converged)
+      real(wp),                   intent(in) :: nrm
+      real(wp),         optional, intent(in) :: nrmX
+      real(wp)                               :: nrmX_
+      type(dlra_opts), optional, intent(in) :: opts
+      type(dlra_opts)                       :: opts_
+
+      ! internals
+      character*128 :: msg
+
+      if (present(opts)) then
+         opts_ = opts
+      else
+         opts_ = dlra_opts()
+      end if
+
+      if (present(nrmX)) then
+         nrmX_ = nrmX
+      else
+         nrmX_ = 1.0_wp
+      end if
+
+      converged = .false.
+
+      if (opts%relative_norm) then
+         if (nrm/nrmX_ < opts%inc_tol) converged = .true.
+      else
+         if (nrm < opts%inc_tol) converged = .true.
+      end if
+
+   end function
 
 end module LightROM_Utils
