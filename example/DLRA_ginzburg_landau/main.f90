@@ -208,7 +208,7 @@ program demo
    !
    !----------------------------------
 
-   run_test = .true.
+   run_test = .false.
    if (run_test) then
       nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 6 /)
       ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 0.1 /)
@@ -220,6 +220,28 @@ program demo
       ifverb = .false. ! verbosity
       iflogs = .false. ! write logs with convergence and signular value evolution
       call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, Tend, nrep, ifsave, ifverb, iflogs)
+      deallocate(rkv)
+      deallocate(tauv)
+      deallocate(TOv)
+   end if 
+
+   !----------------------------------
+   !
+   ! RANK-ADAPTIVE DLRA LYAPUNOV -- CONVERGENCE with increment norm
+   !
+   !----------------------------------
+
+   run_test = .true.
+   if (run_test) then
+      nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 6 /)
+      ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 0.1 /)
+      allocate(TOv(1)); TOv = (/ 1 /)
+      Tend = 150.0_wp
+      ! run DLRA
+      ifsave = .false. ! save X and Y matrices to disk (LightROM/local)
+      ifverb = .false. ! verbosity
+      iflogs = .false. ! write logs with convergence and signular value evolution
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, Tend, 1, ifsave, ifverb, iflogs)
       deallocate(rkv)
       deallocate(tauv)
       deallocate(TOv)
