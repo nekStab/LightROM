@@ -481,7 +481,7 @@ module LightROM_LyapunovSolvers
       character*128                                         :: msg
 
       ! optional arguments
-      X%rk = optval(rk_init, 1)
+      X%rk = optval(rk_init, 2)
       n = optval(nsteps, 5)
       rkmax = size(X%U)
 
@@ -562,66 +562,65 @@ module LightROM_LyapunovSolvers
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
       
       ! internals
+      ! save current state to reset it later
       class(abstract_vector_rdp),               allocatable :: Utmp(:)
       real(wp),                                 allocatable :: Stmp(:,:)
-      class(abstract_vector_rdp),               allocatable :: U1(:), Vperp(:)
+      ! first solution to compute the difference against
+      class(abstract_vector_rdp),               allocatable :: U1(:)
       real(wp),                                 allocatable :: S1(:,:)
-      real(wp),                                 allocatable :: Vt1(:,:), Vt2(:,:)
-      real(wp),                                 allocatable :: Sdiff(:,:)
-      integer                                               :: info
+      ! projected bases
+      real(wp),                                 allocatable :: V1(:,:), V2(:,:)
+      ! projected difference
+      real(wp),                                 allocatable :: D(:,:)
+      integer                                               :: rx, r, info
 
       ! svd
       real(wp),                                 allocatable :: ssvd(:)
       real(wp),                                 allocatable :: Usvd(:,:), VTsvd(:,:)
 
-      ! scratch
-      allocate(Vt1(X%rk,X%rk)); Vt1 = 0.0_wp
-      allocate(Vt2(X%rk,X%rk)); Vt2 = 0.0_wp
-      allocate(Sdiff(2*X%rk,2*X%rk)); Sdiff = 0.0_wp
+      rx = X%rk
+      r  = 2*rx
 
       ! save curret state
-      allocate(Utmp(X%rk), source=X%U(:X%rk))
-      allocate(Stmp(X%rk,X%rk)); Stmp = X%S(:X%rk,:X%rk)
+      allocate(Utmp(rx), source=X%U(:rx))
+      allocate(Stmp(rx,rx)); Stmp = X%S(:rx,:rx)
 
       ! tau step
       call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, verbose=.false.)
       ! save result
-      allocate(U1(X%rk), source=X%U(:X%rk))
-      allocate(S1(X%rk,X%rk)); S1 = X%S(:X%rk,:X%rk)
+      allocate(U1(rx), source=X%U(:rx))
+      allocate(S1(rx,rx)); S1 = X%S(:rx,:rx)
 
       ! reset curret state
-      call copy_basis(X%U(:X%rk), Utmp)
-      X%S(:X%rk,:X%rk) = Stmp
+      call copy_basis(X%U(:rx), Utmp)
+      X%S(:rx,:rx) = Stmp
+
       ! tau/2 steps
       call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans, verbose=.false.)
       call numerical_low_rank_splitting_lyapunov_step_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans, verbose=.false.)
 
       ! compute common basis
-      allocate(Vperp(X%rk), source=X%U(:X%rk))  ! V_perp = V
-      call orthogonalize_against_basis(Vperp, U1, info, if_chk_orthonormal=.false., beta=Vt1) ! beta = Vt1.T
-      call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='compute_splitting_error')
-      call qr(Vperp, Swrk, info)
-      call check_info(info, 'qr', module=this_module, procedure='compute_splitting_error')
-      call innerprod(Vt2, X%U(1:X%rk), Vperp)
+      call project_onto_common_basis(V1, V2, U1(:rx), X%U(:rx))
 
-      ! project X_2 onto extended basis and construct difference matrix
-      Sdiff(      :  X%rk,      :  X%rk) = S1 - matmul(          Vt1,  matmul(X%S(:X%rk,:X%rk), transpose(Vt1)))
-      Sdiff(X%rk+1:2*X%rk,      :  X%rk) =    - matmul(transpose(Vt2), matmul(X%S(:X%rk,:X%rk), transpose(Vt1)))
-      Sdiff(      :  X%rk,X%rk+1:2*X%rk) =    - matmul(          Vt1,  matmul(X%S(:X%rk,:X%rk),           Vt2))
-      Sdiff(X%rk+1:2*X%rk,X%rk+1:2*X%rk) =    - matmul(transpose(Vt2), matmul(X%S(:X%rk,:X%rk),           Vt2))
+      ! project second low-rank state onto common basis and construct difference
+      allocate(D(r,r)); D = 0.0_wp
+      D(    :rx,     :rx) = S1 - matmul(V1, matmul(X%S(:rx,:rx), transpose(V1)))
+      D(rx+1:r ,     :rx) =    - matmul(V2, matmul(X%S(:rx,:rx), transpose(V1)))
+      D(    :rx, rx+1:r ) =    - matmul(V1, matmul(X%S(:rx,:rx), transpose(V2)))
+      D(rx+1:r , rx+1:r ) =    - matmul(V2, matmul(X%S(:rx,:rx), transpose(V2)))
       
       ! svd
-      allocate( Usvd(2*X%rk,2*X%rk))
-      allocate( ssvd(2*X%rk))
-      allocate(VTsvd(2*X%rk,2*X%rk))
-      call svd(Sdiff, ssvd, Usvd, VTsvd)
+      allocate( Usvd(r,r))
+      allocate( ssvd(r))
+      allocate(VTsvd(r,r))
+      call svd(D, ssvd, Usvd, VTsvd)
 
       ! compute local error based on frobenius norm of difference
       err_est = 2**mode / (2**mode - 1) * sqrt( sum( ssvd ** 2 ) )
 
       ! reset curret state
-      call copy_basis(X%U(:X%rk), Utmp)
-      X%S(:X%rk,:X%rk) = Stmp
+      call copy_basis(X%U(:rx), Utmp)
+      X%S(:rx,:rx) = Stmp
 
    end subroutine compute_splitting_error
 
