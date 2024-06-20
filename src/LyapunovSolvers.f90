@@ -2,7 +2,7 @@ module LightROM_LyapunovSolvers
    !! This module provides the implementation of the Krylov-based solvers for the Differential Lyapunov
    !! equation based on the dynamic low-rank approximation and operator splitting.
    ! Standard library
-   use stdlib_linalg, only : eye, diag, svd
+   use stdlib_linalg, only : eye, diag, svd, svdvals
    use stdlib_optval, only : optval
    ! LightKrylov modules
    use LightKrylov
@@ -23,6 +23,10 @@ module LightROM_LyapunovSolvers
    class(abstract_vector_rdp),  allocatable   :: Uwrk(:)
    class(abstract_vector_rdp),  allocatable   :: BBTU(:)
    real(wp),                    allocatable   :: Swrk(:,:)
+
+   ! lagged solution for computation of increment norm
+   class(abstract_vector_rdp),  allocatable   :: U_lag(:)
+   real(wp),                    allocatable   :: S_lag(:,:)
 
    ! svd
    real(wp),                    allocatable   :: ssvd(:)
@@ -156,14 +160,15 @@ module LightROM_LyapunovSolvers
       type(dlra_opts)                                        :: opts
       !! Options for solver configuration
 
-      ! Internal variables   
-      integer                                                :: istep, nsteps, iostep
-      integer                                                :: rk_reduction_lock  ! 'timer' to disable rank reduction
-      real(wp)                                               :: T
-      real(wp)                                               :: El                 ! aggregate error estimate
-      real(wp)                                               :: err_est            ! current error estimate
-      real(wp)                                               :: tol                ! current tolerance
-      logical                                                :: verbose
+      ! Internal variables
+      integer                                                :: istep, nsteps, iostep, chkstep
+      integer                                                :: rk_reduction_lock   ! 'timer' to disable rank reduction
+      real(wp)                                               :: T                   ! simulation time
+      real(wp)                                               :: nrm, nrmX           ! increment and solution norm
+      real(wp)                                               :: El                  ! aggregate error estimate
+      real(wp)                                               :: err_est             ! current error estimate
+      real(wp)                                               :: tol                 ! current tolerance
+      logical                                                :: verbose, converged
       character*128                                          :: msg
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
 
@@ -190,6 +195,7 @@ module LightROM_LyapunovSolvers
       ! Initialize
       T                 = 0.0_wp
       rk_reduction_lock = 10
+      converged         = .false.
 
       ! Compute number of steps
       nsteps = floor(Tend/tau)
@@ -216,7 +222,7 @@ module LightROM_LyapunovSolvers
       ! determine initial rank if rank-adaptive
       if (opts%if_rank_adaptive) then
          if (.not. X%rank_is_initialised) then
-            call set_initial_rank(X, A, B, tau, opts%mode, p_exptA, trans, 1e-6_wp, verbose=.false.)
+            call set_initial_rank(X, A, B, tau, opts%mode, p_exptA, trans, 1e-6_wp, verbose=.true.)
          end if
          if (opts%use_err_est) then
             err_est = 0.0_wp
@@ -258,12 +264,41 @@ module LightROM_LyapunovSolvers
          ! update time
          T = T + tau
 
+         ! save lag data
+         if ( mod(istep + 1, opts%chkstep) == 0 .or. istep == nsteps -1 ) then
+            ! allocate lag data (we do it here so we do not need to store the data size and can pass the whole array)
+            allocate(U_lag(X%rk), source=X%U(:X%rk)) ! U_lag = X%U
+            allocate(S_lag(X%rk, X%rk)); S_lag = X%S(:X%rk,:X%rk)
+            if (verbose) then
+               write(msg, *) 'Solution saved for increment norm computation.'
+               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+            endif
+         end if
+
          ! here we can do some checks such as whether we have reached steady state
-         if ( mod(istep,iostep) == 0 ) then
+         if ( mod(istep, opts%chkstep) == 0 .or. istep == nsteps ) then
             if (verbose) then
                write(msg, '(3X,I3,A,F6.3)') istep, " steps of DLRA computed. T = ", T
-               call logger%log_message(trim(msg), module=this_module, procedure='DLRA-main')
+               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
             endif
+            call compute_increment_norm(nrm, X%U(:X%rk), X%S(:X%rk,:X%rk), U_lag, S_lag)
+            nrmX = compute_norm(X)
+            write(msg, '(A,I4,A,F6.2,A,E10.4,A,E10.4,A,E10.4)') "Step ", istep, ", T = ", T, &
+                                 & ": dX = ", nrm, ' X = ', nrmX, ' dX/X = ', nrm/nrmX
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+            deallocate(U_lag); deallocate(S_lag)
+            ! Check convergence
+            converged = is_converged(nrm, nrmX, opts)
+            if (converged) then
+               write(msg, *) 'Solution converged!'
+               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+               exit dlra
+            else ! if final step
+               if (istep == nsteps) then
+                  write(msg, *) 'Solution not converged!'
+                  call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+               end if
+            end if
          endif
       enddo dlra
 
@@ -481,7 +516,7 @@ module LightROM_LyapunovSolvers
       character*128                                         :: msg
 
       ! optional arguments
-      X%rk = optval(rk_init, 2)
+      X%rk = optval(rk_init, 1)
       n = optval(nsteps, 5)
       rkmax = size(X%U)
 
@@ -516,7 +551,7 @@ module LightROM_LyapunovSolvers
          if (.not. found) irk = irk - 1
          if (verbose) then
             write(msg,'(A,I2,A,E8.2)') '   rk = ', X%rk, ' s_r =', ssvd(X%rk)
-            call logger%log_message(trim(msg), module=this_module, procedure='numerical_low_rank_splitting_lyapunov_integrator_rdp')
+            call logger%log_message(trim(msg), module=this_module, procedure='set_initial_rank')
          end if
          if (found) then
             accept_rank = .true.
@@ -623,6 +658,43 @@ module LightROM_LyapunovSolvers
       X%S(:rx,:rx) = Stmp
 
    end subroutine compute_splitting_error
+
+   subroutine compute_increment_norm(nrm, U, S, U_lag, S_lag)
+      real(wp),                               intent(out)   :: nrm
+      !! Increment norm of current timestep
+      class(abstract_vector_rdp),             intent(in)    :: U(:)
+      !! Low-rank basis of current solution
+      real(wp),                               intent(in)    :: S(:,:)
+      !! Coefficients of current solution
+      class(abstract_vector_rdp),             intent(in)    :: U_lag(:)
+      !! Low-rank basis of lagged solution
+      real(wp),                               intent(in)    :: S_lag(:,:)
+      !! Coefficients of lagged solution
+
+      ! internals
+      real(wp), dimension(:,:),                 allocatable :: D, V1, V2
+      real(wp), dimension(:),                   allocatable :: svals       
+      integer :: r, rl
+
+      r  = size(U)
+      rl = size(U_lag)
+
+      ! compute common basis
+      call project_onto_common_basis(V1, V2, U_lag, U)
+
+      ! project second low-rank state onto common basis and construct difference
+      allocate(D(r+rl,r+rl)); D = 0.0_wp
+      D(    :rl  ,     :rl  ) = S_lag - matmul(V1, matmul(S, transpose(V1)))
+      D(rl+1:rl+r,     :rl  ) =       - matmul(V2, matmul(S, transpose(V1)))
+      D(    :rl  , rl+1:rl+r) =       - matmul(V1, matmul(S, transpose(V2)))
+      D(rl+1:rl+r, rl+1:rl+r) =       - matmul(V2, matmul(S, transpose(V2)))
+
+      ! compute Frobenius norm of difference
+      svals = svdvals(D)
+      nrm = sqrt(sum(svals**2)) !/ U%get_size()
+
+      return
+   end subroutine compute_increment_norm
 
    subroutine M_forward_map_rdp(X, A, tau, info, exptA, iftrans)
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
