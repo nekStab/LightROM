@@ -279,8 +279,8 @@ contains
       real(wp),                   intent(in) :: nrm
       real(wp),         optional, intent(in) :: nrmX
       real(wp)                               :: nrmX_
-      type(dlra_opts), optional, intent(in) :: opts
-      type(dlra_opts)                       :: opts_
+      type(dlra_opts),  optional, intent(in) :: opts
+      type(dlra_opts)                        :: opts_
 
       ! internals
       character*128 :: msg
