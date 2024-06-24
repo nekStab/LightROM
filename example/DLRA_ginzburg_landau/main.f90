@@ -4,7 +4,7 @@ program demo
    use stdlib_linalg, only : eye, diag
    use stdlib_math, only : all_close, logspace
    use stdlib_io_npy, only : save_npy, load_npy
-   use stdlib_logger, only : error_level, none_level
+   use stdlib_logger, only : information_level, warning_level, debug_level, error_level, none_level
     ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only : wp => dp
@@ -241,6 +241,7 @@ program demo
       ifsave = .false. ! save X and Y matrices to disk (LightROM/local)
       ifverb = .false. ! verbosity
       iflogs = .false. ! write logs with convergence and signular value evolution
+      call logger%configure(level=warning_level)
       call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, Tend, 1, ifsave, ifverb, iflogs)
       deallocate(rkv)
       deallocate(tauv)

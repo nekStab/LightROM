@@ -50,15 +50,11 @@ module LightROM_Utils
       logical :: verbose = .false.
       !! Verbosity control (default: .false.)
       integer :: chkstep = 10
-      !! Time step interval at which convergence is checked (default: 10)
-      integer :: iostep = 10
-      !! Time step interval at which runtime information is printed (default: 10)
-      !! iostep = 0 means no output.
-      integer :: iotime = 1.0_wp
-      !! Simulation time interval at which runtime information is printed (default: 1.0).
-      !! iotime = 0.0 means no output
-      logical :: ioctrl_time = .true.
-      !! IO control: use time instead of timestep IO control (default: .true.)
+      !! Time step interval at which convergence is checked and runtime information is printed (default: 10)
+      integer :: chktime = 1.0_wp
+      !! Simulation time interval at which convergence is checked and runtime information is printed (default: 1.0)
+      logical :: chkctrl_time = .true.
+      !! IO control: use time instead of timestep control (default: .true.)
       real(wp) :: inc_tol = 1e-6_wp
       !! Tolerance on the increment norm for convergence (default: 1e-6)
       logical :: relative_norm = .true.
@@ -311,43 +307,42 @@ contains
 
    end function is_converged
 
-   integer function get_iostep(opts, verbose, tau) result(iostep)
+   integer function get_chkstep(opts, verbose, tau) result(chkstep)
    
-      type(dlra_opts), intent(in) :: opts
-      logical,         intent(in) :: verbose
-      real(wp),        intent(in) :: tau
+      type(dlra_opts), intent(inout) :: opts
+      logical,         intent(in)    :: verbose
+      real(wp),        intent(in)    :: tau
 
       ! internal
       character(len=128) :: msg
+      type(dlra_opts) :: opts_default
+
+      opts_default = dlra_opts()
    
-      if (opts%ioctrl_time) then
-         if (opts%iotime > 0.0_wp) then
-            iostep = max(1, floor(opts%iotime/tau))
-            if (verbose) then
-               write(msg,*) 'Output every', opts%ioctrl_time, 'time units (', iostep, 'steps)'
-               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-            end if
-         else
-            if (verbose) then
-               write(msg,*) 'No output.'
-               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-            end if
+      if (opts%chkctrl_time) then
+         if (opts%chktime <= 0.0_wp) then
+            opts%chktime = opts_default%chktime
+            write(msg, *) "Invalid chktime. Reset to default (",  opts%chktime,")"
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         end if
+         chkstep = max(1, NINT(opts%chktime/tau))
+         if (verbose) then
+            write(msg,*) 'Output every', opts%chkctrl_time, 'time units (', chkstep, 'steps)'
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
          end if
       else
-         if (opts%iostep > 0) then
-            iostep = opts%iostep
-            if (verbose) then
-               write(msg,*) 'Output every', iostep, 'steps (based on steps).'
-               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-            end if
-         else
-            if (verbose) then
-               write(msg,*) 'No output.'
-               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-            end if
+         if (opts%chkstep <= 0) then
+            opts%chkstep = opts_default%chkstep
+            write(msg, *) "Invalid chktime. Reset to default (",  opts%chkstep,")"
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         end if
+         chkstep = opts%chkstep
+         if (verbose) then
+            write(msg,*) 'Output every', chkstep, 'steps (based on steps).'
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
          end if
       end if
 
-   end function get_iostep
+   end function get_chkstep
 
 end module LightROM_Utils

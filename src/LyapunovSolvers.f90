@@ -166,7 +166,7 @@ module LightROM_LyapunovSolvers
       !! Options for solver configuration
 
       ! Internal variables
-      integer                                                :: istep, nsteps, chkstep, iostep
+      integer                                                :: istep, nsteps, chkstep
       integer                                                :: rk_reduction_lock   ! 'timer' to disable rank reduction
       real(wp)                                               :: T                   ! simulation time
       real(wp)                                               :: nrm, nrmX           ! increment and solution norm
@@ -210,7 +210,7 @@ module LightROM_LyapunovSolvers
       end if
 
       ! Determine IO step
-      iostep = get_iostep(opts, verbose, tau)
+      chkstep = get_chkstep(opts, verbose, tau)
 
       if ( opts%mode > 2 ) then
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
@@ -267,24 +267,19 @@ module LightROM_LyapunovSolvers
          ! update time
          T = T + tau
 
-         ! information
-         if ( mod(istep, iostep) == 0 ) then
-            write(msg, '(A,I4,A,F6.2)') "Step ", istep, ", T = ", T
-         end if
-
          ! save lag data
-         if ( mod(istep + 1, opts%chkstep) == 0 .or. istep == nsteps -1 ) then
+         if ( mod(istep + 1, chkstep) == 0 .or. istep == nsteps -1 ) then
             ! allocate lag data (we do it here so we do not need to store the data size and can pass the whole array)
             allocate(U_lag(X%rk), source=X%U(:X%rk)) ! U_lag = X%U
             allocate(S_lag(X%rk, X%rk)); S_lag = X%S(:X%rk,:X%rk)
             if (verbose) then
                write(msg, *) 'Solution saved for increment norm computation.'
-               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+               call logger%log_debug(trim(msg), module=this_module, procedure='DLRA')
             endif
          end if
 
          ! here we can do some checks such as whether we have reached steady state
-         if ( mod(istep, opts%chkstep) == 0 .or. istep == nsteps ) then
+         if ( mod(istep, chkstep) == 0 .or. istep == nsteps ) then
             if (verbose) then
                write(msg, '(3X,I3,A,F6.3)') istep, " steps of DLRA computed. T = ", T
                call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
@@ -298,12 +293,12 @@ module LightROM_LyapunovSolvers
             ! Check convergence
             converged = is_converged(nrm, nrmX, opts)
             if (converged) then
-               write(msg, *) 'Solution converged!'
+               write(msg, *) "Step ", istep, "Solution converged!"
                call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
                exit dlra
             else ! if final step
                if (istep == nsteps) then
-                  write(msg, *) 'Solution not converged!'
+                  write(msg, *) "Step ", istep, "Solution not converged!"
                   call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
                end if
             end if
@@ -436,10 +431,9 @@ module LightROM_LyapunovSolvers
                write(msg, *) 'Cannot increase rank, rkmax is reached. Increase rkmax and restart!'
                call stop_error(trim(msg), module=this_module, procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
             else
-               if (verbose) then
-                  write(msg,'(6X,A,I3)') '--> increase rank to ', rk + 1
-                  call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
-               end if
+               write(msg,'(A,I3)') 'rk =', rk + 1
+               call logger%log_warning(trim(msg), module=this_module, procedure='RA-DLRA')
+               
                X%rk = X%rk + 1
                rk = X%rk ! this is only to make the code more readable
                ! set coefficients to zero (for redundancy)
@@ -472,10 +466,8 @@ module LightROM_LyapunovSolvers
 
                rk = max(irk, rk - 2)  ! reduce by at most 2
 
-               if (verbose) then
-                  write(msg, '(6X,A,I3)') '--> decrease rank to ', rk
-                  call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
-               end if
+               write(msg, '(A,I3)') 'rk =', rk
+               call logger%log_warning(trim(msg), module=this_module, procedure='RA-DLRA')
             end if
             
          end if ! found
