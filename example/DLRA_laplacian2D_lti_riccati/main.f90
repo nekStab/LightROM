@@ -1,28 +1,31 @@
 program demo
+   ! Standard Library
+   use stdlib_optval, only : optval 
+   use stdlib_linalg, only : eye, diag
+   use stdlib_math, only : all_close, logspace
+   use stdlib_io_npy, only : save_npy
+   ! LightKrylov for Linear Algebra
    use LightKrylov
-   use LightKrylov_expmlib
-   use LightKrylov_utils
-
+   use LightKrylov, only : wp => dp
+   use LightKrylov_AbstractVectors
+   use LightKrylov_ExpmLib
+   use LightKrylov_Utils
+   ! LightROM
    use LightROM_AbstractLTIsystems
-   use LightROM_utils
-   
+   use LightROM_Utils
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
-   use LightROM_RiccatiSolvers
-
+   use LightROM_RiccatiSolvers, only : projector_splitting_DLRA_riccati_integrator
+   ! Laplacian
    use Laplacian2D_LTI_Riccati_Base
    use Laplacian2D_LTI_Riccati_Operators
    use Laplacian2D_LTI_Riccati_RKlib
-
-   use stdlib_optval, only : optval 
-   use stdlib_linalg, only : eye
-   use stdlib_math, only : all_close, logspace
-   use stdlib_io_npy, only : save_npy
+   use Laplacian2D_LTI_Riccati_Utils
    implicit none
 
    ! DLRA
    integer, parameter :: rkmax = 14
-   integer, parameter :: rk_X0 = 10
+   integer, parameter :: rk_X0 = 14
    logical, parameter :: verb  = .false.
    logical, parameter :: save  = .false.
    character*128      :: oname
@@ -49,14 +52,16 @@ program demo
    type(state_vector), allocatable :: U(:)
    real(wp) , allocatable          :: S(:,:)
    
-   !> STATE MATRIX (RKlib)
+   ! STATE MATRIX (RKlib)
    type(state_matrix)              :: X_mat_RKlib(2)
    real(wp), allocatable           :: X_RKlib(:,:,:)
    real(wp)                        :: X_RKlib_ref(N,N)
 
     ! Initial condition
-   real(wp)                        :: U0(N, rkmax)
+   type(state_vector)              :: U0(rkmax)
    real(wp)                        :: S0(rkmax,rkmax)
+   ! matrix
+   real(wp)                        :: U0_in(N,rkmax)
    real(wp)                        :: X0(N,N)
 
    ! OUTPUT
@@ -70,27 +75,25 @@ program demo
    ! PROBLEM DEFINITION
    real(wp)  :: Adata(N,N)
 
-   ! SVD
-   real(wp)  :: U_svd(N,N)
-   real(wp)  :: S_svd(rkmax)
-   real(wp)  :: V_svd(rkmax,rkmax)
-
    ! LAPACK SOLUTION RICATTI
-   real(kind=wp)      :: Hdata(2*N,2*N)
-   real(kind=wp)      :: wr(2*N), wi(2*N)
-   real(kind=wp)      :: VR(2*N,2*N)
+   real(wp)           :: Hdata(2*N,2*N)
+   real(wp)           :: wr(2*N), wi(2*N)
+   real(wp)           :: VR(2*N,2*N)
    integer, parameter :: lwork = 1040
-   real(kind=wp)      :: work(lwork)
-   real(kind=wp)      :: UR(2*N,N)
-   real(kind=wp)      :: UI(2*N,N)
+   real(wp)           :: work(lwork)
+   real(wp)           :: UR(2*N,N)
+   real(wp)           :: UI(2*N,N)
    logical            :: flag
-   real(kind=wp)      :: F(N,N)
-   real(kind=wp)      :: Ginv(N,N)
-   real(kind=wp)      :: Xref(N,N)
+   real(wp)           :: F(N,N)
+   real(wp)           :: Ginv(N,N)
+   real(wp)           :: Xref(N,N)
    integer :: icnt
 
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
+
+   ! DLRA opts
+   type(dlra_opts) :: opts
    
    call system_clock(count_rate=clock_rate)
 
@@ -99,11 +102,8 @@ program demo
 
    ! Define LTI system
    LTI = lti_system()
-   allocate(LTI%A,          source=A)
-   allocate(LTI%B(1:rk_b),  source=B(1:rk_b))
-   allocate(LTI%CT(1:rk_c), source=CT(1:rk_c))
-   allocate(LTI%D(1:rk_c,1:rk_b)); LTI%D = 0.0_wp
-
+   call LTI%initialize_lti_system(A, B, CT)
+   
    write(*,*)
    write(*,*) 'RICCATI EQUATION FOR THE 2D LAPLACE OPERATOR:'
    write(*,*)
@@ -169,27 +169,21 @@ program demo
    call inv(Ginv)
    Xref = matmul(F, Ginv)
 
-   ! sanity check
-   !call print_mat(N,N,Xref)
-   !X0 = CARE(Xref, Adata, CTQcCdata, BRinvBTdata)
-
    call system_clock(count=clock_stop)      ! Stop Timer
    write(*,'(A40,F10.4," s")') '--> X_ref.    Elapsed time:', real(clock_stop-clock_start)/real(clock_rate)
    write(*,*)
 
-   ! Define initial condition
-   U0 = 0.0_wp
-   call random_number(U0(:, 1:rk_X0))
-   ! Compute SVD to get low-rank representation
-   call svd(U0(:,1:rk_X0), U_svd(:,1:N), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
-   S0 = 0.0_wp
-   do i = 1,rk_X0
-      S0(i,i) = S_svd(i)
-   end do
-   U0(:,1:rk_X0) = U_svd(:,1:rk_X0)
+   ! sanity check
+   X0 = CARE(Xref, Adata, CTQcCdata, BRinvBTdata)
+   write(*,*) '    Direct problem:', norm2(X0)/N
+
+   ! Define initial condition of the form X0 + U0 @ S0 @ U0.T SPD 
+   if (verb) write(*,*) '    Define initial condition'
+   call generate_random_initial_condition(U0, S0, rk_X0)
+   call get_state(U_out, U0)
 
    ! Compute the full initial condition X0 = U_in @ S0 @ U_in.T
-   X0 = matmul( U0(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U0(:,1:rk_X0))))
+   X0 = matmul( U_out(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U_out(:,1:rk_X0))))
 
    write(*,*)
    write(*,*) 'II.  Compute approximate solution of the differential Riccati equation using RKlib:'
@@ -239,14 +233,10 @@ program demo
 
    X = LR_state()
 
-   do torder = 1, 2
+   do torder = 1, 1 ! 2
       do i = 1, nrk
          rk = rkv(i)
 
-         allocate(U(1:rk)); call mat_zero(U)
-         allocate(S(1:rk,1:rk)); S = 0.0_wp
-         allocate(X%U(1:rk), source=U(1:rk))
-         allocate(X%S(1:rk,1:rk)); 
          write(*,'(A10,I1)') ' torder = ', torder
 
          do j = ndt, 1, -1
@@ -254,11 +244,16 @@ program demo
             if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
 
             ! Reset input
-            call X%set_LR_state(U0(:,1:rk), S0(1:rk,1:rk))
+            call X%initialize_LR_state(U0, S0, rk)
+
+            ! set options
+            opts = dlra_opts(mode=torder, verbose=verb)
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_riccati_integrator(X, LTI, Qc, Rinv, Tend, dt, torder, info)
+            call projector_splitting_DLRA_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
+                                                                  & Tend, dt, torder, info, &
+                                                                  & exptA=exptA, iftrans=.false., options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution
@@ -269,17 +264,15 @@ program demo
                               & rk, torder, dt, Tend, &
                               & norm2(X_RKlib_ref - X_out)/N, &
                               & real(clock_stop-clock_start)/real(clock_rate)
+
+            deallocate(X%U)
+            deallocate(X%S)
          end do
 
          if (save) then
             write(oname,'("example/DLRA_laplacian2D_riccati/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
             call save_npy(oname, X_out)
          end if
-
-         deallocate(X%U);
-         deallocate(X%S);
-         deallocate(U);
-         deallocate(S);
 
       end do
    end do
@@ -289,8 +282,8 @@ program demo
    call initialize_problem(1.0_wp, 1.0_wp)
 
    ! Reset LTI system
-   call mat_copy(LTI%B, B)
-   call mat_copy(LTI%CT, CT)
+   call copy_basis(LTI%B, B)
+   call copy_basis(LTI%CT, CT)
 
    write(*,*)
    write(*,*) 'RICCATI EQUATION FOR THE 2D LAPLACE OPERATOR:'
@@ -356,26 +349,21 @@ program demo
    Xref = matmul(F, Ginv)
 
    ! sanity check
-   !call print_mat(N,N,Xref)
-   !X0 = CARE(Xref, Adata, CTQcCdata, BRinvBTdata)
+   X0 = CARE(Xref, Adata, CTQcCdata, BRinvBTdata)
+   write(*,*) '    Direct problem:', norm2(X0)/N
 
    call system_clock(count=clock_stop)      ! Stop Timer
    write(*,'(A40,F10.4," s")') '--> X_ref.    Elapsed time:', real(clock_stop-clock_start)/real(clock_rate)
    write(*,*)
 
    ! Define initial condition
-   U0 = 0.0_wp
-   call random_number(U0(:, 1:rk_X0))
-   ! Compute SVD to get low-rank representation
-   call svd(U0(:,1:rk_X0), U_svd(:,1:N), S_svd(1:rk_X0), V_svd(1:rk_X0,1:rk_X0))
-   S0 = 0.0_wp
-   do i = 1,rk_X0
-      S0(i,i) = S_svd(i)
-   end do
-   U0(:,1:rk_X0) = U_svd(:,1:rk_X0)
+   if (verb) write(*,*) 'Define initial condition'
+   call generate_random_initial_condition(U0, S0, rk_X0)
+   call get_state(U_out, U0)
 
    ! Compute the full initial condition X0 = U_in @ S0 @ U_in.T
-   X0 = matmul( U0(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U0(:,1:rk_X0))))
+   X0 = matmul( U_out(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U_out(:,1:rk_X0))))
+
 
    write(*,*)
    write(*,*) 'II.  Compute approximate solution of the differential Riccati equation using RKlib:'
@@ -421,13 +409,10 @@ program demo
 
    X = LR_state()
 
-   do torder = 1, 2
+   do torder = 1, 1 !2
       do i = 1, nrk
          rk = rkv(i)
 
-         allocate(U(1:rk)); call mat_zero(U)
-         allocate(X%U(1:rk), source=U(1:rk))
-         allocate(X%S(1:rk,1:rk)); 
          write(*,'(A10,I1)') ' torder = ', torder
 
          do j = ndt, 1, -1
@@ -435,11 +420,16 @@ program demo
             if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
 
             ! Reset input
-            call X%set_LR_state(U0(:,1:rk), S0(1:rk,1:rk))
+            call X%initialize_LR_state(U0, S0, rk)
+
+            ! set options
+            opts = dlra_opts(mode=torder, verbose=verb)
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call numerical_low_rank_splitting_riccati_integrator(X, LTI, Qc, Rinv, Tend, dt, torder, info)
+            call projector_splitting_DLRA_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
+                                                                & Tend, dt, torder, info, &
+                                                                & exptA=exptA, iftrans=.false., options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution
@@ -450,16 +440,15 @@ program demo
                               & rk, torder, dt, Tend, &
                               & norm2(X_RKlib_ref - X_out)/N, &
                               & real(clock_stop-clock_start)/real(clock_rate)
+
+            deallocate(X%U)
+            deallocate(X%S)
          end do
 
          if (save) then
             write(oname,'("example/DLRA_laplacian2D_riccati/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
             call save_npy(oname, X_out)
          end if
-
-         deallocate(X%U);
-         deallocate(X%S);
-         deallocate(U);
 
       end do
    end do

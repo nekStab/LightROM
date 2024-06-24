@@ -5,10 +5,10 @@ program Tester
   use testdrive, only : run_testsuite, new_testsuite, testsuite_type
   !> Only dummy test. Needs to be removed later.
   use testdrive, only : new_unittest, unittest_type, error_type, check
+  use LightKrylov
+  use LightKrylov_Logger
   !> Abstract implementation of ROM-LTI techniques.
   use LightROM
-  use TestVector
-  use TestMatrices
   use TestLyapunov
 
   implicit none
@@ -25,7 +25,7 @@ program Tester
   !-------------------------------
 
   !> Display information about the version of LightKrylov being tested.
-  call greetings()
+  call greetings_LightROM()
 
   !> Test status.
   status = 0
@@ -52,25 +52,5 @@ program Tester
   else if (status == 0) then
      write(*, *) "All test successfully passed!"
   endif
-
-contains
-
-  subroutine collect_dummy_testsuite(testsuite)
-    !> Collection of tests.
-    type(unittest_type), allocatable, intent(out) :: testsuite(:)
-
-    testsuite = [new_unittest("Dummy test 1", dummy_test_1)]
-
-    return
-  end subroutine collect_dummy_testsuite
-
-  subroutine dummy_test_1(error)
-    !> Error-type to be returned.
-    type(error_type), allocatable, intent(out) :: error
-
-    !> Check if 1 == 1.
-    call check(error, 1 == 1)
-    return
-  end subroutine dummy_test_1
 
 end program Tester

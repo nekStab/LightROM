@@ -1,32 +1,36 @@
 module Laplacian2D_LTI_Lyapunov_RKlib
-   use Laplacian2D_LTI_Lyapunov_Base
-   use laplacian2D_LTI_Lyapunov_Operators
-   !> RKLIB module for time integration.
-   use rklib_module
-   !> LightKrylov for linear algebra.
-   use LightKrylov
    !> Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
    use stdlib_linalg, only : eye
+   !> RKLIB module for time integration.
+   use rklib_module
+   !> LightKrylov for linear algebra.
+   use LightKrylov
+   use LightKrylov, only : wp => dp
+   !> Laplacian
+   use Laplacian2D_LTI_Lyapunov_Base
+   use laplacian2D_LTI_Lyapunov_Operators
    implicit none
 
-   private
+   private :: this_module
+
+   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_RKLib'
 
    !-----------------------------------------------
    !-----     EXPONENTIAL PROPAGATOR RKLIB    -----
    !-----------------------------------------------
 
-   type, extends(abstract_linop), public :: rklib_exptA_laplacian
-      real(kind=wp) :: tau ! Integration time.
+   type, extends(abstract_linop_rdp), public :: rklib_exptA_laplacian
+      real(wp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec  => direct_solver_vec
       procedure, pass(self), public :: rmatvec => direct_solver_vec                  ! dummy
    end type rklib_exptA_laplacian
 
-   type, extends(abstract_linop), public :: rklib_lyapunov_mat
-      real(kind=wp) :: tau ! Integration time.
+   type, extends(abstract_linop_rdp), public :: rklib_lyapunov_mat
+      real(wp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec  => direct_solver_mat
@@ -43,13 +47,13 @@ contains
    
    subroutine rhs(me, t, x, f)
       !> Time-integrator.
-      class(rk_class), intent(inout)             :: me
+      class(rk_class), intent(inout)      :: me
       !> Current time.
-      real(kind=wp)  , intent(in)                :: t
+      real(wp), intent(in)                :: t
       !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: x
+      real(wp), dimension(:), intent(in)  :: x
       !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: f
+      real(wp), dimension(:), intent(out) :: f
 
       f = 0.0_wp
       call laplacian(f(1:N), x(1:N))
@@ -61,13 +65,13 @@ contains
       !> Linear Operator.
       class(rklib_exptA_laplacian), intent(in)  :: self
       !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
+      class(abstract_vector_rdp),   intent(in)  :: vec_in
       !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
+      class(abstract_vector_rdp),   intent(out) :: vec_out
 
       !> Time-integrator.
       type(rks54_class) :: prop
-      real(kind=wp)     :: dt = 1.0_wp
+      real(wp)          :: dt = 1.0_wp
 
       select type(vec_in)
       type is (state_vector)
@@ -88,17 +92,17 @@ contains
 
    subroutine rhs_lyap(me, t, x, f)
       !> Time-integrator.
-      class(rk_class), intent(inout)             :: me
+      class(rk_class), intent(inout)      :: me
       !> Current time.
-      real(kind=wp)  , intent(in)                :: t
+      real(wp), intent(in)                :: t
       !> State vector.
-      real(kind=wp)  , dimension(:), intent(in)  :: x
+      real(wp), dimension(:), intent(in)  :: x
       !> Time-derivative.
-      real(kind=wp)  , dimension(:), intent(out) :: f
+      real(wp), dimension(:), intent(out) :: f
 
       !> Internal variables.
       integer :: i, j, k
-      real(kind=wp), dimension(N**2) :: dv, dvT
+      real(wp), dimension(N**2) :: dv, dvT
 
       !> Sets the internal variables.
       dv  = 0.0_wp
@@ -118,14 +122,14 @@ contains
 
    subroutine direct_solver_mat(self, vec_in, vec_out)
       !> Linear Operator.
-      class(rklib_lyapunov_mat), intent(in)  :: self
+      class(rklib_lyapunov_mat),  intent(in)  :: self
       !> Input vector.
-      class(abstract_vector) , intent(in)  :: vec_in
+      class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
-      class(abstract_vector) , intent(out) :: vec_out
+      class(abstract_vector_rdp), intent(out) :: vec_out
       !> Time-integrator.
       type(rks54_class) :: prop
-      real(kind=wp)     :: dt = 0.1_wp
+      real(wp)          :: dt = 0.1_wp
 
       select type(vec_in)
       type is (state_matrix)

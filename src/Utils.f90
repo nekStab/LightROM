@@ -1,106 +1,142 @@
-module LightROM_utils
-   use LightKrylov
-   use LightKrylov_utils
-   use LightROM_AbstractLTIsystems
-
-   use stdlib_linalg, only : eye, diag
+module LightROM_Utils
+   ! stdlib
+   use stdlib_linalg, only : eye, diag, svd, svdvals, is_symmetric
    use stdlib_optval, only : optval
+   ! LightKrylov for Linear Algebra
+   use LightKrylov
+   use LightKrylov, only : dp, wp => dp
+   use LightKrylov_Logger
+   use LightKrylov_AbstractVectors
+   use LightKrylov_BaseKrylov, only : orthogonalize_against_basis
+   use LightKrylov_Utils, only : abstract_opts
+   ! LightROM
+   use LightROM_AbstractLTIsystems
+   
    implicit none 
 
-   private
-   public Approximate_Balanced_Truncation, ROM_Petrov_Galerkin_Projection, ROM_Galerkin_Projection
+   private :: this_module
+   character(len=*), parameter :: this_module = 'LightROM_Utils'
+
+   public :: dlra_opts
+   public :: compute_norm
+   public :: is_converged
+   public :: project_onto_common_basis
+   public :: Balancing_Transformation
+   public :: ROM_Petrov_Galerkin_Projection
+   public :: ROM_Galerkin_Projection
+
+   interface Balancing_Transformation
+      module procedure Balancing_Transformation_rdp
+   end interface
+
+   interface ROM_Petrov_Galerkin_Projection
+      module procedure ROM_Petrov_Galerkin_Projection_rdp
+   end interface
+
+   interface ROM_Galerkin_Projection
+      module procedure ROM_Galerkin_Projection_rdp
+   end interface
+
+   interface project_onto_common_basis
+      module procedure project_onto_common_basis_rdp
+   end interface
+
+   type, extends(abstract_opts), public :: dlra_opts
+      !! Options container for the (rank-adaptive) projector-splitting dynalical low-rank approximation
+      !! integrator
+      integer :: mode = 1
+      !! Time integration mode. Only 1st order (Lie splitting - mode 1) and 
+      !! 2nd order (Strang splitting - mode 2) are implemented. (default: 1)
+      logical :: verbose = .false.
+      !! Verbosity control (default: .false.)
+      integer :: chkstep = 10
+      !! Time step interval at which convergence is checked and runtime information is printed (default: 10)
+      integer :: chktime = 1.0_wp
+      !! Simulation time interval at which convergence is checked and runtime information is printed (default: 1.0)
+      logical :: chkctrl_time = .true.
+      !! IO control: use time instead of timestep control (default: .true.)
+      real(wp) :: inc_tol = 1e-6_wp
+      !! Tolerance on the increment norm for convergence (default: 1e-6)
+      logical :: relative_norm = .true.
+      !! Tolerance control: Check convergence for dX/X (true) or dX (false)? (default: .true.)
+      !
+      ! RANK-ADPATIVE SPECIFICS
+      !
+      logical :: if_rank_adaptive = .true.
+      !! Allow rank-adaptivity
+      real(wp) :: tol = 1e-6_wp
+      !! Tolerance on the extra singular value to determine rank-adaptation
+      logical :: use_err_est = .false.
+      !! Choose whether to base the tolerance on 'tol' or on the splitting error estimate
+      integer :: err_est_step = 10
+      !! Time step interval for recomputing the splitting error estimate (only of use_err_est = .true.)
+   end type
 
 contains
 
-   subroutine approximate_Balanced_Truncation(T,S,ST,X,Y)
-      !! Computes the the biorthogonal balancing transformation \( \mathbf{T}, \mathbf{S}^T \) from the
-      !! low-rank approximations of the obervability and controlability Gramians, \( \mathbf{W}_o \) and 
-      !! \( \mathbf{W}_c \) respectively, given as:
-      !! \[ 
-      !!    \mathbf{W}_o = \mathbf{X}_o \mathbf{S}_o \mathbf{X}_o^T 
-      !!    \quad \text{and} \quad 
-      !!    \mathbf{W}_c = \mathbf{Y}_c \mathbf{S}_c \mathbf{Y}_c^T
-      !! \]
+   subroutine Balancing_Transformation_rdp(T, S, Tinv, Xc, Yo)
+      !! Computes the the biorthogonal balancing transformation \( \mathbf{T}, \mathbf{T}^{-1} \) from the
+      !! low-rank representation of the SVD of the controllability and observability Gramians, \( \mathbf{W}_c \) 
+      !! and \( \mathbf{W}_o \) respectively, given as:
+      !! \[ \begin{align}
+      !!    \mathbf{W}_c &= \mathbf{X}_c \mathbf{X}_c^T \\
+      !!    \mathbf{W}_o &= \mathbf{Y}_o \mathbf{Y}_o^T
+      !! \end{align} \]
       !!
-      !! Given the SVD of the cross-Gramians:
-      !! $$ \mathbf{S}_c^T \mathbf{Y}_c^T \mathbf{X}_o \mathbf{S}_o = \mathbf{U} \mathbf{S} \mathbf{V}^T $$
+      !! Given the SVD of the cross-Gramian:
+      !! $$ \mathbf{X}_c^T \mathbf{Y}_o = \mathbf{U} \mathbf{S} \mathbf{V}^T $$
       !! the balancing transformation and its inverse are given by:
       !! \[ \begin{align}
       !!            \mathbf{T}   &= \mathbf{X}_o \mathbf{S}_o^{1/2} \mathbf{V} \mathbf{S}^{-1/2} \\
-      !!            \mathbf{S}^T &= \mathbf{Y}_c \mathbf{S}_c^{1/2} \mathbf{U} \mathbf{S}^{-1/2} 
+      !!            \mathbf{Tinv}^T &= \mathbf{Y}_c \mathbf{S}_c^{1/2} \mathbf{U} \mathbf{S}^{-1/2} 
       !! \end{align} \]
       !! Note: In the current implementation, the numerical rank of the SVD is not considered.
-      class(abstract_vector),              intent(out)   :: T(:)
+      class(abstract_vector_rdp),          intent(out)   :: T(:)
       !! Balancing transformation
-      real(kind=wp),                       intent(out)   :: S(:)
+      real(wp),                            intent(out)   :: S(:)
       !! Singular values of the BT
-      class(abstract_vector),              intent(out)   :: ST(:)
+      class(abstract_vector_rdp),          intent(out)   :: Tinv(:)
       !! Inverse balancing transformation
-      class(abstract_sym_low_rank_state),  intent(inout) :: X
+      class(abstract_vector_rdp),          intent(in)    :: Xc(:)
       !! Low-rank representation of the Controllability Gramian
-      class(abstract_sym_low_rank_state),  intent(inout) :: Y
+      class(abstract_vector_rdp),          intent(in)    :: Yo(:)
       !! Low-rank representation of the Observability Gramian
 
       ! internal variables
       integer                                :: i, rkc, rko, rk, rkmin
-      real(kind=wp),             allocatable :: S_svd(:,:)
-      real(kind=wp),             allocatable :: Swrk(:,:)
-      real(kind=wp),             allocatable :: Sigma(:)
-      real(kind=wp),             allocatable :: V(:,:), W(:,:)
-      class(abstract_vector),    allocatable :: Uwrk(:)
+      real(wp),                  allocatable :: LRCrossGramian(:,:)
+      real(wp),                  allocatable :: Swrk(:,:)
+      real(wp),                  allocatable :: Sigma(:)
+      real(wp),                  allocatable :: V(:,:), W(:,:)
 
-      rkc = size(X%U)
-      rko = size(Y%U)
-      allocate(S_svd(rkc,rko))
-      ! scratch arrays
-      rk = max(rkc, rko)
-      rkmin = min(rkc, rko)
-      allocate(Swrk(rk,rk))
-      allocate(Uwrk(rk), source=T(1))
+      rkc   = size(Xc)
+      rko   = size(Yo)
+      rk    = max(rkc, rko)
+      rkmin = min(rkc, rko) 
 
-      ! compute inner product with Gramian bases
-      call mat_mult(S_svd, Y%U, X%U)
+      ! compute inner product with Gramian bases and compte SVD
+      allocate(LRCrossGramian(rkc,rko)); allocate(V(rko,rko)); allocate(W(rkc,rkc))
+      call innerprod(LRCrossGramian, Xc, Yo)
+      call svd(LRCrossGramian, S, V, W)
 
-      ! compute Cholesky factors of Y update LR factor with Cholesky factor
-      Swrk = 0.0_wp
-      call sqrtm(Swrk(1:rkc,1:rkc), Y%S)
-      call mat_zero(Uwrk)
-      call mat_mult(Uwrk(1:rkc), Y%U, Swrk(1:rkc,1:rkc))
-      call mat_copy(Y%U, Uwrk(1:rkc))
-      ! Update data matrix
-      S_svd = matmul(Swrk(1:rkc,1:rkc), S_svd)
-
-      ! compute Cholesky factors of X update LR factor with Cholesky factor
-      Swrk = 0.0_wp
-      call sqrtm(Swrk(1:rko,1:rko), X%S)
-      call mat_zero(Uwrk)
-      call mat_mult(Uwrk(1:rkc), X%U, Swrk(1:rkc,1:rkc))
-      call mat_copy(X%U, Uwrk(1:rkc))
-      ! Update data matrix
-      S_svd = matmul(S_svd, Swrk(1:rko,1:rko))
-
-      ! Compute BT
-      allocate(V(rkc,rkc)); allocate(W(rko,rko)); allocate(Sigma(rkmin))
-      call svd(S_svd, V, Sigma, W)
-
-      ! We truncate in case come singular values are very small
-      s_inv: do i = 1, rkmin
-         if (Sigma(i) < atol) then
-            exit s_inv
-            rk = i-1
-         end if 
-         Sigma(i) = 1/sqrt(Sigma(i))
-      enddo s_inv
-      
-      call mat_mult( T, X%U, matmul(          W(:, 1:rk),  diag(sigma(1:rk))))
-      call mat_mult(ST, Y%U, matmul(transpose(V(1:rk, :)), diag(sigma(1:rk))))
-
+      allocate(Sigma(rkmin))
+      do i = 1, rkmin
+         Sigma(i) = 1/sqrt(S(i))
+      enddo
+      block
+         class(abstract_vector_rdp), allocatable :: Xwrk(:)
+         call linear_combination(Xwrk, Yo(1:rkmin), matmul(W(1:rkmin,1:rkmin), diag(Sigma)))
+         call copy_basis(T(1:rkmin), Xwrk)
+         call linear_combination(Xwrk, Xc(1:rkmin), matmul(V(1:rkmin,1:rkmin), diag(Sigma)))
+         call copy_basis(Tinv(1:rkmin), Xwrk)
+      end block
+         
       return
-   end subroutine
+   end subroutine Balancing_Transformation_rdp
 
-   subroutine ROM_Petrov_Galerkin_Projection(romLTI, LTI, T, ST)
-      !! Computes the Reduced-Order of the input LTI dynamical system via Petrov-Galerkin projection using 
-      !! the biorthogonal projection bases \( \mathbf{V} \) and \( \mathbf{W} \) with 
+   subroutine ROM_Petrov_Galerkin_Projection_rdp(Ahat, Bhat, Chat, D, LTI, T, Tinv)
+      !! Computes the Reduced-Order Model of the input LTI dynamical system via Petrov-Galerkin projection 
+      !! using the biorthogonal projection bases \( \mathbf{V} \) and \( \mathbf{W} \) with 
       !! \( \mathbf{W}^T \mathbf{V} = \mathbf{I} \).
       !! 
       !! Given an LTI system defined by the matrices \( \mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D}\), 
@@ -112,34 +148,49 @@ contains
       !!     \hat{\mathbf{C}} = \mathbf{C} \mathbf{V}, \qquad
       !!     \hat{\mathbf{D}} = \mathbf{D} .
       !! \]
-      class(abstract_ROM_lti_system),   intent(out)    :: romLTI
-      !! Reduced-order LTI
-      class(abstract_lti_system),       intent(in)     :: LTI
+      real(wp),            allocatable, intent(out)    :: Ahat(:, :)
+      !! Reduced-order dynamics matrix.
+      real(wp),            allocatable, intent(out)    :: Bhat(:, :)
+      !! Reduced-order input-to-state matrix.
+      real(wp),            allocatable, intent(out)    :: Chat(:, :)
+      !! Reduced-order state-to-output matrix.
+      real(wp),            allocatable, intent(out)    :: D(:, :)
+      !! Feed-through matrix
+      class(abstract_lti_system_rdp),   intent(in)     :: LTI
       !! Large-scale LTI to project
-      class(abstract_vector),           intent(inout)  :: T(:)
+      class(abstract_vector_rdp),       intent(in)     :: T(:)
       !! Balancing transformation
-      class(abstract_vector),           intent(in)     :: ST(:)
+      class(abstract_vector_rdp),       intent(in)     :: Tinv(:)
       !! Inverse balancing transformation
 
       ! internal variables
-      integer                                       :: i, rk
-      class(abstract_vector),           allocatable :: Uwrk(:)
+      integer                                          :: i, rk, rkc, rkb
+      class(abstract_vector_rdp),       allocatable    :: Uwrk(:)
+      real(wp),                         allocatable    :: Cwrk(:, :)
 
-      rk = size(T)
-      allocate(Uwrk(rk), source=T(1)); call mat_zero(Uwrk)
+      rk  = size(T)
+      rkb = size(LTI%B)
+      rkc = size(LTI%CT)
+      allocate(Uwrk(rk), source=T(1)); call zero_basis(Uwrk)
+      allocate(Ahat(1:rk, 1:rk ));                  Ahat = 0.0_wp
+      allocate(Bhat(1:rk, 1:rkb));                  Bhat = 0.0_wp
+      allocate(Cwrk(1:rk, 1:rkc));                  Cwrk = 0.0_wp
+      allocate(Chat(1:rkc,1:rk ));                  Chat = 0.0_wp
+      allocate(D(1:size(LTI%D,1),1:size(LTI%D,2))); D    = 0.0_wp
 
       do i = 1, rk
-         call LTI%A%matvec(Uwrk(i), T(i))
+         call LTI%A%matvec(Tinv(i), Uwrk(i))
       end do
-      call mat_mult(romLTI%A, ST, Uwrk)
-      call mat_mult(romLTI%B, ST, LTI%B)
-      call mat_mult(romLTI%C, LTI%CT, T)
-      romLTI%D = LTI%D
+      call innerprod(Ahat, T, Uwrk)
+      call innerprod(Bhat, T, LTI%B)
+      call innerprod(Cwrk, LTI%CT, Tinv)
+      Chat = transpose(Cwrk)
+      D = LTI%D
 
-   end subroutine ROM_Petrov_Galerkin_Projection
+   end subroutine ROM_Petrov_Galerkin_Projection_rdp
 
-   subroutine ROM_Galerkin_Projection(romLTI, LTI, T)
-      !! Computes the Reduced-Order of the input LTI dynamical system via Galerkin projection using 
+   subroutine ROM_Galerkin_Projection_rdp(Ahat, Bhat, Chat, D, LTI, T)
+      !! Computes the Reduced-Order Model of the input LTI dynamical system via Galerkin projection using 
       !! the orthogonal projection basis \( \mathbf{V} \) with \( \mathbf{V}^T \mathbf{V} = \mathbf{I} \).
       !! 
       !! Given an LTI system defined by the matrices \( \mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D}\), 
@@ -150,16 +201,148 @@ contains
       !!     \hat{\mathbf{C}} = \mathbf{C} \mathbf{V}, \qquad
       !!     \hat{\mathbf{D}} = \mathbf{D} .
       !! \]
-      class(abstract_ROM_lti_system),   intent(out)    :: romLTI
-      !! Reduced-order LTI
-      class(abstract_lti_system),       intent(in)     :: LTI
+      real(wp),            allocatable, intent(out)    :: Ahat(:, :)
+      !! Reduced-order dynamics matrix.
+      real(wp),            allocatable, intent(out)    :: Bhat(:, :)
+      !! Reduced-order input-to-state matrix.
+      real(wp),            allocatable, intent(out)    :: Chat(:, :)
+      !! Reduced-order state-to-output matrix.
+      real(wp),            allocatable, intent(out)    :: D(:, :)
+      !! Feed-through matrix
+      class(abstract_lti_system_rdp),   intent(in)     :: LTI
       !! Large-scale LTI to project
-      class(abstract_vector),           intent(inout)  :: T(:)
+      class(abstract_vector_rdp),       intent(inout)  :: T(:)
       !! Balancing transformation
 
-      call ROM_Petrov_Galerkin_Projection(romLTI, LTI, T, T)
+      call ROM_Petrov_Galerkin_Projection(Ahat, Bhat, Chat, D, LTI, T, T)
 
       return
-   end subroutine ROM_Galerkin_Projection
+   end subroutine ROM_Galerkin_Projection_rdp
 
-end module LightROM_utils
+   subroutine project_onto_common_basis_rdp(UTV, VpTV, U, V)
+      !! Computes the common orthonormal basis of the space spanned by the union of the input Krylov bases 
+      !! \( [ \mathbf{U}, \mathbf{V} ] \) by computing \( \mathbf{V_\perp} \) as an orthonormal basis of 
+      !! \( \mathbf{V} \) lying in the orthogonal complement of \( \mathbf{U} \) given by
+      !! \[
+      !!    \mathbf{V_\perp}, R = \text{qr}( \mathbf{V} - \mathbf{U} \mathbf{U}^T \mathbf{V} )
+      !! \[
+      !!
+      !! NOTE: The orthonormality of \( \mathbf{U} \) is assumed and not checked.
+      !! 
+      !! The output is
+      !! \[
+      !!     \mathbf{U}^T \mathbf{V}, \qquad \text{and }  \qquad \mathbf{V_perp}^T \mathbf{V}
+      !!     \hat{\mathbf{D}} = \mathbf{D} .
+      !! \]
+      real(wp),                   allocatable, intent(out) :: UTV(:,:)
+      real(wp),                   allocatable, intent(out) :: VpTV(:,:)
+      class(abstract_vector_rdp),              intent(in)  :: U(:)
+      class(abstract_vector_rdp),              intent(in)  :: V(:)
+
+      ! internals
+      class(abstract_vector_rdp),             allocatable  :: Vp(:)
+      real(wp),                               allocatable  :: wrk(:,:)
+      integer :: ru, rv, r, info
+
+      ru = size(U)
+      rv = size(V)
+      r  = ru + rv
+
+      allocate(Vp(rv), source=V) ! Vp = V
+      allocate(UTV( ru,rv)); UTV  = 0.0_wp
+      allocate(VpTV(rv,rv)); VpTV = 0.0_wp
+
+      ! orthonormalize second basis against first
+      call orthogonalize_against_basis(Vp, U, info, if_chk_orthonormal=.false., beta=UTV)
+      call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='project_onto_common_basis_rdp')
+      allocate(wrk(rv,rv)); wrk = 0.0_wp
+      call qr(Vp, wrk, info)
+      call check_info(info, 'qr', module=this_module, procedure='project_onto_common_basis_rdp')
+
+      ! compute inner product between second basis and its orthonormalized version
+      call innerprod(VpTV, Vp, V)
+
+      return
+   end subroutine project_onto_common_basis_rdp
+
+   real(dp) function compute_norm(X) result(nrm)
+      !! This function computes the Frobenius norm of a low-rank approximation via an SVD of the (small) coefficient matrix
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
+      !! Low-Rank factors of the solution.
+      real(wp) :: s(X%rk)
+      s = svdvals(X%S(:X%rk,:X%rk))
+      nrm = sqrt(sum(s**2))
+   end function compute_norm
+
+   logical function is_converged(nrm, nrmX, opts) result(converged)
+      !! This function checks the convergence of the solution based on the (relative) increment norm
+      real(wp),                   intent(in) :: nrm
+      real(wp),         optional, intent(in) :: nrmX
+      real(wp)                               :: nrmX_
+      type(dlra_opts),  optional, intent(in) :: opts
+      type(dlra_opts)                        :: opts_
+
+      ! internals
+      character*128 :: msg
+
+      if (present(opts)) then
+         opts_ = opts
+      else
+         opts_ = dlra_opts()
+      end if
+
+      if (present(nrmX)) then
+         nrmX_ = nrmX
+      else
+         nrmX_ = 1.0_wp
+      end if
+
+      converged = .false.
+
+      if (opts%relative_norm) then
+         if (nrm/nrmX_ < opts%inc_tol) converged = .true.
+      else
+         if (nrm < opts%inc_tol) converged = .true.
+      end if
+
+   end function is_converged
+
+   integer function get_chkstep(opts, verbose, tau) result(chkstep)
+   
+      type(dlra_opts), intent(inout) :: opts
+      logical,         intent(in)    :: verbose
+      real(wp),        intent(in)    :: tau
+
+      ! internal
+      character(len=128) :: msg
+      type(dlra_opts) :: opts_default
+
+      opts_default = dlra_opts()
+   
+      if (opts%chkctrl_time) then
+         if (opts%chktime <= 0.0_wp) then
+            opts%chktime = opts_default%chktime
+            write(msg, *) "Invalid chktime. Reset to default (",  opts%chktime,")"
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         end if
+         chkstep = max(1, NINT(opts%chktime/tau))
+         if (verbose) then
+            write(msg,*) 'Output every', opts%chkctrl_time, 'time units (', chkstep, 'steps)'
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         end if
+      else
+         if (opts%chkstep <= 0) then
+            opts%chkstep = opts_default%chkstep
+            write(msg, *) "Invalid chktime. Reset to default (",  opts%chkstep,")"
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         end if
+         chkstep = opts%chkstep
+         if (verbose) then
+            write(msg,*) 'Output every', chkstep, 'steps (based on steps).'
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         end if
+      end if
+
+   end function get_chkstep
+
+end module LightROM_Utils

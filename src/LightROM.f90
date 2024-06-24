@@ -5,11 +5,11 @@ module LightROM
   private
 
   !> Global variables.
-  public :: greetings, wp, atol, rtol
+  public :: greetings_LightROM, wp, atol, rtol
 
 contains
 
-  subroutine greetings()
+  subroutine greetings_LightROM()
     write(*, *)
     write(*, *)
     write(*, *) "-------------------------------------------------"
@@ -38,6 +38,6 @@ contains
     write(*, *) "-------------------------------------------------"
     write(*, *)
     write(*, *)
-  end subroutine greetings
+  end subroutine greetings_LightROM
 
 end module LightROM

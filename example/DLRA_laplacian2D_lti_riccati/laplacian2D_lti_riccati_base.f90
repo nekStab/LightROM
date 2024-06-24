@@ -1,54 +1,46 @@
 module Laplacian2D_LTI_Riccati_Base
-   !> LightKrylov for linear algebra.
-   use LightKrylov
-   use LightKrylov_utils, only : assert_shape
-   use LightROM_AbstractLTIsystems
-   !> Standard Library.
-   use stdlib_math, only : linspace
+   ! Standard Library.
    use stdlib_optval, only : optval
-   use stdlib_linalg, only : eye
+   ! LightKrylov for linear algebra.
+   use LightKrylov
+   use LightKrylov, only : wp => dp
+   use LightKrylov_Logger
+   use LightKrylov_Utils, only : assert_shape
+   use LightKrylov_AbstractVectors
+   ! LightROM
+   use LightROM_AbstractLTIsystems ! LR_state
    implicit none
 
-   private
+   private :: this_module
+   character*128, parameter :: this_module = 'Laplacian2D_LTI_Riccati_Base'
    ! problem parameters
-   public :: N, nx, dx, dx2, L, rk_b, rk_c
+   public  :: N, nx, dx, dx2, L, rk_b, rk_c
    ! problem definition
-   public :: B, CT, Qc, Rinv
+   public  :: B, CT, Qc, Rinv
    ! derived data
-   public :: Bdata, CTdata, CTQcC, BRinvBTdata, CTQcCdata
-   ! initialisation
-   public :: initialize_problem
-   ! utils
-   public :: get_state, set_state, init_rand
+   public  :: Bdata, CTdata, CTQcC, BRinvBTdata, CTQcCdata
 
    !------------------------------
    !-----     PARAMETERS     -----
    !------------------------------
 
    ! --> Mesh related parameters.
-   real(kind=wp), parameter :: L  = 1.0_wp  !> Domain length
-   integer      , parameter :: nx = 4      !> Number of grid points per direction
-   integer      , parameter :: N  = nx**2   !> total number of grid points
-   real(kind=wp), parameter :: dx = L/nx    !> Grid size.
-   real(kind=wp), parameter :: dx2= dx**2   !> Grid size.
-   integer,       parameter :: rk_b = 1     !> rank of the RHS
-   integer,       parameter :: rk_c = 1     !> rank of Q = CTC
-
-   !-----------------------------------------------
-   !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
-   !-----------------------------------------------
-
-   type, extends(abstract_lti_system), public :: lti_system
-   end type lti_system
+   real(wp), parameter :: L  = 1.0_wp  !> Domain length
+   integer,  parameter :: nx = 4      !> Number of grid points per direction
+   integer,  parameter :: N  = nx**2   !> total number of grid points
+   real(wp), parameter :: dx = L/nx    !> Grid size.
+   real(wp), parameter :: dx2= dx**2   !> Grid size.
+   integer,  parameter :: rk_b = 1     !> rank of the RHS
+   integer,  parameter :: rk_c = 1     !> rank of Q = CTC
 
    !-------------------------------------------------------
    !-----     LIGHTKRYLOV SYM LOW RANK STATE TYPE     -----
    !-------------------------------------------------------
 
-   type, extends(abstract_sym_low_rank_state), public :: LR_state
+   type, extends(abstract_sym_low_rank_state_rdp), public :: LR_state
    contains
       private
-      procedure, pass(self), public :: set_LR_state
+      procedure, pass(self), public :: initialize_LR_state
    end type LR_state
 
 
@@ -56,8 +48,8 @@ module Laplacian2D_LTI_Riccati_Base
    !-----     LIGHTKRYLOV VECTOR TYPE     -----
    !-------------------------------------------
 
-   type, extends(abstract_vector), public :: state_vector
-      real(kind=wp) :: state(N) = 0.0_wp
+   type, extends(abstract_vector_rdp), public :: state_vector
+      real(wp) :: state(N) = 0.0_wp
       contains
       private
       procedure, pass(self), public :: zero => vector_zero
@@ -65,14 +57,15 @@ module Laplacian2D_LTI_Riccati_Base
       procedure, pass(self), public :: scal => vector_scal
       procedure, pass(self), public :: axpby => vector_axpby
       procedure, pass(self), public :: rand => vector_rand
+      procedure, pass(self), public :: get_size => vector_get_size
    end type state_vector
 
    !-------------------------------------------
    !-----     LIGHTKRYLOV VECTOR TYPE     -----
    !-------------------------------------------
 
-   type, extends(abstract_vector), public :: state_matrix
-      real(kind=wp) :: state(N**2) = 0.0_wp
+   type, extends(abstract_vector_rdp), public :: state_matrix
+      real(wp) :: state(N**2) = 0.0_wp
    contains
       private
       procedure, pass(self), public :: zero => matrix_zero
@@ -80,21 +73,19 @@ module Laplacian2D_LTI_Riccati_Base
       procedure, pass(self), public :: scal => matrix_scal
       procedure, pass(self), public :: axpby => matrix_axpby
       procedure, pass(self), public :: rand => matrix_rand
+      procedure, pass(self), public :: get_size => matrix_get_size
    end type state_matrix
 
    type(state_vector)       :: B(rk_b)
    type(state_vector)       :: CT(rk_c)
-   real(kind=wp)            :: Qc(rk_c,rk_c)
-   real(kind=wp)            :: Rinv(rk_b,rk_b)
+   real(wp)                 :: Qc(rk_c,rk_c)
+   real(wp)                 :: Rinv(rk_b,rk_b)
 
-   real(kind=wp)            :: Bdata(N,rk_b)
-   real(kind=wp)            :: CTdata(N,rk_c)
-   real(kind=wp)            :: Bwrk(N,rk_b)
-   real(kind=wp)            :: CTQcC(N**2)
-   real(kind=wp)            :: CTQcCdata(N,N)
-   real(kind=wp)            :: BRinvBTdata(N,N)
-
-   
+   real(wp)                 :: Bdata(N,rk_b)
+   real(wp)                 :: CTdata(N,rk_c)
+   real(wp)                 :: CTQcC(N**2)
+   real(wp)                 :: CTQcCdata(N,N)
+   real(wp)                 :: BRinvBTdata(N,N)
 
 contains
 
@@ -106,9 +97,9 @@ contains
       return
    end subroutine vector_zero
 
-   real(kind=wp) function vector_dot(self, vec) result(alpha)
-      class(state_vector)   , intent(in) :: self
-      class(abstract_vector), intent(in) :: vec
+   real(wp) function vector_dot(self, vec) result(alpha)
+      class(state_vector),        intent(in) :: self
+      class(abstract_vector_rdp), intent(in) :: vec
       select type(vec)
       type is (state_vector)
          alpha = dot_product(self%state, vec%state)
@@ -116,17 +107,23 @@ contains
       return
    end function vector_dot
 
+   integer function vector_get_size(self) result(N)
+     class(state_vector), intent(in) :: self
+     N = nx
+     return
+   end function vector_get_size
+
    subroutine vector_scal(self, alpha)
       class(state_vector), intent(inout) :: self
-      real(kind=wp)      , intent(in)    :: alpha
+      real(wp),            intent(in)    :: alpha
       self%state = self%state * alpha
       return
    end subroutine vector_scal
 
    subroutine vector_axpby(self, alpha, vec, beta)
-      class(state_vector)   , intent(inout) :: self
-      class(abstract_vector), intent(in)    :: vec
-      real(kind=wp)         , intent(in)    :: alpha, beta
+      class(state_vector),        intent(inout) :: self
+      class(abstract_vector_rdp), intent(in)    :: vec
+      real(wp),                   intent(in)    :: alpha, beta
       select type(vec)
       type is (state_vector)
          self%state = alpha*self%state + beta*vec%state
@@ -139,7 +136,7 @@ contains
       logical, optional,   intent(in)    :: ifnorm
       ! internals
       logical :: normalize
-      real(kind=wp) :: alpha
+      real(wp) :: alpha
       normalize = optval(ifnorm,.true.)
       call random_number(self%state)
       if (normalize) then
@@ -157,9 +154,9 @@ contains
       return
    end subroutine matrix_zero
 
-   real(kind=wp) function matrix_dot(self, vec) result(alpha)
-      class(state_matrix)   , intent(in) :: self
-      class(abstract_vector), intent(in) :: vec
+   real(wp) function matrix_dot(self, vec) result(alpha)
+      class(state_matrix),        intent(in) :: self
+      class(abstract_vector_rdp), intent(in) :: vec
       select type(vec)
       type is(state_matrix)
           alpha = dot_product(self%state, vec%state)
@@ -167,17 +164,23 @@ contains
       return
    end function matrix_dot
 
+   integer function matrix_get_size(self) result(N)
+     class(state_matrix), intent(in) :: self
+     N = N
+     return
+   end function matrix_get_size
+
    subroutine matrix_scal(self, alpha)
       class(state_matrix), intent(inout) :: self
-      real(kind=wp)      , intent(in)    :: alpha
+      real(wp),            intent(in)    :: alpha
       self%state = self%state * alpha
       return
    end subroutine matrix_scal  
 
    subroutine matrix_axpby(self, alpha, vec, beta)
-      class(state_matrix)   , intent(inout) :: self
-      class(abstract_vector), intent(in)    :: vec
-      real(kind=wp)         , intent(in)    :: alpha, beta
+      class(state_matrix),        intent(inout) :: self
+      class(abstract_vector_rdp), intent(in)    :: vec
+      real(wp),                   intent(in)    :: alpha, beta
       select type(vec)
       type is(state_matrix)
           self%state = alpha*self%state + beta*vec%state
@@ -190,7 +193,7 @@ contains
       logical, optional,   intent(in)    :: ifnorm
       ! internals
       logical :: normalize
-      real(kind=wp) :: alpha
+      real(wp)      :: alpha
       normalize = optval(ifnorm, .true.)
       call random_number(self%state)
       if (normalize) then
@@ -198,131 +201,59 @@ contains
          call self%scal(1.0/alpha)
       endif
       return
-   end subroutine matrix_rand
+   end subroutine matrix_rand  
 
-   !---------------------------------------
-   !-----     CONSTRUCT THE MESH      -----
-   !---------------------------------------
+   !-----------------------------------------------------------------------
+   !-----     TYPE BOUND PROCEDURE FOR SYM LOW RANK REPRESENTATION    -----
+   !-----------------------------------------------------------------------
 
-   subroutine initialize_problem(magQ, magR)
-      implicit none
-      real(kind=wp), intent(in)  :: magQ, magR
-      real(kind=wp), allocatable :: x(:)
-      integer :: i
+   subroutine initialize_LR_state(self, U, S, rk, rkmax)
+      class(LR_state),            intent(inout) :: self
+      class(abstract_vector_rdp), intent(in)    :: U(:)
+      real(wp),                   intent(in)    :: S(:,:)
+      integer,                    intent(in)    :: rk
+      integer, optional,          intent(in)    :: rkmax
 
-      !> Construct mesh.
-      x = linspace(-L/2, L/2, nx)
-
-      ! Define C, Qc & compute CTQcC
-      Qc = magQ*eye(rk_c)
-
-      call init_rand(CT, ifnorm = .false.)
-      call get_state(CTdata, CT)
-      CTQcCdata = matmul(CTdata, matmul( Qc, transpose(CTdata)))
-      CTQcC(1:N**2) = reshape(CTQcCdata, shape(CTQcC))
-      
-      ! Define B, Rinv & compule BRinvBT
-      if (magR .lt. atol) then
-         Rinv = 0.0_wp
-      else
-         Rinv = 1/magR*eye(rk_b)
-      endif
-
-      call init_rand(B, ifnorm = .false.)
-      Bdata = 0.0_wp
-      call get_state(Bdata, B)
-      Bwrk = 0.0_wp
-      Bwrk = matmul(Bdata, Rinv)
-      BRinvBTdata = matmul( Bwrk, transpose(Bdata) )
-
-      return
-   end subroutine initialize_problem
-
-   !--------------------------------------------------------------------
-   !-----     UTILITIES FOR STATE_VECTOR AND STATE MATRIX TYPES    -----
-   !--------------------------------------------------------------------
-
-   subroutine get_state(mat_out, state_in)
-      !! Utility function to transfer data from a state vector to a real array
-      real(kind=wp),          intent(out) :: mat_out(:,:)
-      class(abstract_vector), intent(in)  :: state_in(:)
-      ! internal variables
-      integer :: k, kdim
-      mat_out = 0.0_wp
-      select type (state_in)
-      type is (state_vector)
-         kdim = size(state_in)
-         call assert_shape(mat_out, (/ N, kdim /), 'get_state -> state_vector', 'mat_out')
-         do k = 1, kdim
-            mat_out(:,k) = state_in(k)%state
-         end do
-      type is (state_matrix)
-         call assert_shape(mat_out, (/ N, N /), 'get_state -> state_matrix', 'mat_out')
-         mat_out = reshape(state_in(1)%state, (/ N, N /))
-      end select
-      return
-   end subroutine get_state
-
-   subroutine set_state(state_out, mat_in)
-      !! Utility function to transfer data from a real array to a state vector
-      class(abstract_vector), intent(out) :: state_out(:)
-      real(kind=wp),          intent(in)  :: mat_in(:,:)
-      ! internal variables
-      integer       :: k, kdim
-      select type (state_out)
-      type is (state_vector)
-         kdim = size(state_out)
-         call assert_shape(mat_in, (/ N, kdim /), 'set_state -> state_vector', 'mat_in')
-         call mat_zero(state_out)
-         do k = 1, kdim
-            state_out(k)%state = mat_in(:,k)
-         end do
-      type is (state_matrix)
-         call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
-         call mat_zero(state_out)
-         state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
-      end select
-      return
-   end subroutine set_state
-
-   subroutine init_rand(state, ifnorm)
-      !! Utility function to initialize a state vector with random data
-      class(abstract_vector), intent(inout)  :: state(:)
-      logical, optional,      intent(in)     :: ifnorm
-      ! internal variables
-      integer :: k, kdim
-      logical :: normalize
-      normalize = optval(ifnorm,.true.)
-      select type (state)
-      type is (state_vector)
-         kdim = size(state)
-         do k = 1, kdim
-            call state(k)%rand(ifnorm = normalize)
-         end do
-      type is (state_matrix)
-         kdim = size(state)
-         do k = 1, kdim
-            call state(k)%rand(ifnorm = normalize)
-         end do
-      end select
-      return
-   end subroutine init_rand
-
-   !------------------------------------------------------------
-   !-----     UTILITIES FOR SYM LOW RANK REPRESENTATION    -----
-   !------------------------------------------------------------
-
-   subroutine set_LR_state(self, U, S)
-      class(LR_state), intent(inout) :: self
-      real(kind=wp),   intent(in)    :: U(:,:)
-      real(kind=wp),   intent(in)    :: S(:,:)
       ! internals
-      integer :: rk
-      rk = size(U,2)
-      call assert_shape(S, (/ rk, rk /), 'set_LR_state', 'S')
-      call set_state(self%U, U)
-      self%S = S
+      real(wp), allocatable :: R(:, :)
+      integer :: i, n, rka, info
+
+      n = size(U)
+      call assert_shape(S, [n,n], "initialize_LR_state", "S")
+
+      ! optional size argument
+      if (present(rkmax)) then
+         self%rk = rkmax - 1
+         rka = rkmax
+      else
+         self%rk = rk
+         rka = rk + 1
+      end if
+
+      select type (U)
+      type is (state_vector)
+         ! allocate & initialize
+         allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
+         allocate(self%S(rka,rka)); self%S = 0.0_wp
+         ! copy inputs
+         if (self%rk > n) then   ! copy the full IC into self%U
+            call copy_basis(self%U(1:n), U)
+            self%S(1:n,1:n) = S
+         else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
+            call copy_basis(self%U(1:self%rk), U(1:self%rk))
+            self%S(1:self%rk,1:self%rk) = S(1:self%rk,1:self%rk)
+         end if
+         ! top up basis (to rka for rank-adaptivity) with orthonormal columns if needed
+         if (rka > n) then
+            do i = n+1, rka
+               call self%U(i)%rand()
+            end do
+            allocate(R(rka,rka)); R = 0.0_wp
+            call qr(self%U, R, info)
+            call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
+         end if
+      end select
       return
-   end subroutine set_LR_state
+   end subroutine initialize_LR_state
 
 end module Laplacian2D_LTI_Riccati_Base
