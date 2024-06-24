@@ -9,8 +9,6 @@ program Tester
   use LightKrylov_Logger
   !> Abstract implementation of ROM-LTI techniques.
   use LightROM
-  use TestVectors
-  use TestLinops
   use TestLyapunov
 
   implicit none
