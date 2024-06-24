@@ -5,7 +5,7 @@ module LightROM_Utils
    ! LightKrylov for Linear Algebra
    use LightKrylov
    use LightKrylov, only : dp, wp => dp
-   use LightKrylov_Logger, only : check_info
+   use LightKrylov_Logger
    use LightKrylov_AbstractVectors
    use LightKrylov_BaseKrylov, only : orthogonalize_against_basis
    use LightKrylov_Utils, only : abstract_opts
@@ -48,9 +48,17 @@ module LightROM_Utils
       !! Time integration mode. Only 1st order (Lie splitting - mode 1) and 
       !! 2nd order (Strang splitting - mode 2) are implemented. (default: 1)
       logical :: verbose = .false.
-      !! Verbosity control (default: `.false.`)
+      !! Verbosity control (default: .false.)
       integer :: chkstep = 10
-      !! Intervals at which convergence is checked
+      !! Time step interval at which convergence is checked (default: 10)
+      integer :: iostep = 10
+      !! Time step interval at which runtime information is printed (default: 10)
+      !! iostep = 0 means no output.
+      integer :: iotime = 1.0_wp
+      !! Simulation time interval at which runtime information is printed (default: 1.0).
+      !! iotime = 0.0 means no output
+      logical :: ioctrl_time = .true.
+      !! IO control: use time instead of timestep IO control (default: .true.)
       real(wp) :: inc_tol = 1e-6_wp
       !! Tolerance on the increment norm for convergence (default: 1e-6)
       logical :: relative_norm = .true.
@@ -301,6 +309,45 @@ contains
          if (nrm < opts%inc_tol) converged = .true.
       end if
 
-   end function
+   end function is_converged
+
+   integer function get_iostep(opts, verbose, tau) result(iostep)
+   
+      type(dlra_opts), intent(in) :: opts
+      logical,         intent(in) :: verbose
+      real(wp),        intent(in) :: tau
+
+      ! internal
+      character(len=128) :: msg
+   
+      if (opts%ioctrl_time) then
+         if (opts%iotime > 0.0_wp) then
+            iostep = max(1, floor(opts%iotime/tau))
+            if (verbose) then
+               write(msg,*) 'Output every', opts%ioctrl_time, 'time units (', iostep, 'steps)'
+               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+            end if
+         else
+            if (verbose) then
+               write(msg,*) 'No output.'
+               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+            end if
+         end if
+      else
+         if (opts%iostep > 0) then
+            iostep = opts%iostep
+            if (verbose) then
+               write(msg,*) 'Output every', iostep, 'steps (based on steps).'
+               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+            end if
+         else
+            if (verbose) then
+               write(msg,*) 'No output.'
+               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+            end if
+         end if
+      end if
+
+   end function get_iostep
 
 end module LightROM_Utils

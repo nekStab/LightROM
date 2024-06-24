@@ -166,7 +166,7 @@ module LightROM_LyapunovSolvers
       !! Options for solver configuration
 
       ! Internal variables
-      integer                                                :: istep, nsteps, chkstep
+      integer                                                :: istep, nsteps, chkstep, iostep
       integer                                                :: rk_reduction_lock   ! 'timer' to disable rank reduction
       real(wp)                                               :: T                   ! simulation time
       real(wp)                                               :: nrm, nrmX           ! increment and solution norm
@@ -205,9 +205,12 @@ module LightROM_LyapunovSolvers
       ! Compute number of steps
       nsteps = floor(Tend/tau)
       if (verbose) then
-         write(msg,*) 'DLRA integration: nsteps', nsteps
+         write(msg,*) 'Integration over', nsteps, 'steps with dt = ', tau
          call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
       end if
+
+      ! Determine IO step
+      iostep = get_iostep(opts, verbose, tau)
 
       if ( opts%mode > 2 ) then
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
@@ -263,6 +266,11 @@ module LightROM_LyapunovSolvers
 
          ! update time
          T = T + tau
+
+         ! information
+         if ( mod(istep, iostep) == 0 ) then
+            write(msg, '(A,I4,A,F6.2)') "Step ", istep, ", T = ", T
+         end if
 
          ! save lag data
          if ( mod(istep + 1, opts%chkstep) == 0 .or. istep == nsteps -1 ) then
