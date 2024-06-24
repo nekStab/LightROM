@@ -29,6 +29,7 @@ module Ginzburg_Landau_RK_Lyapunov
       procedure, pass(self), public :: scal => matrix_scal
       procedure, pass(self), public :: axpby => matrix_axpby
       procedure, pass(self), public :: rand => matrix_rand
+      procedure, pass(self), public :: get_size => matrix_get_size
    end type state_matrix
 
    !-------------------------------
@@ -62,6 +63,12 @@ contains
       end select
       return
    end function matrix_dot
+
+   integer function matrix_get_size(self) result(N)
+     class(state_matrix), intent(in) :: self
+     N = N**2
+     return
+   end function matrix_get_size
 
    subroutine matrix_scal(self, alpha)
       class(state_matrix), intent(inout) :: self

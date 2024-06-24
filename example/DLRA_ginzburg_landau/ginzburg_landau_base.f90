@@ -44,6 +44,7 @@ module Ginzburg_Landau_Base
       procedure, pass(self), public :: scal
       procedure, pass(self), public :: axpby
       procedure, pass(self), public :: rand
+      procedure, pass(self), public :: get_size
    end type state_vector
 
    !-------------------------------------------------------
@@ -120,6 +121,12 @@ contains
       end select
       return
    end function dot
+
+   integer function get_size(self) result(N)
+     class(state_vector), intent(in) :: self
+     N = 2*nx
+     return
+   end function get_size
 
    subroutine scal(self, alpha)
       class(state_vector), intent(inout) :: self

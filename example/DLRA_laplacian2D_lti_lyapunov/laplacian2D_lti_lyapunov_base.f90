@@ -52,6 +52,7 @@ module laplacian2D_LTI_Lyapunov_Base
       procedure, pass(self), public :: scal => vector_scal
       procedure, pass(self), public :: axpby => vector_axpby
       procedure, pass(self), public :: dot => vector_dot
+      procedure, pass(self), public :: get_size => vector_get_size
    end type state_vector
 
    !-------------------------------------------
@@ -66,7 +67,8 @@ module laplacian2D_LTI_Lyapunov_Base
       procedure, pass(self), public :: rand => matrix_rand
       procedure, pass(self), public :: scal => matrix_scal
       procedure, pass(self), public :: axpby => matrix_axpby
-      procedure, pass(self), public :: dot => matrix_dot      
+      procedure, pass(self), public :: dot => matrix_dot
+      procedure, pass(self), public :: get_size => matrix_get_size  
    end type state_matrix
 
    type(state_vector)       :: B(rk_b)
@@ -91,6 +93,12 @@ contains
       end select
       return
    end function vector_dot
+
+   integer function vector_get_size(self) result(N)
+     class(state_vector), intent(in) :: self
+     N = nx
+     return
+   end function vector_get_size
 
    subroutine vector_scal(self, alpha)
       class(state_vector), intent(inout) :: self
@@ -142,6 +150,12 @@ contains
       end select
       return
    end function matrix_dot
+
+   integer function matrix_get_size(self) result(N)
+     class(state_matrix), intent(in) :: self
+     N = N
+     return
+   end function matrix_get_size
 
    subroutine matrix_scal(self, alpha)
       class(state_matrix), intent(inout) :: self
