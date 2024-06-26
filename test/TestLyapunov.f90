@@ -9,14 +9,11 @@ module TestLyapunov
    use LightKrylov
    use LightKrylov, only : dp, wp => dp
    use LightKrylov_Logger
-   use LightKrylov_TestTypes
+   use LightKrylov_TestUtils
    ! LightROM
    use LightROM_Utils
-   ! Specific types for testing
-   use TestUtils
    ! Tests
-   Use LightROM_LyapunovUtils
-   
+   Use LightROM_LyapunovUtils  
    
    implicit none
  
