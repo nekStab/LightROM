@@ -105,7 +105,7 @@ module TestLyapunov
 
       ! Check correctness.
       err = abs(sdata(1) - svals(1))
-      call get_err_str(msg, "max err: ", err)
+      call get_err_str(msg, "max err: ", err, rtol_dp)
       call check(error, err < rtol_dp)
       call check_test(error, 'test_project_onto_common_basis_rdp', &
                   & info='Singular value comparison', eq='s_1 = s(LR)_1', context=msg)
