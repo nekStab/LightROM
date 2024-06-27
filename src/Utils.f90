@@ -387,7 +387,7 @@ contains
             call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
          opts%ninit = max(5, NINT(opts%tinit/tau))
-         opts%tinit = opts%nint*tau
+         opts%tinit = opts%ninit*tau
          if (opts%verbose) then
             write(msg, '(A,F0.2,A,I4,A)') 'Initial rank computed over ', opts%tinit, ' time units ( ', opts%ninit, ' steps)'
             call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
