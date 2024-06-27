@@ -976,6 +976,14 @@ contains
             write(*,*) 'Save ', trim(basepath)//trim(oname)
             call save_npy(trim(basepath)//oname, X_out, iostatus)
             if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
+            write(oname,'("data_GL_lyapconv_U0_RK_n",I4.4,".npy")') nx
+            write(*,*) 'Save ', trim(basepath)//trim(oname)
+            call save_npy(trim(basepath)//oname, U0_mat, iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
+            write(oname,'("data_GL_lyapconv_S0_RK_n",I4.4,".npy")') nx
+            write(*,*) 'Save ', trim(basepath)//trim(oname)
+            call save_npy(trim(basepath)//oname, S0, iostatus)
+            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
             ! Save forcing DLRA
             Bmat = 0.0_wp
             call get_state(Bmat, LTI%B(1:rk_b))
