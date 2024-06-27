@@ -2,6 +2,7 @@ module LightROM_Utils
    ! stdlib
    use stdlib_linalg, only : eye, diag, svd, svdvals, is_symmetric
    use stdlib_optval, only : optval
+   use stdlib_logger, only : logger => global_logger
    ! LightKrylov for Linear Algebra
    use LightKrylov
    use LightKrylov, only : dp, wp => dp
@@ -18,6 +19,8 @@ module LightROM_Utils
    character(len=*), parameter :: this_module = 'LightROM_Utils'
 
    public :: dlra_opts
+
+   public :: chk_opts
    public :: compute_norm
    public :: is_converged
    public :: project_onto_common_basis
@@ -49,27 +52,40 @@ module LightROM_Utils
       !! 2nd order (Strang splitting - mode 2) are implemented. (default: 1)
       logical :: verbose = .false.
       !! Verbosity control (default: .false.)
+      !
+      !! CHKSTEP
       integer :: chkstep = 10
       !! Time step interval at which convergence is checked and runtime information is printed (default: 10)
-      integer :: chktime = 1.0_wp
+      real(wp) :: chktime = 1.0_wp
       !! Simulation time interval at which convergence is checked and runtime information is printed (default: 1.0)
       logical :: chkctrl_time = .true.
       !! IO control: use time instead of timestep control (default: .true.)
+      !
+      !! INCREMENT NORM
       real(wp) :: inc_tol = 1e-6_wp
       !! Tolerance on the increment norm for convergence (default: 1e-6)
       logical :: relative_norm = .true.
       !! Tolerance control: Check convergence for dX/X (true) or dX (false)? (default: .true.)
-      !
-      ! RANK-ADPATIVE SPECIFICS
-      !
       logical :: if_rank_adaptive = .true.
       !! Allow rank-adaptivity
+      !
+      ! RANK-ADPATIVE SPECIFICS
+      !    
+      !! INITIAL RANK
+      integer :: ninit = 10
+      !! Number of time steps to run the integrator when determining the initial rank (default: 10)
+      real(wp) :: tinit = 2.0_wp
+      !! Physical time to run the integrator when determining the initial rank (default: 1.0)
+      logical :: initctrl_step = .true.
+      !! Init control: use ninit to determine the integration time for initial rank (default: .true.)
+      !
+      !! TOLERANCE
       real(wp) :: tol = 1e-6_wp
       !! Tolerance on the extra singular value to determine rank-adaptation
-      logical :: use_err_est = .false.
-      !! Choose whether to base the tolerance on 'tol' or on the splitting error estimate
       integer :: err_est_step = 10
       !! Time step interval for recomputing the splitting error estimate (only of use_err_est = .true.)
+      logical :: use_err_est = .false.
+      !! Choose whether to base the tolerance on 'tol' or on the splitting error estimate
    end type
 
 contains
@@ -307,10 +323,9 @@ contains
 
    end function is_converged
 
-   integer function get_chkstep(opts, verbose, tau) result(chkstep)
-   
+   subroutine read_opts(opts, tau)
+
       type(dlra_opts), intent(inout) :: opts
-      logical,         intent(in)    :: verbose
       real(wp),        intent(in)    :: tau
 
       ! internal
@@ -318,31 +333,119 @@ contains
       type(dlra_opts) :: opts_default
 
       opts_default = dlra_opts()
-   
+
+      ! mode
+      if ( opts%mode > 2 ) then
+         opts%mode = 2
+         write(msg, *) "Time-integration order for the operator splitting of d > 2 &
+                      & requires adjoint solves and is not implemented. Resetting torder = 2." 
+         call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+      else if ( opts%mode < 1 ) then
+         write(msg, '(A,I2)') "Invalid time-integration order specified: ", opts%mode
+         call stop_error(trim(msg), module=this_module, procedure='DLRA chk_opts')
+      endif
+
+      ! chkctrl -- chkstep
       if (opts%chkctrl_time) then
          if (opts%chktime <= 0.0_wp) then
             opts%chktime = opts_default%chktime
-            write(msg, *) "Invalid chktime. Reset to default (",  opts%chktime,")"
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+            write(msg, '(A,F0.2,A,F0.2,A)') "Invalid chktime ( ", opts%chktime, " ). Reset to default ( ",  opts%chktime," )"
+            call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
-         chkstep = max(1, NINT(opts%chktime/tau))
-         if (verbose) then
-            write(msg,*) 'Output every', opts%chkctrl_time, 'time units (', chkstep, 'steps)'
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         opts%chkstep = max(1, NINT(opts%chktime/tau))
+         if (opts%verbose) then
+            write(msg, '(A,F0.2,A,I4,A)') 'Output every ', opts%chktime, ' time units ( ', opts%chkstep, ' steps)'
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       else
          if (opts%chkstep <= 0) then
             opts%chkstep = opts_default%chkstep
-            write(msg, *) "Invalid chktime. Reset to default (",  opts%chkstep,")"
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+            write(msg, '(A,F0.2,A,I4,A)') "Invalid chktime ( ", opts%chktime, " ). Reset to default ( ",  opts%chkstep," )"
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
-         chkstep = opts%chkstep
-         if (verbose) then
-            write(msg,*) 'Output every', chkstep, 'steps (based on steps).'
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         if (opts%verbose) then
+            write(msg,'(A,I4,A)') 'Output every ', opts%chkstep, ' steps (based on steps).'
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       end if
 
-   end function get_chkstep
+      ! initctrl --> ninit
+      if (opts%initctrl_step) then
+         if (opts%ninit <= 0) then
+            opts%ninit = opts_default%ninit
+            write(msg, '(A,I4,A,I4,A)') "Invalid ninit ( ", opts%ninit, " ). Reset to default ( ",  opts%ninit," )"
+            call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         end if 
+         if (opts%verbose) then
+            write(msg, '(A,I4,A)') 'Initial rank computed over ', opts%ninit, ' steps.'
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         end if
+      else
+         if (opts%tinit <= 0.0_wp) then
+            opts%tinit = opts_default%tinit
+            write(msg, '(A,F0.2,A,F0.2,A)') "Invalid tinit ( ", opts%tinit, " ). Reset to default ( ",  opts%tinit," )"
+            call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         end if
+         opts%ninit = max(5, NINT(opts%tinit/tau))
+         if (opts%verbose) then
+            write(msg, '(A,F0.2,A,I4,A)') 'Initial rank computed over ', opts%tinit, ' time units ( ', opts%ninit, ' steps)'
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         end if
+      end if
+      return
+   end subroutine read_opts
+
+   subroutine chk_opts(opts)
+
+      type(dlra_opts), intent(inout) :: opts
+
+      ! internal
+      character(len=128) :: msg
+      type(dlra_opts) :: opts_default
+
+      opts_default = dlra_opts()
+
+      ! mode
+      if ( opts%mode > 2 ) then
+         opts%mode = 2
+         write(msg, *) "Time-integration order for the operator splitting of d > 2 &
+                      & requires adjoint solves and is not implemented. Resetting torder = 2." 
+         call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+      else if ( opts%mode < 1 ) then
+         write(msg, '(A,I2)') "Invalid time-integration order specified: ", opts%mode
+         call stop_error(trim(msg), module=this_module, procedure='DLRA chk_opts')
+      endif
+
+      ! chkctrl -- chkstep
+      if (opts%chkctrl_time) then
+         if (opts%chktime <= 0.0_wp) then
+            opts%chktime = opts_default%chktime
+            write(msg, '(A,F0.2,A,F0.2,A)') "Invalid chktime ( ", opts%chktime, " ). Reset to default ( ",  opts%chktime," )"
+            call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         end if
+      else
+         if (opts%chkstep <= 0) then
+            opts%chkstep = opts_default%chkstep
+            write(msg, '(A,F0.2,A,I4,A)') "Invalid chktime ( ", opts%chktime, " ). Reset to default ( ",  opts%chkstep," )"
+            call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         end if
+      end if
+
+      ! initctrl --> ninit
+      if (opts%initctrl_step) then
+         if (opts%ninit <= 0) then
+            opts%ninit = opts_default%ninit
+            write(msg, '(A,I4,A,I4,A)') "Invalid ninit ( ", opts%ninit, " ). Reset to default ( ",  opts%ninit," )"
+            call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         end if 
+      else
+         if (opts%tinit <= 0.0_wp) then
+            opts%tinit = opts_default%tinit
+            write(msg, '(A,F0.2,A,F0.2,A)') "Invalid tinit ( ", opts%tinit, " ). Reset to default ( ",  opts%tinit," )"
+            call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         end if
+      end if
+      return
+   end subroutine chk_opts
 
 end module LightROM_Utils
