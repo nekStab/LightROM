@@ -36,6 +36,7 @@ module Ginzburg_Landau_Tests
    public  :: run_DLRA_lyapunov_test
    public  :: run_BT_test
    public  :: run_kexpm_test
+   public  :: run_kexpm_var_dt_test
    public  :: run_DLRA_riccati_test
    public  :: run_lyap_convergence_test
 
@@ -757,6 +758,112 @@ contains
 
       return
    end subroutine run_kexpm_test
+
+   subroutine run_kexpm_var_dt_test(A, prop, U0, tauv, torder, N)
+      class(abstract_linop_rdp),     intent(inout) :: A
+      !! Linear operator: A
+      class(abstract_linop_rdp),     intent(inout) :: prop
+      !! Linear operator: exponential propagator
+      class(abstract_vector_rdp),    intent(in)    :: U0
+      !! Abstract vector as a source
+      real(wp),                      intent(in)    :: tauv(:)
+      !! vector of dt values
+      integer,                       intent(inout) :: torder
+      !! torder
+      integer,                       intent(in)    :: n
+      !! Number of repeats
+
+      ! internal variables
+      class(abstract_vector_rdp),    allocatable   :: U, V_kfdt, V_kvdt, V_rk   ! scratch bases
+      integer                                      :: i, j, info, kdim
+      real(wp)                                     :: tau, dt, tol
+      real(wp)                                     :: tv_kfdt(N), tv_kvdt(N), tv_rk(N)
+      real(wp)                                     :: etime_kfdt, etime_kvdt, etime_rk, stddev_kfdt, stddev_kvdt, stddev_rk
+      integer            :: clock_rate, clock_start, clock_stop
+      logical :: verb
+      !type(timer)                                  :: tmr
+
+      call system_clock(count_rate=clock_rate)
+      
+      allocate(U, source=U0); call U%zero()
+      allocate(V_kfdt, source=U0); call V_kfdt%zero()
+      allocate(V_kvdt, source=U0); call V_kvdt%zero()
+      allocate(V_rk,   source=U0); call V_rk%zero()
+
+      tv_kfdt = 0.0_wp
+      tv_kvdt = 0.0_wp
+      tv_rk = 0.0_wp
+
+      tol = atol_dp
+      kdim = 60
+
+      verb = .false.
+
+      write(*,*) 'Comparison over N = ', N, 'runs.'
+      write(*,'(A8," | ",2(10X,A10,10X,5X))') 'tau','KRYLOV','R-K'
+      write(*,'(A8," | ",3(A10,1X),3X,3(A10,1X))') ' ','TOT','AVG','STDDEV','TOT','AVG','STDDEV'
+      write(*,*) '------------------------------------------------------------------------------'
+
+      do i = 1, size(tauv)
+         tau = tauv(i)
+         ! Reset time
+         etime_kfdt = 0.0_wp
+         etime_kvdt = 0.0_wp
+         etime_rk   = 0.0_wp
+
+         do j = 1, N
+            ! generate random vecor
+            call U%rand()
+            ! run Krylov based exponential propagator with fixed dt
+            call system_clock(count=clock_start)     ! Start Timer
+            call kexpm(V_kfdt, A, U, tau, tol, info, verbosity=verb, kdim=kdim)
+            call system_clock(count=clock_stop)      ! Stop Timer
+            tv_kfdt(j) = real(clock_stop-clock_start)/real(clock_rate)
+            etime_kfdt = etime_kfdt + tv_kfdt(j)
+            ! run Krylov based exponential propagator with variable dt
+            call system_clock(count=clock_start)     ! Start Timer
+            dt = tau
+            call kexpm_var_dt(V_kvdt, A, U, tau, dt, tol, info, verbosity=verb, kdim=kdim)
+            call system_clock(count=clock_stop)      ! Stop Timer
+            tv_kvdt(j) = real(clock_stop-clock_start)/real(clock_rate)
+            etime_kvdt = etime_kvdt + tv_kvdt(j)
+            ! run RK integrator
+            call system_clock(count=clock_start)     ! Start Timer
+            call exptA(V_rk, prop, U, tau, info, .false.)
+            call system_clock(count=clock_stop)      ! Stop Timer
+            tv_rk(j) = real(clock_stop-clock_start)/real(clock_rate)
+            etime_rk = etime_rk + tv_rk(j)
+            ! Check solution
+            call V_kfdt%axpby(1.0_wp, V_rk, -1.0_wp)
+            if (V_kfdt%norm()/V_kfdt%get_size() > 10*atol_dp     ) then
+               write(*,*) "Iteration", j, ": Solutions do not match! (fixed dt)"
+               write(*,* ) " tol", 10*atol_dp     , "delta = ", V_kfdt%norm()/V_kfdt%get_size()
+            end if
+            call V_kvdt%axpby(1.0_wp, V_rk, -1.0_wp)
+            if (V_kvdt%norm()/V_kvdt%get_size() > 10*atol_dp     ) then
+               write(*,*) "Iteration", j, ": Solutions do not match! (variable dt)"
+               write(*,* ) " tol", 10*atol_dp     , "delta = ", V_kvdt%norm()/V_kvdt%get_size()
+            end if
+         end do
+         tv_kfdt = tv_kfdt - etime_kfdt/N
+         tv_kvdt = tv_kvdt - etime_kvdt/N
+         tv_rk = tv_rk - etime_rk/N
+         stddev_kfdt = 0.0_wp
+         stddev_kvdt = 0.0_wp
+         stddev_rk   = 0.0_wp
+         do j = 1, N
+            stddev_kfdt = stddev_kfdt + tv_kfdt(j)**2
+            stddev_kvdt = stddev_kvdt + tv_kvdt(j)**2
+            stddev_rk   = stddev_rk + tv_rk(j)**2
+         end do
+         write(*,'(F8.6," | ",3(F10.6,1X),3X,3(F10.6,1X))') tau, &
+                                 & etime_kfdt, etime_kfdt/N, sqrt(stddev_kfdt/(N-1)), &
+                                 & etime_rk,   etime_rk/N,   sqrt(stddev_rk/(N-1))
+         
+      end do
+
+      return
+   end subroutine run_kexpm_var_dt_test
 
    subroutine run_lyap_convergence_test(LTI, U0, S0, Tend, tauv, rkv, TOv, ifsave, ifverb)
       ! LTI system

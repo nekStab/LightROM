@@ -181,6 +181,19 @@ program demo
 
    !----------------------------------
    !
+   ! TEST COMPARING THE SPEED OF RK vs KRYLOV EXPONTNTIAL INTEGRATORS
+   !
+   !----------------------------------
+
+   run_test = .true.
+   if (run_test) then
+      ntau = 5; allocate(tauv(1:ntau)); tauv = logspace(-5.0_wp,0.0_wp,ntau)
+      torder = 1
+      call run_kexpm_var_dt_test(LTI%A, LTI%prop, U0(1), tauv, torder, 100)
+   end if
+
+   !----------------------------------
+   !
    ! DLRA TEST FOR RICCATI EQUATION
    !
    !----------------------------------
@@ -231,7 +244,7 @@ program demo
    !
    !----------------------------------
 
-   run_test = .true.
+   run_test = .false.
    if (run_test) then
       nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 6 /)
       ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 0.1 /)
