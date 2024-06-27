@@ -1,4 +1,6 @@
 module LightROM_LyapunovUtils
+   ! Fortran Standard Library
+   use stdlib_logger, only: logger => global_logger
    ! LightKrylov
    use LightKrylov
    use LightKrylov, only: wp => dp

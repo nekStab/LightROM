@@ -1,7 +1,8 @@
 module LightROM_RiccatiSolvers
    !! This module provides the implementation of the Krylov-based solvers for the Differential Riccati
    !! equation based on the dynamic low-rank approximation and operator splitting.
-   ! Standard Library
+   ! Fortran Standard Library
+   use stdlib_logger, only: logger => global_logger
    use stdlib_optval, only : optval
    use stdlib_linalg, only : eye
    ! LightKrylov modules
