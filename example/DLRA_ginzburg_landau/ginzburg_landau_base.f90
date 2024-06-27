@@ -1,6 +1,7 @@
 module Ginzburg_Landau_Base
    ! Standard Library.
    use stdlib_optval, only : optval
+   use stdlib_stats_distribution_normal, only: normal => rvs_normal
    ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only: wp => dp
@@ -151,9 +152,12 @@ contains
       logical, optional,   intent(in)    :: ifnorm
       ! internals
       logical :: normalize
-      real(wp) :: alpha
+      real(wp) :: mu(2*nx), var(2*nx), alpha
+      mu = 0.0_sp
+      var = 1.0_sp
+      self%state = normal(mu, var)
+
       normalize = optval(ifnorm,.true.)
-      call random_number(self%state)
       if (normalize) then
          alpha = self%norm()
          call self%scal(1.0/alpha)
