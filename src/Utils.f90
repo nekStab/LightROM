@@ -2,14 +2,16 @@ module LightROM_Utils
    ! stdlib
    use stdlib_linalg, only : eye, diag, svd, svdvals, is_symmetric
    use stdlib_optval, only : optval
+   use stdlib_stats_distribution_normal, only: normal => rvs_normal
    use stdlib_logger, only : logger => global_logger
    ! LightKrylov for Linear Algebra
    use LightKrylov
+   use LightKrylov_Constants
    use LightKrylov, only : dp, wp => dp
    use LightKrylov_Logger
    use LightKrylov_AbstractVectors
-   use LightKrylov_BaseKrylov, only : orthogonalize_against_basis
-   use LightKrylov_Utils, only : abstract_opts
+   use LightKrylov_BaseKrylov, only : orthonormalize_basis, orthogonalize_against_basis
+   use LightKrylov_Utils, only : abstract_opts, assert_shape
    ! LightROM
    use LightROM_AbstractLTIsystems
    
@@ -24,6 +26,8 @@ module LightROM_Utils
    public :: compute_norm
    public :: is_converged
    public :: project_onto_common_basis
+   public :: random_low_rank_state
+
    public :: Balancing_Transformation
    public :: ROM_Petrov_Galerkin_Projection
    public :: ROM_Galerkin_Projection
@@ -42,6 +46,10 @@ module LightROM_Utils
 
    interface project_onto_common_basis
       module procedure project_onto_common_basis_rdp
+   end interface
+
+   interface random_low_rank_state
+      module procedure random_low_rank_state_rdp
    end interface
 
    type, extends(abstract_opts), public :: dlra_opts
@@ -257,7 +265,6 @@ contains
 
       ! internals
       class(abstract_vector_rdp),             allocatable  :: Vp(:)
-      real(wp),                               allocatable  :: wrk(:,:)
       integer :: ru, rv, r, info
 
       ru = size(U)
@@ -271,8 +278,7 @@ contains
       ! orthonormalize second basis against first
       call orthogonalize_against_basis(Vp, U, info, if_chk_orthonormal=.false., beta=UTV)
       call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='project_onto_common_basis_rdp')
-      allocate(wrk(rv,rv)); wrk = 0.0_wp
-      call qr(Vp, wrk, info)
+      call orthonormalize_basis(Vp)
       call check_info(info, 'qr', module=this_module, procedure='project_onto_common_basis_rdp')
 
       ! compute inner product between second basis and its orthonormalized version
@@ -448,5 +454,45 @@ contains
       end if
       return
    end subroutine chk_opts
+
+   subroutine random_low_rank_state_rdp(U, S, V)
+      class(abstract_vector_rdp),           intent(inout) :: U(:)
+      real(dp),                             intent(inout) :: S(:,:)
+      class(abstract_vector_rdp), optional, intent(inout) :: V(:)
+
+      ! internals
+      integer :: i, rk
+      real(dp), dimension(:,:), allocatable :: mu, var
+
+      rk = size(S, 1)
+      call assert_shape(S, [rk, rk], 'random_low_rank_state', 'S')
+      if (size(U) /= rk) call stop_error('Input basis U and coefficient matrix S have incompatible sizes', &
+                                          & module=this_module, procedure='random_low_rank_state_rdp')
+
+      allocate(mu(rk,rk), var(rk,rk))
+      mu  = zero_rdp
+      var = one_rdp
+      S = normal(mu, var)
+      
+      call zero_basis(U)
+      do i = 1, size(U)
+         call U(i)%rand(.false.)
+      end do
+      call orthonormalize_basis(U)
+
+      if (present(V)) then
+         if (size(V) /= rk) call stop_error('Input basis V and coefficient matrix S have incompatible sizes', &
+                                          & module=this_module, procedure='random_low_rank_state_rdp')
+         call zero_basis(V)
+         do i = 1, size(V)
+            call V(i)%rand(.false.)
+         end do                    
+         call orthonormalize_basis(V)
+      else
+         ! symmetric
+         S = 0.5*(S + transpose(S))
+      end if
+
+   end subroutine random_low_rank_state_rdp
 
 end module LightROM_Utils
