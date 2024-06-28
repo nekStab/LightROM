@@ -823,7 +823,7 @@ contains
             ! run Krylov based exponential propagator with variable dt
             call system_clock(count=clock_start)     ! Start Timer
             dt = tau
-            call kexpm_var_dt(V_kvdt, A, U, tau, dt, tol, info, verbosity=verb, kdim=kdim)
+            !call kexpm_var_dt(V_kvdt, A, U, tau, dt, tol, info, verbosity=verb, kdim=kdim)
             call system_clock(count=clock_stop)      ! Stop Timer
             tv_kvdt(j) = real(clock_stop-clock_start)/real(clock_rate)
             etime_kvdt = etime_kvdt + tv_kvdt(j)
