@@ -6,6 +6,7 @@ module Laplacian2D_LTI_Riccati_Base
    use LightKrylov, only : wp => dp
    use LightKrylov_Logger
    use LightKrylov_Utils, only : assert_shape
+   use LightKrylov_BaseKrylov, only : orthogonalize_against_basis, orthonormalize_basis
    use LightKrylov_AbstractVectors
    ! LightROM
    use LightROM_AbstractLTIsystems ! LR_state
@@ -215,7 +216,6 @@ contains
       integer, optional,          intent(in)    :: rkmax
 
       ! internals
-      real(wp), allocatable :: R(:, :)
       integer :: i, n, rka, info
 
       n = size(U)
@@ -248,9 +248,8 @@ contains
             do i = n+1, rka
                call self%U(i)%rand()
             end do
-            allocate(R(rka,rka)); R = 0.0_wp
-            call qr(self%U, R, info)
-            call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
+            call orthogonalize_against_basis(self%U(n+1:rka), self%U(:n), info, if_chk_orthonormal=.false.)
+            call orthonormalize_basis(self%U(n+1:rka))
          end if
       end select
       return

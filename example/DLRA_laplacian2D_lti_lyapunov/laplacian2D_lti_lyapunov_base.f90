@@ -6,6 +6,7 @@ module laplacian2D_LTI_Lyapunov_Base
    use LightKrylov, only : wp => dp
    use LightKrylov_Logger
    use LightKrylov_Utils, only : assert_shape
+   use LightKrylov_BaseKrylov, only : orthogonalize_against_basis, orthonormalize_basis
    use LightKrylov_AbstractVectors ! zero_basis
    ! LightROM
    use LightROM_AbstractLTIsystems ! LR_state
@@ -202,7 +203,6 @@ contains
       integer, optional,          intent(in)    :: rkmax
 
       ! internals
-      real(wp), allocatable :: R(:, :)
       integer :: i, n, rka, info
 
       n = size(U)
@@ -224,7 +224,7 @@ contains
          allocate(self%S(rka,rka)); self%S = 0.0_wp
          ! copy inputs
          if (self%rk > n) then   ! copy the full IC into self%U
-            call copy_basis(self%U(1:n), U)
+            call copy_basis(self%U(:n), U)
             self%S(1:n,1:n) = S
          else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
             call copy_basis(self%U(1:self%rk), U(1:self%rk))
@@ -235,9 +235,8 @@ contains
             do i = n+1, rka
                call self%U(i)%rand()
             end do
-            allocate(R(rka,rka)); R = 0.0_wp
-            call qr(self%U, R, info)
-            call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
+            call orthogonalize_against_basis(self%U(n+1:rka), self%U(:n), info, if_chk_orthonormal=.false.)
+            call orthonormalize_basis(self%U(n+1:rka))
          end if
       end select
       return
