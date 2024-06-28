@@ -433,7 +433,7 @@ module LightROM_LyapunovSolvers
                write(msg, *) 'Cannot increase rank, rkmax is reached. Increase rkmax and restart!'
                call stop_error(trim(msg), module=this_module, procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
             else
-               write(msg,'(A,I3)') 'rk =', rk
+               write(msg,'(A,I3)') ' increase to rk =', rk
                call logger%log_warning(trim(msg), module=this_module, procedure='RA-DLRA')
                
                X%rk = X%rk + 1
@@ -475,24 +475,25 @@ module LightROM_LyapunovSolvers
                   rk = rk_new
                end if
 
-               write(msg, '(A,I3)') 'rk =', rk - 1
+               write(msg, '(A,I3)') ' decrease to rk =', rk - 1
                call logger%log_warning(trim(msg), module=this_module, procedure='RA-DLRA')
             end if
             
          end if ! found
          istep = istep + 1
       end do ! while .not. accept_step
-      if (verbose) then
-         write(msg,'(A,I3,A,I2,A,E14.8,A,I2)') 'rk = ', X%rk-1, ':     s_', irk,' = ', &
-                                                   & ssvd(irk), ', rank_lock: ', rk_reduction_lock
-         call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
-      end if
-
+      
       ! decrease rk_reduction_lock
       if (rk_reduction_lock > 0) rk_reduction_lock = rk_reduction_lock - 1
       
       ! reset to the rank of the approximation which we use outside of the integrator
       X%rk = rk - 1
+
+      if (verbose) then
+         write(msg,'(A,I3,A,I2,A,E14.8,A,I2)') 'rk = ', X%rk, ':     s_', irk,' = ', &
+                                                   & ssvd(irk), ', rank_lock: ', rk_reduction_lock
+         call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+      end if
 
       if (.not. accept_step) then
          write(msg, *) 'Maximum number of substeps (', max_step, ') reached but new updated rank could not be found.'
