@@ -1,11 +1,25 @@
 module LightROM
-  implicit none
-  include "dtypes.h"
+   ! LTI system definitions
+   use LightROM_AbstractLTIsystems
+   ! General utilities
+   use LightROM_Utils
+   ! Solvers for Lyapunov equations
+   use LightROM_LyapunovSolvers
+   implicit none
+   private
 
-  private
+   !> Global variables.
+   public :: greetings_LightROM
 
-  !> Global variables.
-  public :: greetings_LightROM, wp, atol, rtol
+   ! Abstract types
+   public :: abstract_lti_system_rdp
+   public :: abstract_sym_low_rank_state_rdp
+
+   ! Utils
+   public :: dlra_opts
+
+   ! Solvers
+   public :: projector_splitting_DLRA_lyapunov_integrator
 
 contains
 
