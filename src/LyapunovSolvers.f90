@@ -204,11 +204,7 @@ module LightROM_LyapunovSolvers
 
       ! Compute number of steps
       nsteps = floor(Tend/tau)
-      if (opts%verbose) then
-         write(msg, '(A,I6,A,F0.2)') 'Integration over ', nsteps, ' steps with dt = ', tau
-         call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-      end if
-      
+           
       ! check opts
       call read_opts(opts, tau)
 
@@ -230,6 +226,11 @@ module LightROM_LyapunovSolvers
                call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
             end if
          end if
+      end if
+
+      if (opts%verbose) then
+         write(msg, '(A,I6,A,E8.2)') 'DLRA initialization complete. Integration over ', nsteps, ' steps with dt = ', tau
+         call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
       end if
 
       dlra : do istep = 1, nsteps
