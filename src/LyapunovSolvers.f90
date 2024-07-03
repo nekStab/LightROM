@@ -311,16 +311,16 @@ module LightROM_LyapunovSolvers
             call logger%log_message(trim(msg), module=this_module, procedure='DLRA_INFO')
             ! Check convergence
             converged = is_converged(nrm, nrmX, opts)
-            !if (converged) then
-            !   write(msg, '(A,I5,A)') "Step ", istep, ": Solution converged!"
-            !   call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-            !   exit dlra
-            !else ! if final step
-            !   if (istep == nsteps) then
-            !      write(msg, '(A,I5,A)') "Step ", istep, ": Solution not converged to tolerance!"
-            !      call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-            !   end if
-            !end if
+            if (converged) then
+               write(msg, '(A,I5,A)') "Step ", istep, ": Solution converged!"
+               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+               exit dlra
+            else ! if final step
+               if (istep == nsteps) then
+                  write(msg, '(A,I5,A)') "Step ", istep, ": Solution not converged to tolerance!"
+                  call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+               end if
+            end if
          end if
       enddo dlra
 
