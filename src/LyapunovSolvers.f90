@@ -174,6 +174,7 @@ module LightROM_LyapunovSolvers
       real(wp)                                               :: El                  ! aggregate error estimate
       real(wp)                                               :: err_est             ! current error estimate
       real(wp)                                               :: tol                 ! current tolerance
+      real(wp)                                               :: scale
       logical                                                :: verbose, converged
       character*128                                          :: msg
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
@@ -201,6 +202,7 @@ module LightROM_LyapunovSolvers
       T                 = 0.0_wp
       rk_reduction_lock = 10
       converged         = .false.
+      scale             = X%U(1)%get_size()
 
       ! Compute number of steps
       nsteps = floor(Tend/tau)
@@ -215,6 +217,11 @@ module LightROM_LyapunovSolvers
       if (opts%if_rank_adaptive) then
          if (.not. X%rank_is_initialised) then
             call set_initial_rank(X, A, B, tau, opts%mode, p_exptA, trans, opts)
+         else
+            if (opts%verbose) then
+               write(msg, *) 'Initial rank set to rk =', X%rk
+               call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+            end if
          end if
          if (opts%use_err_est) then
             err_est = 0.0_wp
@@ -225,6 +232,11 @@ module LightROM_LyapunovSolvers
                write(msg, *) 'Initialization complete: rk = ', X%rk, ', local error estimate: ', tol
                call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
             end if
+         end if
+      else
+         if (opts%verbose) then
+            write(msg, *) 'Constant rank. rk =', X%rk
+            call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
          end if
       end if
 
@@ -274,7 +286,7 @@ module LightROM_LyapunovSolvers
          T = T + tau
 
          ! save lag data
-         if ( (opts%chkstep > 1 .and. mod(istep + 1, opts%chkstep) == 0) .or. istep == nsteps-1 ) then
+         if ( opts%chkstep > 1 .and. (mod(istep + 1, opts%chkstep) == 0 .or. istep == nsteps-1) ) then
             if (allocated(U_lag)) deallocate(U_lag)
             if (allocated(S_lag)) deallocate(S_lag)
             ! allocate lag data (we do it here so we do not need to store the data size and can pass the whole array)
@@ -288,23 +300,27 @@ module LightROM_LyapunovSolvers
 
          ! here we can do some checks such as whether we have reached steady state
          if ( mod(istep, opts%chkstep) == 0 .or. istep == nsteps ) then
-            nrmX = compute_norm(X)
-            call compute_increment_norm(nrm, X%U(:X%rk), X%S(:X%rk,:X%rk), U_lag, S_lag)
-            write(msg, '(A,I5,A,F6.2,A,E10.4,A,E10.4,A,E10.4)') "Step ", istep, ", T = ", T, &
+            nrmX = compute_norm(X, scale)
+            call compute_increment_norm(nrm, X%U(:X%rk), X%S(:X%rk,:X%rk), U_lag, S_lag, scale)
+            if (opts%if_rank_adaptive) then
+               write(msg, '(A,I6,A,F6.2,A,I3)') "  Step ", istep, ", T = ", T, ": rk = ", X%rk
+               call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+            end if
+            write(msg, '(A,I6,A,F6.2,A,E10.4,A,E10.4,A,E10.4)') "Step ", istep, ", T = ", T, &
                                  & ": dX = ", nrm, ' X = ', nrmX, ' dX/X = ', nrm/nrmX
             call logger%log_message(trim(msg), module=this_module, procedure='DLRA_INFO')
             ! Check convergence
             converged = is_converged(nrm, nrmX, opts)
-            if (converged) then
-               write(msg, '(A,I5,A)') "Step ", istep, ": Solution converged!"
-               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-               exit dlra
-            else ! if final step
-               if (istep == nsteps) then
-                  write(msg, '(A,I5,A)') "Step ", istep, ": Solution not converged to tolerance!"
-                  call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-               end if
-            end if
+            !if (converged) then
+            !   write(msg, '(A,I5,A)') "Step ", istep, ": Solution converged!"
+            !   call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+            !   exit dlra
+            !else ! if final step
+            !   if (istep == nsteps) then
+            !      write(msg, '(A,I5,A)') "Step ", istep, ": Solution not converged to tolerance!"
+            !      call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+            !   end if
+            !end if
          end if
       enddo dlra
 
@@ -437,7 +453,7 @@ module LightROM_LyapunovSolvers
                call stop_error(trim(msg), module=this_module, procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
             else
                write(msg,'(A,I3)') ' increase to rk =', rk
-               call logger%log_warning(trim(msg), module=this_module, procedure='RA-DLRA')
+               call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
                
                X%rk = X%rk + 1
                rk = X%rk ! this is only to make the code more readable
@@ -479,7 +495,7 @@ module LightROM_LyapunovSolvers
                end if
 
                write(msg, '(A,I3)') ' decrease to rk =', rk - 1
-               call logger%log_warning(trim(msg), module=this_module, procedure='RA-DLRA')
+               call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
             end if
             
          end if ! found
@@ -685,7 +701,7 @@ module LightROM_LyapunovSolvers
 
    end subroutine compute_splitting_error
 
-   subroutine compute_increment_norm(nrm, U, S, U_lag, S_lag)
+   subroutine compute_increment_norm(nrm, U, S, U_lag, S_lag, scale)
       !! This function computes the norm of the solution increment in a cheap way avoiding the
       !! construction of the full low-rank solutions.
       real(wp),                               intent(out)   :: nrm
@@ -698,11 +714,17 @@ module LightROM_LyapunovSolvers
       !! Low-rank basis of lagged solution
       real(wp),                               intent(in)    :: S_lag(:,:)
       !! Coefficients of lagged solution
+      real(wp),                     optional, intent(in)    :: scale
+      real(wp)                                              :: scale_
+      !! Scaling factor
 
       ! internals
       real(wp), dimension(:,:),                 allocatable :: D, V1, V2
       real(wp), dimension(:),                   allocatable :: svals       
       integer :: r, rl
+
+      scale_ = optval(scale, 1.0_wp)
+      if (scale < atol_dp) call stop_error('Wrong input for scale', module=this_module, procedure='compute_increment_norm')
 
       r  = size(U)
       rl = size(U_lag)
@@ -719,7 +741,7 @@ module LightROM_LyapunovSolvers
 
       ! compute Frobenius norm of difference
       svals = svdvals(D)
-      nrm = sqrt(sum(svals**2))! /U%get_size()
+      nrm = sqrt(sum(svals**2))/scale
 
       return
    end subroutine compute_increment_norm
