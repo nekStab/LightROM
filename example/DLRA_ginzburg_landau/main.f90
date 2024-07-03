@@ -49,8 +49,8 @@ program demo
    type(lti_system)                          :: LTI
 
    ! Initial condition
-   type(state_vector)                        :: U0(1:rkmax)
-   real(wp)                                  :: S0(rkmax,rkmax)
+   type(state_vector)                        :: U0(rk_X0)
+   real(wp)                                  :: S0(rk_X0,rk_X0)
    ! matrix
    real(wp)                                  :: U0_in(2*nx, rkmax)
    
@@ -92,15 +92,17 @@ program demo
    ! Define initial condition of the form X0 + U0 @ S0 @ U0.T SPD 
    if (verb) write(*,*) '    Define initial condition'
    call generate_random_initial_condition(U0, S0, rk_X0)
-   call get_state(U_out, U0)
+   call get_state(U_out(:,:rk_X0), U0)
+   
 
+   if (verb) write(*,*) '    Start tests'
    !----------------------------------
    !
    ! DLRA CONVERGENCE TEST FOR LYAPUNOV EQUATION
    !
    !----------------------------------
 
-   run_test = .false.
+   run_test = .true.
    if (run_test) then
       nrk  = 8; allocate(rkv(1:nrk));   rkv  = (/ 2, 6, 10, 14, 20, 40, 80, 128, 256 /)
       ntau = 3; allocate(tauv(1:ntau)); tauv = logspace(-4.0, -3.0, ntau)
@@ -185,7 +187,7 @@ program demo
    !
    !----------------------------------
 
-   run_test = .true.
+   run_test = .false.
    if (run_test) then
       ntau = 5; allocate(tauv(1:ntau)); tauv = logspace(-5.0_wp,0.0_wp,ntau)
       torder = 1
@@ -252,7 +254,7 @@ program demo
       Tend = 150.0_wp
       ! run DLRA
       ifsave = .false. ! save X and Y matrices to disk (LightROM/local)
-      ifverb = .false. ! verbosity
+      ifverb = .true. ! verbosity
       iflogs = .false. ! write logs with convergence and signular value evolution
       call logger%configure(level=warning_level)
       call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, Tend, 1, ifsave, ifverb, iflogs)

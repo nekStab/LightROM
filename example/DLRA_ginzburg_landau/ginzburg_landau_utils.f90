@@ -4,6 +4,7 @@ module Ginzburg_Landau_Utils
    use stdlib_optval, only : optval
    use stdlib_linalg, only : eye, diag, svd
    use stdlib_io_npy, only : save_npy, load_npy
+   use stdlib_stats_distribution_normal, only: normal => rvs_normal
    !use fortime
    ! LightKrylov for linear algebra.
    use LightKrylov
@@ -199,23 +200,14 @@ contains
       class(state_vector),   intent(out) :: U(:)
       real(wp),              intent(out) :: S(:,:)
       integer,               intent(in)  :: rk
-      ! internals
-      class(state_vector),   allocatable :: Utmp(:)
-      integer,               allocatable :: perm(:)
-      ! SVD
-      real(wp)                           :: U_svd(rk,rk)
-      real(wp)                           :: S_svd(rk)
-      real(wp)                           :: V_svd(rk,rk)
-      integer                            :: i, info
+      ! internal
+      real(wp) :: mu(rk,rk), var(rk,rk)
+      integer :: i
 
+      ! checks
       if (size(U) < rk) then
          write(*,*) 'Input krylov basis size incompatible with requested rank', rk
          STOP 1
-      else
-         call zero_basis(U)
-         do i = 1,rk
-            call U(i)%rand(.false.)
-         end do
       end if
       if (size(S,1) < rk) then
          write(*,*) 'Input coefficient matrix size incompatible with requested rank', rk
@@ -223,23 +215,21 @@ contains
       else if (size(S,1) /= size(S,2)) then
          write(*,*) 'Input coefficient matrix must be square.'
          STOP 2
-      else
-         S = 0.0_wp
       end if
-      ! perform QR
-      allocate(perm(1:rk)); perm = 0
-      allocate(Utmp(1:rk), source=U(1:rk))
-      call qr(Utmp, S, perm, info, verbosity=.false.)
-      if (info /= 0) write(*,*) '  [generate_random_initial_condition] Info: Colinear vectors detected in QR, column ', info
-      ! perform SVD
-      call svd(S(:,1:rk), S_svd(1:rk), U_svd(:,1:rk), V_svd(1:rk,1:rk))
-      S = diag(S_svd)
-      block
-         class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, Utmp, U_svd)
-         call copy_basis(U, Xwrk)
-      end block
-      
+      ! get orthonormal basis
+      call zero_basis(U)
+      do i = 1, size(U)
+         call U(i)%rand(.false.)
+      end do
+      call orthonormalize_basis(U)
+      ! get symmetric coefficients
+      mu = 0.0_sp
+      var = 1.0_sp
+      S = 0.0_wp
+      S(:rk,:rk) = normal(mu, var)
+      S = 0.5*(S + transpose(S))
+
+      return      
    end subroutine
 
    !-----------------------------

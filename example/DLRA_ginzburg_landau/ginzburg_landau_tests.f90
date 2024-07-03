@@ -28,8 +28,8 @@ module Ginzburg_Landau_Tests
    integer,       parameter :: iunit1 = 1
    integer,       parameter :: iunit2 = 2
    character*128, parameter :: basepath = 'local/'
-   integer,       parameter :: rkmax = 40
-   integer,       parameter :: rk_X0 = 40
+   integer,       parameter :: rkmax = 64
+   integer,       parameter :: rk_X0 = 10
 
    private :: this_module
    public  :: iunit1, iunit2, basepath, rkmax, rk_X0
@@ -935,11 +935,11 @@ contains
       call CALE(res_flat, reshape(U_load, shape(res_flat)), BBTW_flat, .false.)
       print *, '   || res ||_2/N = ', norm2(res_flat)/N
 
-      nrep = 1
+      nrep = 100
       allocate(X_RKlib(N, N, nrep))
       if (load_data) then
          ! Load initial condition
-         write(oname,'("data_GL_lyapconv_X0_RK_n",I4.4,".npy")') nx
+         write(oname,'("data_GL_lyapconv_X0_RK_n",I4.4,"_rk0_",I2.2,".npy")') nx, rk_X0
          inquire(file=trim(basepath)//oname, exist=existfile)
          if (existfile) then
             call load_npy(trim(basepath)//trim(oname), U_load, iostatus)
@@ -950,7 +950,7 @@ contains
          end if
          X_out = U_load(1:N, 1:N)
          ! Load reference RK solution
-         write(oname,'("data_GL_lyapconv_X_RK_n",I4.4,"_r",I3.3,".npy")') nx, nrep
+         write(oname,'("data_GL_lyapconv_X_RK_n",I4.4,"_rk0_",I2.2,"_r",I3.3,".npy")') nx, rk_X0, nrep
          inquire(file=trim(basepath)//trim(oname), exist=existfile)
          if (existfile) then
             print *, 'Load RK solution ', trim(basepath)//trim(oname)
@@ -963,8 +963,8 @@ contains
          X_mat_ref = U_load(1:N, 1:N)
       else
          ! Set random initial condition
-         call get_state(U0_mat(:,1:rk_X0), U0)
-         X_out = matmul( U0_mat, matmul( S0, transpose(U0_mat ) ) )
+         call get_state(U0_mat(:,:rk_X0), U0)
+         X_out = matmul( U0_mat(:,:rk_X0), matmul( S0, transpose(U0_mat(:,:rk_X0)) ) )
          if (if_save_npy) then
             ! Save forcing RK
             write(oname,'("data_GL_lyapconv_BBTW_RK_n",I4.4,".npy")') nx
@@ -972,15 +972,15 @@ contains
             call save_npy(trim(basepath)//oname, reshape(BBTW_flat, (/ N,N /)), iostatus)
             if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
             ! Save initial condition
-            write(oname,'("data_GL_lyapconv_X0_RK_n",I4.4,".npy")') nx
+            write(oname,'("data_GL_lyapconv_X0_RK_n",I4.4,"_rk0_",I2.2,".npy")') nx, rk_X0
             write(*,*) 'Save ', trim(basepath)//trim(oname)
             call save_npy(trim(basepath)//oname, X_out, iostatus)
             if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
-            write(oname,'("data_GL_lyapconv_U0_RK_n",I4.4,".npy")') nx
+            write(oname,'("data_GL_lyapconv_U0_RK_n",I4.4,"_rk0_",I2.2,".npy")') nx, rk_X0
             write(*,*) 'Save ', trim(basepath)//trim(oname)
             call save_npy(trim(basepath)//oname, U0_mat, iostatus)
             if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
-            write(oname,'("data_GL_lyapconv_S0_RK_n",I4.4,".npy")') nx
+            write(oname,'("data_GL_lyapconv_S0_RK_n",I4.4,"_rk0_",I2.2,".npy")') nx, rk_X0
             write(*,*) 'Save ', trim(basepath)//trim(oname)
             call save_npy(trim(basepath)//oname, S0, iostatus)
             if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
@@ -993,7 +993,7 @@ contains
             call save_npy(trim(basepath)//oname, X_out, iostatus)
             if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
          end if
-         X_out = matmul( U0_mat, matmul( S0, transpose(U0_mat ) ) )
+         X_out = matmul( U0_mat(:,:rk_X0), matmul( S0, transpose(U0_mat(:,:rk_X0)) ) )
          ! Set initial condition for RK
          call set_state(X_mat(1:1), X_out)
          write(*,'(A10,A26,A26,A26,A20)') 'RKlib:','Tend','|| X_RK ||_2/N', '|| res ||_2/N','Elapsed time'
@@ -1011,7 +1011,7 @@ contains
             write(*,'(I10,F26.4,E26.8,E26.8,F18.4," s")') irep, irep*Tend, norm2(X_RKlib(:,:,irep))/N, norm2(res_flat)/N, &
                            & real(clock_stop-clock_start)/real(clock_rate)
             if (if_save_npy) then
-               write(oname,'("data_GL_lyapconv_X_RK_n",I4.4,"_r",I3.3,".npy")') nx, irep
+               write(oname,'("data_GL_lyapconv_X_RK_n",I4.4,"_rk0_",I2.2,"_r",I3.3,".npy")') nx, rk_X0, irep
                write(*,*) 'Save ', trim(basepath)//trim(oname)
                call save_npy(trim(basepath)//oname, X_RKlib(:,:,irep), iostatus)
                if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
