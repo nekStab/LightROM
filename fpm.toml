@@ -11,7 +11,7 @@ auto-executables = true
 auto-tests = true
 auto-examples = false
 module-naming = false
-link = ["blas", "lapack", "stdlib"]
+link = ["blas", "lapack"]
 
 [install]
 library = true
@@ -22,7 +22,7 @@ implicit-external = true
 source-form = "free"
 
 [dependencies]
-#stdlib = "*"
+stdlib = "*"
 #LightKrylov = { path = "../LightKrylov" }
 #LightKrylov = { git = "https://github.com/nekStab/LightKrylov.git", branch = "dev"}
 LightKrylov = { git = "https://github.com/nekStab/LightKrylov.git", branch = "add_ortho"}
