@@ -287,13 +287,21 @@ contains
       return
    end subroutine project_onto_common_basis_rdp
 
-   real(dp) function compute_norm(X) result(nrm)
+   real(dp) function compute_norm(X, scale) result(nrm)
       !! This function computes the Frobenius norm of a low-rank approximation via an SVD of the (small) coefficient matrix
       class(abstract_sym_low_rank_state_rdp), intent(in) :: X
       !! Low-Rank factors of the solution.
+      real(wp), optional, intent(in) :: scale
+      real(wp)                       :: scale_
+      !! Scaling factor
+      
       real(wp) :: s(X%rk)
+
+      scale_ = optval(scale, 1.0_wp)
+      if (scale < atol_dp) call stop_error('Wrong input for scale', module=this_module, procedure='compute_norm')
+      
       s = svdvals(X%S(:X%rk,:X%rk))
-      nrm = sqrt(sum(s**2))
+      nrm = sqrt(sum(s**2))/scale
    end function compute_norm
 
    logical function is_converged(nrm, nrmX, opts) result(converged)
