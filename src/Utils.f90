@@ -375,28 +375,30 @@ contains
          end if
       end if
 
-      ! initctrl --> ninit
-      if (opts%initctrl_step) then
-         if (opts%ninit <= 0) then
-            opts%ninit = opts_default%ninit
-            write(msg, '(A,I4,A,I4,A)') "Invalid ninit ( ", opts%ninit, " ). Reset to default ( ",  opts%ninit," )"
-            call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
-         end if 
-         if (opts%verbose) then
-            write(msg, '(A,I4,A)') 'Initial rank computed over ', opts%ninit, ' steps.'
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
-         end if
-      else
-         if (opts%tinit <= 0.0_wp) then
-            opts%tinit = opts_default%tinit
-            write(msg, '(A,F0.2,A,F0.2,A)') "Invalid tinit ( ", opts%tinit, " ). Reset to default ( ",  opts%tinit," )"
-            call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
-         end if
-         opts%ninit = max(5, NINT(opts%tinit/tau))
-         opts%tinit = opts%ninit*tau
-         if (opts%verbose) then
-            write(msg, '(A,F0.2,A,I4,A)') 'Initial rank computed over ', opts%tinit, ' time units ( ', opts%ninit, ' steps)'
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+      if (opts%if_rank_adaptive) then
+         ! initctrl --> ninit
+         if (opts%initctrl_step) then
+            if (opts%ninit <= 0) then
+               opts%ninit = opts_default%ninit
+               write(msg, '(A,I4,A,I4,A)') "Invalid ninit ( ", opts%ninit, " ). Reset to default ( ",  opts%ninit," )"
+               call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            end if 
+            if (opts%verbose) then
+               write(msg, '(A,I4,A)') 'Initial rank computed over ', opts%ninit, ' steps.'
+               call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            end if
+         else
+            if (opts%tinit <= 0.0_wp) then
+               opts%tinit = opts_default%tinit
+               write(msg, '(A,F0.2,A,F0.2,A)') "Invalid tinit ( ", opts%tinit, " ). Reset to default ( ",  opts%tinit," )"
+               call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            end if
+            opts%ninit = max(5, NINT(opts%tinit/tau))
+            opts%tinit = opts%ninit*tau
+            if (opts%verbose) then
+               write(msg, '(A,F0.2,A,I4,A)') 'Initial rank computed over ', opts%tinit, ' time units ( ', opts%ninit, ' steps)'
+               call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            end if
          end if
       end if
       return
