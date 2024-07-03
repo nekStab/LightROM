@@ -229,12 +229,14 @@ module LightROM_LyapunovSolvers
       end if
 
       if (opts%verbose) then
-         write(msg, '(A,I6,A,E8.2)') 'DLRA initialization complete. Integration over ', nsteps, ' steps with dt = ', tau
+         write(msg, '(A)') 'DLRA initialization complete.'
+         call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         write(msg, '(A,I6,A,E8.2)') 'Integration over ', nsteps, ' steps with dt = ', tau
          call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
       end if
 
       dlra : do istep = 1, nsteps
-         if ( opts%chkstep == 1) then
+         if ( opts%chkstep == 1 ) then
             if (allocated(U_lag)) deallocate(U_lag)
             if (allocated(S_lag)) deallocate(S_lag)
             ! allocate lag data (we do it here so we do not need to store the data size and can pass the whole array)
@@ -253,7 +255,7 @@ module LightROM_LyapunovSolvers
                if ( mod(istep, opts%err_est_step) == 0 ) then
                   call compute_splitting_error(err_est, X, A, B, tau, opts%mode, exptA, trans)
                   El = El + err_est
-                  tol = El / sqrt(256_wp - real(X%rk + 1))
+                  tol = El / sqrt(X%U(1)%get_size() - real(X%rk + 1))
                   if (opts%verbose) then
                      write(msg, '(3X,I3,A,E8.2)') istep, ': recomputed error estimate: ', tol
                      call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
@@ -265,14 +267,14 @@ module LightROM_LyapunovSolvers
             !
          else
             call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, opts%mode, info,  & 
-                                                      & p_exptA, trans, opts%verbose)
+                                                           & p_exptA, trans, opts%verbose)
          end if
 
          ! update time
          T = T + tau
 
          ! save lag data
-         if ( opts%chkstep > 1 .and. (mod(istep + 1, opts%chkstep) == 0 .or. istep == nsteps -1) ) then
+         if ( (opts%chkstep > 1 .and. mod(istep + 1, opts%chkstep) == 0) .or. istep == nsteps-1 ) then
             if (allocated(U_lag)) deallocate(U_lag)
             if (allocated(S_lag)) deallocate(S_lag)
             ! allocate lag data (we do it here so we do not need to store the data size and can pass the whole array)
@@ -544,7 +546,7 @@ module LightROM_LyapunovSolvers
       allocate(Utmp(rkmax), source=X%U)
       allocate(Stmp(rkmax,rkmax)); Stmp = X%S
       
-      do while (.not. accept_rank .and. X%rk <= rkmax)
+      do while (.not. accept_rank .and. X%rk <= rkmax-1)
          ! run integrator
          do i = 1, opts%ninit
             call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, opts%verbose)
@@ -586,7 +588,7 @@ module LightROM_LyapunovSolvers
          X%S = Stmp
       end do
 
-      if (X%rk > rkmax) then
+      if (X%rk > rkmax-1) then
          write(msg, *) 'Maximum rank reached but singular values are not converged. Increase rkmax and restart.'
          call stop_error(trim(msg), module=this_module, procedure='set_initial_rank')
       end if
@@ -717,7 +719,7 @@ module LightROM_LyapunovSolvers
 
       ! compute Frobenius norm of difference
       svals = svdvals(D)
-      nrm = sqrt(sum(svals**2)) !/ U%get_size()
+      nrm = sqrt(sum(svals**2))! /U%get_size()
 
       return
    end subroutine compute_increment_norm
@@ -893,7 +895,9 @@ module LightROM_LyapunovSolvers
       info = 0
 
       rk = X%rk
-      if (.not. allocated(Uwrk)) allocate(Uwrk(rkmax), source=X%U(1)); call zero_basis(Uwrk)
+      rkmax = size(X%U)
+      if (.not. allocated(Uwrk)) allocate(Uwrk(rkmax), source=X%U(1))
+      call zero_basis(Uwrk)
 
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
