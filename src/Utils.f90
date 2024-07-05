@@ -70,6 +70,8 @@ module LightROM_Utils
       !! IO control: use time instead of timestep control (default: .true.)
       !
       !! INCREMENT NORM
+      logical :: chk_convergence = .true.
+      !! Toggle whether to check for convergence of the solution
       real(wp) :: inc_tol = 1e-6_wp
       !! Tolerance on the increment norm for convergence (default: 1e-6)
       logical :: relative_norm = .true.
