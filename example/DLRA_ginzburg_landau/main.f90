@@ -94,15 +94,16 @@ program demo
    call generate_random_initial_condition(U0, S0, rk_X0)
    call get_state(U_out(:,:rk_X0), U0)
    
-
    if (verb) write(*,*) '    Start tests'
+   if (verb) write(*,*) '    Output folder:', basepath
+   
    !----------------------------------
    !
    ! DLRA CONVERGENCE TEST FOR LYAPUNOV EQUATION
    !
    !----------------------------------
 
-   run_test = .true.
+   run_test = .false.
    if (run_test) then
       nrk  = 8; allocate(rkv(1:nrk));   rkv  = (/ 2, 6, 10, 14, 20, 40, 80, 128, 256 /)
       ntau = 3; allocate(tauv(1:ntau)); tauv = logspace(-4.0, -3.0, ntau)
@@ -246,18 +247,18 @@ program demo
    !
    !----------------------------------
 
-   run_test = .false.
+   run_test = .true.
    if (run_test) then
-      nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 6 /)
+      nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 2, 4, 6, 8, 10 /)
       ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 0.1 /)
       allocate(TOv(1)); TOv = (/ 1 /)
-      Tend = 150.0_wp
+      Tend = 1.0_wp
       ! run DLRA
       ifsave = .false. ! save X and Y matrices to disk (LightROM/local)
       ifverb = .true. ! verbosity
-      iflogs = .false. ! write logs with convergence and signular value evolution
+      iflogs = .true. ! write logs with convergence and signular value evolution
       call logger%configure(level=warning_level)
-      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, Tend, 1, ifsave, ifverb, iflogs)
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, Tend, 100, ifsave, ifverb, iflogs)
       deallocate(rkv)
       deallocate(tauv)
       deallocate(TOv)

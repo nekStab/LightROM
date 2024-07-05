@@ -27,7 +27,7 @@ module Ginzburg_Landau_Tests
    ! IO
    integer,       parameter :: iunit1 = 1
    integer,       parameter :: iunit2 = 2
-   character*128, parameter :: basepath = 'local/'
+   character*128, parameter :: basepath = 'local/RA-DLRA/'
    integer,       parameter :: rkmax = 64
    integer,       parameter :: rk_X0 = 10
 
@@ -1094,7 +1094,7 @@ contains
       type(LR_state),     allocatable           :: Y     ! Observability
       real(wp)                                  :: U_out(2*nx,rkmax)
       real(wp)                                  :: X_out(2*nx,2*nx)
-      real(wp),           allocatable           :: vals(:)
+      real(wp)                                  :: vals(rkmax)
       real(wp)                                  :: sfro
       real(wp)                                  :: tau, Ttot, etime, etime_tot
       integer                                   :: i, j, k, ito, rk, irep, nsteps
@@ -1126,13 +1126,12 @@ contains
          torder = TOv(ito)
          do i = 1, size(rkv)
             rk = rkv(i)
-            if (allocated(vals)) deallocate(vals)
-            allocate(vals(1:rk))
             do j = 1, size(tauv)
                tau = tauv(j)
                ! Initialize low-rank representation with rank rk
                if (verb) write(*,*) 'Initialize LR state, rk =', rk
                call X%initialize_LR_state(U0, S0, rk, rkmax)
+               X%rank_is_initialized = .false.
                ! Reset time
                Ttot = 0.0_wp
                lagsvd = 0.0_wp
@@ -1152,9 +1151,10 @@ contains
                nsteps = nint(Tend/tau)
                etime_tot = 0.0_wp
                ! set solver options
-               opts = dlra_opts(mode=ito, if_rank_adaptive=.true., tol=1e-6_wp, &
-                                 & use_err_est = .false., verbose=verb)
+               opts = dlra_opts(mode=ito, if_rank_adaptive=.true., tol=1e-6_wp, chktime=0.5_wp, &
+                                 & use_err_est = .false., verbose=verb, chk_convergence=.false.)
                do irep = 1, nrep
+                  if (irep == nrep) opts%chk_convergence = .true.
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
@@ -1163,24 +1163,21 @@ contains
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
-                  vals = svdvals(X%S(1:rk,1:rk))
+                  vals = 0.0_wp
+                  vals(:X%rk) = svdvals(X%S(:X%rk,:X%rk))
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Ttot
-                     do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
+                     do k = 1, rkmax; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
                      write (iunit2,'(A)', ADVANCE='NO') ' | '
-                     do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(1); end do
-                     write (iunit2,'(A)', ADVANCE='NO') ' | '
-                     do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(k); end do
-                     write (iunit2,'(A)', ADVANCE='NO') ' | '
-                     lagsvd(1:rk) = lagsvd(1:rk) - vals
+                     lagsvd(:X%rk) = lagsvd(:X%rk) - vals(:X%rk)
                      sfro = 0.0_wp
-                     do k = 1, rk
+                     do k = 1, X%rk
                         sfro = sfro + lagsvd(k)**2
                      end do
                      sfro = sqrt(sfro)
-                     write(iunit2,'(E14.6)'), sfro           
+                     write(iunit2,'(E10.2)'), sfro           
                   end if
-                  lagsvd(1:rk) = vals
+                  lagsvd(:X%rk) = vals(:X%rk)
                   ! Reconstruct solution
                   call reconstruct_solution(X_out, X)
                   Ttot = Ttot + Tend
