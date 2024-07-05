@@ -215,7 +215,7 @@ module LightROM_LyapunovSolvers
       
       ! determine initial rank if rank-adaptive
       if (opts%if_rank_adaptive) then
-         if (.not. X%rank_is_initialised) then
+         if (.not. X%rank_is_initialized) then
             call set_initial_rank(X, A, B, tau, opts%mode, p_exptA, trans, opts)
          else
             if (opts%verbose) then
@@ -310,15 +310,17 @@ module LightROM_LyapunovSolvers
                                  & ": dX = ", nrm, ' X = ', nrmX, ' dX/X = ', nrm/nrmX
             call logger%log_message(trim(msg), module=this_module, procedure='DLRA_INFO')
             ! Check convergence
-            converged = is_converged(nrm, nrmX, opts)
-            if (converged) then
-               write(msg, '(A,I5,A)') "Step ", istep, ": Solution converged!"
-               call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-               exit dlra
-            else ! if final step
-               if (istep == nsteps) then
-                  write(msg, '(A,I5,A)') "Step ", istep, ": Solution not converged to tolerance!"
+            if (opts%chk_convergence) then
+               converged = is_converged(nrm, nrmX, opts)
+               if (converged) then
+                  write(msg, '(A,I5,A)') "Step ", istep, ": Solution converged!"
                   call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+                  exit dlra
+               else ! if final step
+                  if (istep == nsteps) then
+                     write(msg, '(A,I5,A)') "Step ", istep, ": Solution not converged to tolerance!"
+                     call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+                  end if
                end if
             end if
          end if
@@ -586,16 +588,16 @@ module LightROM_LyapunovSolvers
             end if
          end do tol_chk
          if (.not. found) irk = irk - 1
-         if (opts%verbose) then
-            write(msg,'(A,I2,A,E8.2)') '   Try rk = ', X%rk, ' s_r =', ssvd(X%rk)
-            call logger%log_message(trim(msg), module=this_module, procedure='set_initial_rank')
-         end if
          if (found) then
             accept_rank = .true.
             X%rk = irk
-            write(msg,'(A,I2,A,E10.4)') '   Accpeted rank: r = ', X%rk-1, ',     s_{r+1} = ', ssvd(X%rk)
+            write(msg,'(A,I2,A,I2,A,E10.4,A)') 'rk = ', X%rk-1, ',     s(', X%rk, ') = ', ssvd(X%rk), ': accepted.'
             call logger%log_message(trim(msg), module=this_module, procedure='set_initial_rank')
          else
+            if (opts%verbose) then
+               write(msg,'(A,I2,A,I2,A,E10.4,A)') 'rk = ', X%rk, ',     s(', X%rk, ') =', ssvd(X%rk), ': rejected.'
+               call logger%log_message(trim(msg), module=this_module, procedure='set_initial_rank')
+            end if
             X%rk = 2*X%rk
          end if
          
@@ -611,7 +613,7 @@ module LightROM_LyapunovSolvers
 
       ! reset to the rank of the approximation which we use outside of the integrator & mark rank as initialized
       X%rk = X%rk - 1
-      X%rank_is_initialised = .true.
+      X%rank_is_initialized = .true.
 
    end subroutine set_initial_rank
 
@@ -767,16 +769,14 @@ module LightROM_LyapunovSolvers
       class(abstract_vector_rdp),             allocatable   :: exptAU    ! scratch basis
       real(wp),                               allocatable   :: R(:,:)    ! QR coefficient matrix
       integer,                                allocatable   :: perm(:)   ! Permutation vector
-      real(wp),                               allocatable   :: wrk(:,:)
       integer                                               :: i, rk
 
       ! Optional argument
       trans = optval(iftrans, .false.)
 
       rk = X%rk
-      allocate(R(rk,rk));   R = 0.0_wp 
-      allocate(perm(rk));     perm = 0
-      allocate(wrk(rk,rk)); wrk = 0.0_wp
+      allocate(R(rk,rk)); R = 0.0_wp 
+      allocate(perm(rk)); perm = 0
 
       ! Apply propagator to initial basis
       allocate(exptAU, source=X%U(1)); call exptAU%zero()
@@ -790,8 +790,7 @@ module LightROM_LyapunovSolvers
       ! Update low-rank fcators
       call apply_inverse_permutation_matrix(R, perm)
       ! Update coefficient matrix
-      wrk = matmul(X%S(:rk,:rk), transpose(R))
-      X%S(:rk,:rk) = matmul(R, wrk)
+      X%S(:rk,:rk) = matmul(R, matmul(X%S(:rk,:rk), transpose(R)))
 
       return
    end subroutine M_forward_map_rdp
