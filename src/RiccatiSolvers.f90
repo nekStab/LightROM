@@ -207,7 +207,7 @@ module LightROM_RiccatiSolvers
       if ( opts%mode > 2 ) then
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
-         call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
       else if ( opts%mode < 1 ) then
          write(msg, *) "Invalid time-integration order specified: ", opts%mode
          call stop_error(trim(msg), module=this_module, &

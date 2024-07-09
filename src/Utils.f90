@@ -358,7 +358,7 @@ contains
          opts%mode = 2
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
-         call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
       else if ( opts%mode < 1 ) then
          write(msg, '(A,I2)') "Invalid time-integration order specified: ", opts%mode
          call stop_error(trim(msg), module=this_module, procedure='DLRA chk_opts')
@@ -369,22 +369,22 @@ contains
          if (opts%chktime <= 0.0_wp) then
             opts%chktime = opts_default%chktime
             write(msg, '(A,F0.2,A,F0.2,A)') "Invalid chktime ( ", opts%chktime, " ). Reset to default ( ",  opts%chktime," )"
-            call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
          opts%chkstep = max(1, NINT(opts%chktime/tau))
          if (opts%verbose) then
             write(msg, '(A,F0.2,A,I4,A)') 'Output every ', opts%chktime, ' time units ( ', opts%chkstep, ' steps)'
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       else
          if (opts%chkstep <= 0) then
             opts%chkstep = opts_default%chkstep
             write(msg, '(A,F0.2,A,I4,A)') "Invalid chktime ( ", opts%chktime, " ). Reset to default ( ",  opts%chkstep," )"
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
          if (opts%verbose) then
             write(msg,'(A,I4,A)') 'Output every ', opts%chkstep, ' steps (based on steps).'
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       end if
 
@@ -395,29 +395,29 @@ contains
                if (opts%ninit <= 0) then
                   opts%ninit = opts_default%ninit
                   write(msg, '(A,I4,A,I4,A)') "Invalid ninit ( ", opts%ninit, " ). Reset to default ( ",  opts%ninit," )"
-                  call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+                  if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
                end if 
                if (opts%verbose) then
                   write(msg, '(A,I4,A)') 'Initial rank computed over ', opts%ninit, ' steps.'
-                  call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+                  if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
                end if
             else
                if (opts%tinit <= 0.0_wp) then
                   opts%tinit = opts_default%tinit
                   write(msg, '(A,F0.2,A,F0.2,A)') "Invalid tinit ( ", opts%tinit, " ). Reset to default ( ",  opts%tinit," )"
-                  call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+                  if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
                end if
                opts%ninit = max(5, NINT(opts%tinit/tau))
                opts%tinit = opts%ninit*tau
                if (opts%verbose) then
                   write(msg, '(A,F0.2,A,I4,A)') 'Initial rank computed over ', opts%tinit, ' time units ( ', opts%ninit, ' steps)'
-                  call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+                  if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
                end if
             end if
          else
             if (opts%verbose) then
                write(msg, '(A)') 'Initial rank already set.'
-               call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+               if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
             end if
          end if
       end if
@@ -439,7 +439,7 @@ contains
          opts%mode = 2
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
-         call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
       else if ( opts%mode < 1 ) then
          write(msg, '(A,I2)') "Invalid time-integration order specified: ", opts%mode
          call stop_error(trim(msg), module=this_module, procedure='DLRA chk_opts')
@@ -450,13 +450,13 @@ contains
          if (opts%chktime <= 0.0_wp) then
             opts%chktime = opts_default%chktime
             write(msg, '(A,F0.2,A,F0.2,A)') "Invalid chktime ( ", opts%chktime, " ). Reset to default ( ",  opts%chktime," )"
-            call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       else
          if (opts%chkstep <= 0) then
             opts%chkstep = opts_default%chkstep
             write(msg, '(A,F0.2,A,I4,A)') "Invalid chktime ( ", opts%chktime, " ). Reset to default ( ",  opts%chkstep," )"
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       end if
 
@@ -465,13 +465,13 @@ contains
          if (opts%ninit <= 0) then
             opts%ninit = opts_default%ninit
             write(msg, '(A,I4,A,I4,A)') "Invalid ninit ( ", opts%ninit, " ). Reset to default ( ",  opts%ninit," )"
-            call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if 
       else
          if (opts%tinit <= 0.0_wp) then
             opts%tinit = opts_default%tinit
             write(msg, '(A,F0.2,A,F0.2,A)') "Invalid tinit ( ", opts%tinit, " ). Reset to default ( ",  opts%tinit," )"
-            call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       end if
       return
