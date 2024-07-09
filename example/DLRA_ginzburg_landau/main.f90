@@ -37,7 +37,7 @@ program demo
    integer  :: nrk, ntau, rk,  torder
    real(wp) :: tau, Tend, Ttot
    ! vector of dt values
-   real(wp), allocatable :: tauv(:)
+   real(wp), allocatable :: tauv(:), tolv(:)
    ! vector of rank values
    integer, allocatable :: rkv(:), TOv(:)
 
@@ -228,6 +228,7 @@ program demo
    if (run_test) then
       nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 6 /)
       ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 0.1 /)
+      tolv = (/ 1e-6 /)
       allocate(TOv(1)); TOv = (/ 1 /)
       Tend = 1.0_wp
       nrep = 60
@@ -235,7 +236,7 @@ program demo
       ifsave = .false. ! save X and Y matrices to disk (LightROM/local)
       ifverb = .false. ! verbosity
       iflogs = .false. ! write logs with convergence and signular value evolution
-      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, Tend, nrep, ifsave, ifverb, iflogs)
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, ifsave, ifverb, iflogs)
       deallocate(rkv)
       deallocate(tauv)
       deallocate(TOv)
@@ -249,16 +250,19 @@ program demo
 
    run_test = .true.
    if (run_test) then
-      nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 2, 4, 6, 8, 10 /)
-      ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 0.1 /)
-      allocate(TOv(1)); TOv = (/ 1 /)
+      rkv  = (/ 6, 10 /)
+      tauv = (/ 0.001, 1.0 /)
+      !tauv = (/ 0.01, 0.1 /)
+      !tauv = (/ 1.0 /)
+      tolv = (/ 1e-2, 1e-4, 1e-6, 1e-8, 1e-10 /)
+      TOv = (/ 1 /)
       Tend = 1.0_wp
       ! run DLRA
-      ifsave = .false. ! save X and Y matrices to disk (LightROM/local)
+      ifsave = .true. ! save X and Y matrices to disk (LightROM/local)
       ifverb = .true. ! verbosity
       iflogs = .true. ! write logs with convergence and signular value evolution
       call logger%configure(level=warning_level)
-      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, Tend, 100, ifsave, ifverb, iflogs)
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, 100, ifsave, ifverb, iflogs)
       deallocate(rkv)
       deallocate(tauv)
       deallocate(TOv)
