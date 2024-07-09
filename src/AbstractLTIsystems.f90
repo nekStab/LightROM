@@ -62,6 +62,8 @@ module LightROM_AbstractLTIsystems
       integer                                 :: rk = 1
       !> Has rank been initialized? (for rank-adaptive DLRA)
       logical                                 :: rank_is_initialized = .false.
+      !> Simulation time
+      real(wp)                                :: time = 0.0_wp
    contains
    end type abstract_sym_low_rank_state_rdp
 
