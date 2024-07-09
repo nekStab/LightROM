@@ -68,6 +68,8 @@ module LightROM_Utils
       !! Simulation time interval at which convergence is checked and runtime information is printed (default: 1.0)
       logical :: chkctrl_time = .true.
       !! IO control: use time instead of timestep control (default: .true.)
+      logical :: print_svals = .true.
+      !! IO control: compute and print singular values of solution (default: .true.)
       !
       !! INCREMENT NORM
       logical :: chk_convergence = .true.
@@ -84,7 +86,7 @@ module LightROM_Utils
       !! INITIAL RANK
       integer :: ninit = 10
       !! Number of time steps to run the integrator when determining the initial rank (default: 10)
-      real(wp) :: tinit = 2.0_wp
+      real(wp) :: tinit = 1.0_wp
       !! Physical time to run the integrator when determining the initial rank (default: 1.0)
       logical :: initctrl_step = .true.
       !! Init control: use ninit to determine the integration time for initial rank (default: .true.)
@@ -339,10 +341,11 @@ contains
 
    end function is_converged
 
-   subroutine read_opts(opts, tau)
+   subroutine read_opts(opts, tau, rank_is_initialized)
 
       type(dlra_opts), intent(inout) :: opts
       real(wp),        intent(in)    :: tau
+      logical,         intent(in)    :: rank_is_initialized
 
       ! internal
       character(len=128) :: msg
@@ -387,26 +390,33 @@ contains
 
       if (opts%if_rank_adaptive) then
          ! initctrl --> ninit
-         if (opts%initctrl_step) then
-            if (opts%ninit <= 0) then
-               opts%ninit = opts_default%ninit
-               write(msg, '(A,I4,A,I4,A)') "Invalid ninit ( ", opts%ninit, " ). Reset to default ( ",  opts%ninit," )"
-               call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
-            end if 
-            if (opts%verbose) then
-               write(msg, '(A,I4,A)') 'Initial rank computed over ', opts%ninit, ' steps.'
-               call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         if (.not.rank_is_initialized) then
+            if (opts%initctrl_step) then
+               if (opts%ninit <= 0) then
+                  opts%ninit = opts_default%ninit
+                  write(msg, '(A,I4,A,I4,A)') "Invalid ninit ( ", opts%ninit, " ). Reset to default ( ",  opts%ninit," )"
+                  call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+               end if 
+               if (opts%verbose) then
+                  write(msg, '(A,I4,A)') 'Initial rank computed over ', opts%ninit, ' steps.'
+                  call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+               end if
+            else
+               if (opts%tinit <= 0.0_wp) then
+                  opts%tinit = opts_default%tinit
+                  write(msg, '(A,F0.2,A,F0.2,A)') "Invalid tinit ( ", opts%tinit, " ). Reset to default ( ",  opts%tinit," )"
+                  call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+               end if
+               opts%ninit = max(5, NINT(opts%tinit/tau))
+               opts%tinit = opts%ninit*tau
+               if (opts%verbose) then
+                  write(msg, '(A,F0.2,A,I4,A)') 'Initial rank computed over ', opts%tinit, ' time units ( ', opts%ninit, ' steps)'
+                  call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+               end if
             end if
          else
-            if (opts%tinit <= 0.0_wp) then
-               opts%tinit = opts_default%tinit
-               write(msg, '(A,F0.2,A,F0.2,A)') "Invalid tinit ( ", opts%tinit, " ). Reset to default ( ",  opts%tinit," )"
-               call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
-            end if
-            opts%ninit = max(5, NINT(opts%tinit/tau))
-            opts%tinit = opts%ninit*tau
             if (opts%verbose) then
-               write(msg, '(A,F0.2,A,I4,A)') 'Initial rank computed over ', opts%tinit, ' time units ( ', opts%ninit, ' steps)'
+               write(msg, '(A)') 'Initial rank already set.'
                call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
             end if
          end if
