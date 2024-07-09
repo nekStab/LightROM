@@ -31,7 +31,6 @@ module LightROM_LyapunovSolvers
 
    ! svd
    real(wp),                    allocatable   :: ssvd(:)
-   real(wp),                    allocatable   :: Usvd(:,:), VTsvd(:,:)
 
    ! module name
    private :: this_module
@@ -167,16 +166,17 @@ module LightROM_LyapunovSolvers
       !! Options for solver configuration
 
       ! Internal variables
-      integer                                                :: istep, nsteps
+      integer                                                :: istep, nsteps, rk
       integer                                                :: rk_reduction_lock   ! 'timer' to disable rank reduction
-      real(wp)                                               :: T                   ! simulation time
+      real(wp)                                               :: tau0                ! input timestep
       real(wp)                                               :: nrm, nrmX           ! increment and solution norm
       real(wp)                                               :: El                  ! aggregate error estimate
       real(wp)                                               :: err_est             ! current error estimate
       real(wp)                                               :: tol                 ! current tolerance
       real(wp)                                               :: scale
       logical                                                :: verbose, converged
-      character*128                                          :: msg
+      character(len=1024)                                    :: msg
+      character(len=128)                                     :: fmt
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
 
       integer, allocatable :: log_units(:)
@@ -198,17 +198,22 @@ module LightROM_LyapunovSolvers
          p_exptA => k_exptA_rdp
       end if
 
+      ! Compute number of steps
+      tau0 = tau
+      nsteps = nint(Tend/tau)
+      tau = Tend/nsteps
+      if (tau0 - tau > rtol_dp .and. opts%verbose) then
+         write(msg, *) 'Reset timestep dt:', tau0, '-->', tau 
+         call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+      end if
+
       ! Initialize
-      T                 = 0.0_wp
       rk_reduction_lock = 10
       converged         = .false.
       scale             = X%U(1)%get_size()
-
-      ! Compute number of steps
-      nsteps = floor(Tend/tau)
            
       ! check opts
-      call read_opts(opts, tau)
+      call read_opts(opts, tau, X%rank_is_initialized)
 
       ! set tolerance (might be overridden by error estimate)
       tol = opts%tol
@@ -219,7 +224,7 @@ module LightROM_LyapunovSolvers
             call set_initial_rank(X, A, B, tau, opts%mode, p_exptA, trans, opts)
          else
             if (opts%verbose) then
-               write(msg, *) 'Initial rank set to rk =', X%rk
+               write(msg, '(A,F6.2,A,I2)') 'T = ', X%time,': Initial rank set to rk = ', X%rk
                call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
             end if
          end if
@@ -283,7 +288,7 @@ module LightROM_LyapunovSolvers
          end if
 
          ! update time
-         T = T + tau
+         X%time = X%time + tau
 
          ! save lag data
          if ( opts%chkstep > 1 .and. (mod(istep + 1, opts%chkstep) == 0 .or. istep == nsteps-1) ) then
@@ -302,11 +307,31 @@ module LightROM_LyapunovSolvers
          if ( mod(istep, opts%chkstep) == 0 .or. istep == nsteps ) then
             nrmX = compute_norm(X, scale)
             call compute_increment_norm(nrm, X%U(:X%rk), X%S(:X%rk,:X%rk), U_lag, S_lag, scale)
-            if (opts%if_rank_adaptive) then
-               write(msg, '(A,I6,A,F6.2,A,I3)') "  Step ", istep, ", T = ", T, ": rk = ", X%rk
+            if (opts%print_svals) then
+               if (opts%if_rank_adaptive) then
+                  rk = X%rk + 1
+               else
+                  rk = X%rk
+               end if               
+               if (.not.allocated( ssvd)) allocate( ssvd(size(X%U))); ssvd = 0.0_wp
+               ssvd(:rk) = svdvals(X%S(:rk,:rk))
+               rk = size(X%U)
+               if (rk < 10) then
+                  write(fmt,'(A,I1,A)') '(A,I6,A,F6.2,A,I3,A,',rk,'(1X,E8.2))'
+               else if (rk < 100) then
+                  write(fmt,'(A,I2,A)') '(A,I6,A,F6.2,A,I3,A,',rk,'(1X,E8.2))'
+               else
+                  write(fmt,'(A,I3,A)') '(A,I6,A,F6.2,A,I3,A,',rk,'(1X,E8.2))'
+               end if
+               write(msg, fmt) "  Step ", istep, ", T = ", X%time, ', rk = ', X%rk, ': ', ssvd
                call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+            else
+               if (opts%if_rank_adaptive) then
+                  write(msg, '(A,I6,A,F6.2,A,I3)') "  Step ", istep, ", T = ", X%time, ": rk = ", X%rk
+                  call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+               end if
             end if
-            write(msg, '(A,I6,A,F6.2,A,E10.4,A,E10.4,A,E10.4)') "Step ", istep, ", T = ", T, &
+            write(msg, '(A,I6,A,F6.2,A,E10.4,A,E10.4,A,E10.4)') "Step ", istep, ", T = ", X%time, &
                                  & ": dX = ", nrm, ' X = ', nrmX, ' dX/X = ', nrm/nrmX
             call logger%log_message(trim(msg), module=this_module, procedure='DLRA_INFO')
             ! Check convergence
@@ -422,9 +447,7 @@ module LightROM_LyapunovSolvers
       integer, parameter :: rkmin = 2
 
       ! Allocate memory for SVD
-      if (.not.allocated( Usvd)) allocate( Usvd(size(X%U),size(X%U)))
       if (.not.allocated( ssvd)) allocate( ssvd(size(X%U)))
-      if (.not.allocated(VTsvd)) allocate(VTsvd(size(X%U),size(X%U)))
 
       ! ensure that we are integrating one more rank than we use for approximation
       X%rk = X%rk + 1
@@ -436,8 +459,8 @@ module LightROM_LyapunovSolvers
          ! run a regular step
          call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, verbose)
          ! compute singular values of X%S
-         Usvd = 0.0_wp; ssvd = 0.0_wp; VTsvd = 0.0_wp
-         call svd(X%S(:rk,:rk), ssvd(:rk), Usvd(:rk,:rk), VTsvd(:rk,:rk))
+         ssvd = 0.0_wp
+         ssvd(:rk) = svdvals(X%S(:rk,:rk))
          found = .false.
          tol_chk: do irk = 1, rk
             if ( ssvd(irk) < tol ) then
@@ -454,7 +477,7 @@ module LightROM_LyapunovSolvers
                write(msg, *) 'Cannot increase rank, rkmax is reached. Increase rkmax and restart!'
                call stop_error(trim(msg), module=this_module, procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
             else
-               write(msg,'(A,I3)') ' increase to rk =', rk
+               write(msg,'(A, F8.3, A, I3)') 'T = ', X%time, ': increase to rk =', rk
                call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
                
                X%rk = X%rk + 1
@@ -478,14 +501,6 @@ module LightROM_LyapunovSolvers
 
             if (irk /= rk .and. rk_reduction_lock == 0) then ! we should decrease the rank
                ! decrease rank
-               
-               ! rotate basis onto principal axes
-               block
-                  class(abstract_vector_rdp), allocatable :: Xwrk(:)
-                  call linear_combination(Xwrk, X%U(:rk), Usvd(:rk,:rk))
-                  call copy_basis(X%U(:rk), Xwrk)
-               end block
-               X%S(:rk,:rk) = diag(ssvd(:rk))
 
                rk_new = max(irk, rk - 2)  ! reduce by at most 2
 
@@ -496,7 +511,7 @@ module LightROM_LyapunovSolvers
                   rk = rk_new
                end if
 
-               write(msg, '(A,I3)') ' decrease to rk =', rk - 1
+               write(msg, '(A, F8.3, A, I3)') 'T = ', X%time, ': decrease to rk =', rk - 1
                call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
             end if
             
@@ -513,7 +528,7 @@ module LightROM_LyapunovSolvers
       if (verbose) then
          write(msg,'(A,I3,A,I2,A,E14.8,A,I2)') 'rk = ', X%rk, ':     s_', irk,' = ', &
                                                    & ssvd(irk), ', rank_lock: ', rk_reduction_lock
-         call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+         call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
       end if
 
       if (.not. accept_step) then
@@ -553,9 +568,7 @@ module LightROM_LyapunovSolvers
       rkmax = size(X%U)            
 
       ! Allocate memory for SVD
-      if (.not.allocated( Usvd)) allocate( Usvd(rkmax,rkmax))
       if (.not.allocated( ssvd)) allocate( ssvd(rkmax))
-      if (.not.allocated(VTsvd)) allocate(VTsvd(rkmax,rkmax))
 
       info = 0
       accept_rank = .false.
@@ -569,8 +582,8 @@ module LightROM_LyapunovSolvers
          do i = 1, opts%ninit
             call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, opts%verbose)
             if (opts%verbose) then
-               Usvd = 0.0_wp; ssvd = 0.0_wp; VTsvd = 0.0_wp
-               call svd(X%S(:X%rk,:X%rk), ssvd(:X%rk), Usvd(:X%rk,:X%rk), VTsvd(:X%rk,:X%rk))
+               ssvd = 0.0_wp
+               ssvd(:X%rk) = svdvals(X%S(:X%rk,:X%rk))
                write(fmt, '(A,I2,A)') "(A,I3,1X,I2,1X,",X%rk,"(E10.2))"
                write(msg, fmt) 'Step', i, X%rk, ssvd(:X%rk)
                call logger%log_debug(trim(msg), module=this_module, procedure='set_initial_rank')
@@ -578,8 +591,8 @@ module LightROM_LyapunovSolvers
          end do
 
          ! check if singular values are resolved
-         Usvd = 0.0_wp; ssvd = 0.0_wp; VTsvd = 0.0_wp
-         call svd(X%S(:X%rk,:X%rk), ssvd(:X%rk), Usvd(:X%rk,:X%rk), VTsvd(:X%rk,:X%rk))
+         ssvd = 0.0_wp
+         ssvd(:X%rk) = svdvals(X%S(:X%rk,:X%rk))
          found = .false.
          tol_chk: do irk = 1, X%rk
             if ( ssvd(irk) < opts%tol ) then
@@ -590,12 +603,13 @@ module LightROM_LyapunovSolvers
          if (.not. found) irk = irk - 1
          if (found) then
             accept_rank = .true.
-            X%rk = irk
-            write(msg,'(A,I2,A,I2,A,E10.4,A)') 'rk = ', X%rk-1, ',     s(', X%rk, ') = ', ssvd(X%rk), ': accepted.'
+            write(msg,'(A,I2,A,I2,A,E10.4,A,I2)') 'rk = ', X%rk, ',     s(', irk, ') = ', ssvd(irk), &
+                                          & ' : accepted. Approximation rank =', irk-1
             call logger%log_message(trim(msg), module=this_module, procedure='set_initial_rank')
+            X%rk = irk
          else
             if (opts%verbose) then
-               write(msg,'(A,I2,A,I2,A,E10.4,A)') 'rk = ', X%rk, ',     s(', X%rk, ') =', ssvd(X%rk), ': rejected.'
+               write(msg,'(A,I2,A,I2,A,E10.4,A)') 'rk = ', X%rk, ',     s(', X%rk, ') = ', ssvd(X%rk), ' : rejected.'
                call logger%log_message(trim(msg), module=this_module, procedure='set_initial_rank')
             end if
             X%rk = 2*X%rk
