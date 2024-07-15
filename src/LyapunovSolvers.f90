@@ -175,7 +175,7 @@ module LightROM_LyapunovSolvers
       real(wp)                                               :: tol                 ! current tolerance
       real(wp)                                               :: scale
       logical                                                :: verbose, converged
-      character(len=1024)                                    :: msg
+      character(len=2048)                                    :: msg
       character(len=128)                                     :: fmt
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
 
@@ -224,7 +224,7 @@ module LightROM_LyapunovSolvers
             call set_initial_rank(X, A, B, tau, opts%mode, p_exptA, trans, opts)
          else
             if (opts%verbose) then
-               write(msg, '(A,F6.2,A,I2)') 'T = ', X%time,': Initial rank set to rk = ', X%rk
+               write(msg, '(A,F6.2,A,I4)') 'T = ', X%time,': Initial rank set to rk = ', X%rk
                if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
             end if
          end if
@@ -316,18 +316,12 @@ module LightROM_LyapunovSolvers
                if (.not.allocated( ssvd)) allocate( ssvd(size(X%U))); ssvd = 0.0_wp
                ssvd(:rk) = svdvals(X%S(:rk,:rk))
                rk = size(X%U)
-               if (rk < 10) then
-                  write(fmt,'(A,I1,A)') '(A,I6,A,F6.2,A,I3,A,',rk,'(1X,E8.2))'
-               else if (rk < 100) then
-                  write(fmt,'(A,I2,A)') '(A,I6,A,F6.2,A,I3,A,',rk,'(1X,E8.2))'
-               else
-                  write(fmt,'(A,I3,A)') '(A,I6,A,F6.2,A,I3,A,',rk,'(1X,E8.2))'
-               end if
+               write(fmt,'(A,I4,A)') '(A,I6,A,F6.2,A,I3,A,',rk,'(1X,E8.2))'
                write(msg, fmt) "  Step ", istep, ", T = ", X%time, ', rk = ', X%rk, ': ', ssvd
                if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
             else
                if (opts%if_rank_adaptive) then
-                  write(msg, '(A,I6,A,F6.2,A,I3)') "  Step ", istep, ", T = ", X%time, ": rk = ", X%rk
+                  write(msg, '(A,I6,A,F6.2,A,I4)') "  Step ", istep, ", T = ", X%time, ": rk = ", X%rk
                   if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
                end if
             end if
@@ -477,7 +471,7 @@ module LightROM_LyapunovSolvers
                write(msg, *) 'Cannot increase rank, rkmax is reached. Increase rkmax and restart!'
                call stop_error(trim(msg), module=this_module, procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
             else
-               write(msg,'(A, F8.3, A, I3)') 'T = ', X%time, ': increase to rk =', rk
+               write(msg,'(A, F8.3, A, I4)') 'T = ', X%time, ': increase to rk =', rk
                if (nid == 0) call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
                
                X%rk = X%rk + 1
@@ -511,7 +505,7 @@ module LightROM_LyapunovSolvers
                   rk = rk_new
                end if
 
-               write(msg, '(A, F8.3, A, I3)') 'T = ', X%time, ': decrease to rk =', rk - 1
+               write(msg, '(A, F8.3, A, I4)') 'T = ', X%time, ': decrease to rk =', rk - 1
                if (nid == 0) call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
             end if
             
@@ -526,7 +520,7 @@ module LightROM_LyapunovSolvers
       X%rk = rk - 1
 
       if (verbose) then
-         write(msg,'(A,I3,A,I2,A,E14.8,A,I2)') 'rk = ', X%rk, ':     s_', irk,' = ', &
+         write(msg,'(A,I4,A,I4,A,E14.8,A,I2)') 'rk = ', X%rk, ':     s_', irk,' = ', &
                                                    & ssvd(irk), ', rank_lock: ', rk_reduction_lock
          if (nid == 0) call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
       end if
@@ -584,7 +578,7 @@ module LightROM_LyapunovSolvers
             if (opts%verbose) then
                ssvd = 0.0_wp
                ssvd(:X%rk) = svdvals(X%S(:X%rk,:X%rk))
-               write(fmt, '(A,I2,A)') "(A,I3,1X,I2,1X,",X%rk,"(E10.2))"
+               write(fmt, '(A,I4,A)') "(A,I3,1X,I2,1X,",X%rk,"(E10.2))"
                write(msg, fmt) 'Step', i, X%rk, ssvd(:X%rk)
                if (nid == 0) call logger%log_debug(trim(msg), module=this_module, procedure='set_initial_rank')
             end if
@@ -603,13 +597,13 @@ module LightROM_LyapunovSolvers
          if (.not. found) irk = irk - 1
          if (found) then
             accept_rank = .true.
-            write(msg,'(A,I2,A,I2,A,E10.4,A,I2)') 'rk = ', X%rk, ',     s(', irk, ') = ', ssvd(irk), &
+            write(msg,'(A,I4,A,I4,A,E10.4,A,I4)') 'rk = ', X%rk, ',     s(', irk, ') = ', ssvd(irk), &
                                           & ' : accepted. Approximation rank =', irk-1
             if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='set_initial_rank')
             X%rk = irk
          else
             if (opts%verbose) then
-               write(msg,'(A,I2,A,I2,A,E10.4,A)') 'rk = ', X%rk, ',     s(', X%rk, ') = ', ssvd(X%rk), ' : rejected.'
+               write(msg,'(A,I4,A,I4,A,E10.4,A)') 'rk = ', X%rk, ',     s(', X%rk, ') = ', ssvd(X%rk), ' : rejected.'
                if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='set_initial_rank')
             end if
             X%rk = 2*X%rk
