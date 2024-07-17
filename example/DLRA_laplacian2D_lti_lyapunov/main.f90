@@ -8,6 +8,7 @@ program demo
    ! LightKrylov for linear algebra
    use LightKrylov
    use LightKrylov, only : wp => dp
+   use LightKrylov_Constants
    use LightKrylov_Logger
    use LightKrylov_ExpmLib
    use LightKrylov_Utils
@@ -100,6 +101,8 @@ program demo
    ! DLRA opts
    type(dlra_opts) :: opts
 
+   call comm_setup
+
    call logger%configure(level=error_level); write(*,*) 'Logging set to error_level.'
 
    call system_clock(count_rate=clock_rate)
@@ -136,7 +139,7 @@ program demo
    call zero_basis(LTI%CT)
 
    ! Define initial condition of the form X0 + U0 @ S0 @ U0.T SPD 
-   if (verb) write(*,*) '    Define initial condition'
+   if (verb .and. io_rank()) write(*,*) '    Define initial condition'
    call generate_random_initial_condition(U0, S0, rk_X0)
    call get_state(U_out, U0)
    
@@ -240,7 +243,7 @@ program demo
 
          do j = ndt, 1, -1
             dt = dtv(j)
-            if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
+            if (verb .and. io_rank()) write(*,*) '    dt = ', dt, 'Tend = ', Tend
 
             ! Reset input
             call X%initialize_LR_state(U0, S0, rk)

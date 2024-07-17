@@ -2,12 +2,13 @@ module LightROM_LyapunovSolvers
    !! This module provides the implementation of the Krylov-based solvers for the Differential Lyapunov
    !! equation based on the dynamic low-rank approximation and operator splitting.
    ! Standard library
-   use stdlib_linalg, only : eye, diag, svd, svdvals
-   use stdlib_optval, only : optval
-   use stdlib_logger, only : logger => global_logger
+   use stdlib_linalg, only: eye, diag, svd, svdvals
+   use stdlib_optval, only: optval
+   use stdlib_logger, only: logger => global_logger
    ! LightKrylov modules
    use LightKrylov
    use LightKrylov, only: wp => dp
+   use LightKrylov_Constants
    use LightKrylov_Logger
    use LightKrylov_AbstractVectors
    use LightKrylov_ExpmLib
@@ -204,7 +205,7 @@ module LightROM_LyapunovSolvers
       tau = Tend/nsteps
       if (tau0 - tau > rtol_dp .and. opts%verbose) then
          write(msg, *) 'Reset timestep dt:', tau0, '-->', tau 
-         if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+         if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
       end if
 
       ! Initialize
@@ -225,7 +226,7 @@ module LightROM_LyapunovSolvers
          else
             if (opts%verbose) then
                write(msg, '(A,F6.2,A,I4)') 'T = ', X%time,': Initial rank set to rk = ', X%rk
-               if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+               if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
             end if
          end if
          if (opts%use_err_est) then
@@ -235,21 +236,21 @@ module LightROM_LyapunovSolvers
             tol = err_est / sqrt(X%U(1)%get_size() - real(X%rk + 1))
             if (opts%verbose) then
                write(msg, *) 'Initialization complete: rk = ', X%rk, ', local error estimate: ', tol
-               if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+               if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
             end if
          end if
       else
          if (opts%verbose) then
             write(msg, *) 'Constant rank. rk =', X%rk
-            if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+            if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
          end if
       end if
 
       if (opts%verbose) then
          write(msg, '(A)') 'DLRA initialization complete.'
-         if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
          write(msg, '(A,I6,A,E8.2)') 'Integration over ', nsteps, ' steps with dt = ', tau
-         if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
       end if
 
       dlra : do istep = 1, nsteps
@@ -261,7 +262,7 @@ module LightROM_LyapunovSolvers
             allocate(S_lag(X%rk, X%rk)); S_lag = X%S(:X%rk,:X%rk)
             if (opts%verbose) then
                write(msg, *) 'Solution saved for increment norm computation.'
-               if (nid == 0) call logger%log_debug(trim(msg), module=this_module, procedure='DLRA')
+               if (io_rank()) call logger%log_debug(trim(msg), module=this_module, procedure='DLRA')
             end if
          end if
          ! dynamical low-rank approximation solver
@@ -275,7 +276,7 @@ module LightROM_LyapunovSolvers
                   tol = El / sqrt(X%U(1)%get_size() - real(X%rk + 1))
                   if (opts%verbose) then
                      write(msg, '(3X,I3,A,E8.2)') istep, ': recomputed error estimate: ', tol
-                     if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+                     if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
                   end if
                else
                   El = El + err_est
@@ -299,7 +300,7 @@ module LightROM_LyapunovSolvers
             allocate(S_lag(X%rk, X%rk)); S_lag = X%S(:X%rk,:X%rk)
             if (opts%verbose) then
                write(msg, *) 'Solution saved for increment norm computation.'
-               if (nid == 0) call logger%log_debug(trim(msg), module=this_module, procedure='DLRA')
+               if (io_rank()) call logger%log_debug(trim(msg), module=this_module, procedure='DLRA')
             endif
          end if
 
@@ -318,27 +319,27 @@ module LightROM_LyapunovSolvers
                rk = size(X%U)
                write(fmt,'(A,I4,A)') '(A,I6,A,F6.2,A,I3,A,',rk,'(1X,E8.2))'
                write(msg, fmt) "  Step ", istep, ", T = ", X%time, ', rk = ', X%rk, ': ', ssvd
-               if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+               if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
             else
                if (opts%if_rank_adaptive) then
                   write(msg, '(A,I6,A,F6.2,A,I4)') "  Step ", istep, ", T = ", X%time, ": rk = ", X%rk
-                  if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
+                  if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
                end if
             end if
             write(msg, '(A,I6,A,F6.2,A,E10.4,A,E10.4,A,E10.4)') "Step ", istep, ", T = ", X%time, &
                                  & ": dX = ", nrm, ' X = ', nrmX, ' dX/X = ', nrm/nrmX
-            if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA_INFO')
+            if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA_INFO')
             ! Check convergence
             if (opts%chk_convergence) then
                converged = is_converged(nrm, nrmX, opts)
                if (converged) then
                   write(msg, '(A,I5,A)') "Step ", istep, ": Solution converged!"
-                  if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+                  if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
                   exit dlra
                else ! if final step
                   if (istep == nsteps) then
                      write(msg, '(A,I5,A)') "Step ", istep, ": Solution not converged to tolerance!"
-                     if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+                     if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
                   end if
                end if
             end if
@@ -472,7 +473,7 @@ module LightROM_LyapunovSolvers
                call stop_error(trim(msg), module=this_module, procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
             else
                write(msg,'(A, F8.3, A, I4)') 'T = ', X%time, ': increase to rk =', rk
-               if (nid == 0) call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
+               if (io_rank()) call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
                
                X%rk = X%rk + 1
                rk = X%rk ! this is only to make the code more readable
@@ -500,13 +501,13 @@ module LightROM_LyapunovSolvers
 
                if (rk_new < rkmin) then
                   write(msg, '(A,I1,A,I1)') 'Cannot decrease rank, rkmin = ', rkmin, ' is reached. Resetting to previous rank: ', rk
-                  if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='RA-DLRA')
+                  if (io_rank()) call logger%log_warning(trim(msg), module=this_module, procedure='RA-DLRA')
                else
                   rk = rk_new
                end if
 
                write(msg, '(A, F8.3, A, I4)') 'T = ', X%time, ': decrease to rk =', rk - 1
-               if (nid == 0) call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
+               if (io_rank()) call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
             end if
             
          end if ! found
@@ -522,7 +523,7 @@ module LightROM_LyapunovSolvers
       if (verbose) then
          write(msg,'(A,I4,A,I4,A,E14.8,A,I2)') 'rk = ', X%rk, ':     s_', irk,' = ', &
                                                    & ssvd(irk), ', rank_lock: ', rk_reduction_lock
-         if (nid == 0) call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
+         if (io_rank()) call logger%log_debug(trim(msg), module=this_module, procedure='RA-DLRA')
       end if
 
       if (.not. accept_step) then
@@ -580,7 +581,7 @@ module LightROM_LyapunovSolvers
                ssvd(:X%rk) = svdvals(X%S(:X%rk,:X%rk))
                write(fmt, '(A,I4,A)') "(A,I3,1X,I2,1X,",X%rk,"(E10.2))"
                write(msg, fmt) 'Step', i, X%rk, ssvd(:X%rk)
-               if (nid == 0) call logger%log_debug(trim(msg), module=this_module, procedure='set_initial_rank')
+               if (io_rank()) call logger%log_debug(trim(msg), module=this_module, procedure='set_initial_rank')
             end if
          end do
 
@@ -599,12 +600,12 @@ module LightROM_LyapunovSolvers
             accept_rank = .true.
             write(msg,'(A,I4,A,I4,A,E10.4,A,I4)') 'rk = ', X%rk, ',     s(', irk, ') = ', ssvd(irk), &
                                           & ' : accepted. Approximation rank =', irk-1
-            if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='set_initial_rank')
+            if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='set_initial_rank')
             X%rk = irk
          else
             if (opts%verbose) then
                write(msg,'(A,I4,A,I4,A,E10.4,A)') 'rk = ', X%rk, ',     s(', X%rk, ') = ', ssvd(X%rk), ' : rejected.'
-               if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='set_initial_rank')
+               if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='set_initial_rank')
             end if
             X%rk = 2*X%rk
          end if

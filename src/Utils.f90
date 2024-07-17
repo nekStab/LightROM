@@ -11,7 +11,7 @@ module LightROM_Utils
    use LightKrylov_Logger
    use LightKrylov_AbstractVectors
    use LightKrylov_BaseKrylov, only : orthonormalize_basis, orthogonalize_against_basis
-   use LightKrylov_Utils, only : abstract_opts, assert_shape
+   use LightKrylov_Utils, only : abstract_opts, assert_shape, sqrtm
    ! LightROM
    use LightROM_AbstractLTIsystems
    
@@ -308,6 +308,68 @@ contains
       nrm = sqrt(sum(s**2))/scale
    end function compute_norm
 
+!   real(dp) function compute_CALE_residual(X, A, B) result(res)
+!      !! This function computes the Frobenius norm of a low-rank approximation via an SVD of the (small) coefficient matrix
+!      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
+!      !! Low-Rank factors of the solution.
+!      class(abstract_linop_rdp),              intent(in) :: A
+!      !! Linear operator of the Lyapunov equation
+!      class(abstract_vector_rdp),             intent(in) :: B(:)
+!      !! Forcing term of the Lyapunov equation
+!      
+!      ! internals
+!      integer :: i, info, rk, rkX, rkQ
+!      class(abstract_vector_rdp), allocatable :: AU(:) ! A@U
+!      class(abstract_vector_rdp), allocatable :: Q(:)   ! partial basis
+!      real(wp), dimension(:,:),  allocatable :: R, Rperm, Rtmp ! coefficient matrix of QR decomposition, sqrt(S)
+!
+!      rkX = X%rk
+!      rkQ = 2*rkX
+!      rk  = rkQ + size(B)
+!      allocate(R(rk,rk), Rperm(rk,rk)); R = 0.0_wp; Rperm = 0.0_wp
+!      allocate(Q(rkQ), source=X%U)
+!
+!      ! first column of quasi-QR is given Ru = X%S
+!      !call sqrtm(X%S, R(:rkX,:rkX))
+!      Rperm(:rkX,rkX+1:rkQ) = R(:rkX,:rkX)  ! block 1,1 --> block 1,2
+!      call copy_basis(Q(:rkX), X%U)
+!      
+!      ! second column
+!      allocate(AU(rkX), source=X%U)
+!      ! apply A to X%U
+!      do i = 1, rkX
+!         call A%matvec(X%U(i), AU(i))
+!      end do
+!      block
+!         real(wp) :: Rtmp(rkX,rkX)
+!         call orthogonalize_against_basis(AU(:rkX), Q(:rkX), info, if_chk_orthonormal=.false., beta=Rtmp)
+!         call check_info(info, 'orthogonalize_against_basis (AU)', module=this_module, procedure='compute_CALE_residual')
+!         R    (:rkX,rkX+1:rkQ) = Rtmp   !     block 1,2
+!         Rperm(:rkX,     :rkX) = Rtmp   ! --> block 1,1
+!      end block
+!      call qr(AU, R(rkX+1:rkQ,rkX+1:rkQ), info)       !     block 2,2
+!      Rperm(rkX+1:rkQ,:rkX) = R(rkX+1:rkQ,rkX+1:rkQ) ! --> block 2,1
+!      call check_info(info, 'qr (AU)', module=this_module, procedure='compute_CALE_residual')
+!      
+!      ! third column
+!      block
+!         real(wp) :: Rtmp(rkQ,size(B))
+!         !all orthogonalize_against_basis(B(:), Q(:rkQ), info, if_chk_orthonormal=.false., beta=Rtmp)
+!         call check_info(info, 'orthogonalize_against_basis (B)', module=this_module, procedure='compute_CALE_residual')
+!         R    (:rkQ,rkQ+1:rk) = Rtmp ! block 1:2,3
+!         Rperm(:rkQ,rkQ+1:rk) = Rtmp !
+!      end block
+!      allocate(Rtmp(size(B), size(B))); Rtmp = 0.0_wp
+!      !call qr(B(:), R(rkQ+1:rk,rkQ+1:rk), info)          ! block 3,3
+!      !call qr(B(:), Rtmp, info)
+!      Rperm(rkQ+1:rk,rkQ+1:rk) = R(rkQ+1:rk,rkQ+1:rk) !
+!      call check_info(info, 'qr (B)', module=this_module, procedure='compute_CALE_residual')
+!      
+!      R = matmul(Rperm, transpose(R))
+!
+!      res = 0.0_wp
+!   end function compute_CALE_residual
+
    logical function is_converged(nrm, nrmX, opts) result(converged)
       !! This function checks the convergence of the solution based on the (relative) increment norm
       real(wp),                   intent(in) :: nrm
@@ -358,7 +420,7 @@ contains
          opts%mode = 2
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
-         if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         if (io_rank()) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
       else if ( opts%mode < 1 ) then
          write(msg, '(A,I2)') "Invalid time-integration order specified: ", opts%mode
          call stop_error(trim(msg), module=this_module, procedure='DLRA chk_opts')
@@ -369,55 +431,59 @@ contains
          if (opts%chktime <= 0.0_wp) then
             opts%chktime = opts_default%chktime
             write(msg, '(A,F0.2,A,F0.2,A)') "Invalid chktime ( ", opts%chktime, " ). Reset to default ( ",  opts%chktime," )"
-            if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (io_rank()) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
          opts%chkstep = max(1, NINT(opts%chktime/tau))
          if (opts%verbose) then
             write(msg, '(A,F0.2,A,I4,A)') 'Output every ', opts%chktime, ' time units ( ', opts%chkstep, ' steps)'
-            if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       else
          if (opts%chkstep <= 0) then
             opts%chkstep = opts_default%chkstep
             write(msg, '(A,F0.2,A,I4,A)') "Invalid chktime ( ", opts%chktime, " ). Reset to default ( ",  opts%chkstep," )"
-            if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
          if (opts%verbose) then
             write(msg,'(A,I4,A)') 'Output every ', opts%chkstep, ' steps (based on steps).'
-            if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       end if
 
       if (opts%if_rank_adaptive) then
          ! initctrl --> ninit
          if (.not.rank_is_initialized) then
+            if (opts%verbose) then
+               write(msg, '(A,E8.2)') 'Tolerance for rank adaptation: ', opts%tol
+               if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            end if
             if (opts%initctrl_step) then
                if (opts%ninit <= 0) then
                   opts%ninit = opts_default%ninit
                   write(msg, '(A,I4,A,I4,A)') "Invalid ninit ( ", opts%ninit, " ). Reset to default ( ",  opts%ninit," )"
-                  if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+                  if (io_rank()) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
                end if 
                if (opts%verbose) then
                   write(msg, '(A,I4,A)') 'Initial rank computed over ', opts%ninit, ' steps.'
-                  if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+                  if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
                end if
             else
                if (opts%tinit <= 0.0_wp) then
                   opts%tinit = opts_default%tinit
                   write(msg, '(A,F0.2,A,F0.2,A)') "Invalid tinit ( ", opts%tinit, " ). Reset to default ( ",  opts%tinit," )"
-                  if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+                  if (io_rank()) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
                end if
                opts%ninit = max(5, NINT(opts%tinit/tau))
                opts%tinit = opts%ninit*tau
                if (opts%verbose) then
                   write(msg, '(A,F0.2,A,I4,A)') 'Initial rank computed over ', opts%tinit, ' time units ( ', opts%ninit, ' steps)'
-                  if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+                  if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
                end if
             end if
          else
             if (opts%verbose) then
                write(msg, '(A)') 'Initial rank already set.'
-               if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+               if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
             end if
          end if
       end if
@@ -439,7 +505,7 @@ contains
          opts%mode = 2
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
-         if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+         if (io_rank()) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
       else if ( opts%mode < 1 ) then
          write(msg, '(A,I2)') "Invalid time-integration order specified: ", opts%mode
          call stop_error(trim(msg), module=this_module, procedure='DLRA chk_opts')
@@ -450,13 +516,13 @@ contains
          if (opts%chktime <= 0.0_wp) then
             opts%chktime = opts_default%chktime
             write(msg, '(A,F0.2,A,F0.2,A)') "Invalid chktime ( ", opts%chktime, " ). Reset to default ( ",  opts%chktime," )"
-            if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (io_rank()) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       else
          if (opts%chkstep <= 0) then
             opts%chkstep = opts_default%chkstep
             write(msg, '(A,F0.2,A,I4,A)') "Invalid chktime ( ", opts%chktime, " ). Reset to default ( ",  opts%chkstep," )"
-            if (nid == 0) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       end if
 
@@ -465,13 +531,13 @@ contains
          if (opts%ninit <= 0) then
             opts%ninit = opts_default%ninit
             write(msg, '(A,I4,A,I4,A)') "Invalid ninit ( ", opts%ninit, " ). Reset to default ( ",  opts%ninit," )"
-            if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (io_rank()) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if 
       else
          if (opts%tinit <= 0.0_wp) then
             opts%tinit = opts_default%tinit
             write(msg, '(A,F0.2,A,F0.2,A)') "Invalid tinit ( ", opts%tinit, " ). Reset to default ( ",  opts%tinit," )"
-            if (nid == 0) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
+            if (io_rank()) call logger%log_warning(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       end if
       return

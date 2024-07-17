@@ -7,6 +7,7 @@ program demo
    ! LightKrylov for Linear Algebra
    use LightKrylov
    use LightKrylov, only : wp => dp
+   use LightKrylov_Constants
    use LightKrylov_AbstractVectors
    use LightKrylov_ExpmLib
    use LightKrylov_Utils
@@ -94,6 +95,8 @@ program demo
 
    ! DLRA opts
    type(dlra_opts) :: opts
+
+   call comm_setup
    
    call system_clock(count_rate=clock_rate)
 
@@ -178,7 +181,7 @@ program demo
    write(*,*) '    Direct problem:', norm2(X0)/N
 
    ! Define initial condition of the form X0 + U0 @ S0 @ U0.T SPD 
-   if (verb) write(*,*) '    Define initial condition'
+   if (verb .and. io_rank()) write(*,*) '    Define initial condition'
    call generate_random_initial_condition(U0, S0, rk_X0)
    call get_state(U_out, U0)
 
@@ -241,7 +244,7 @@ program demo
 
          do j = ndt, 1, -1
             dt = dtv(j)
-            if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
+            if (verb .and. io_rank()) write(*,*) '    dt = ', dt, 'Tend = ', Tend
 
             ! Reset input
             call X%initialize_LR_state(U0, S0, rk)
@@ -357,7 +360,7 @@ program demo
    write(*,*)
 
    ! Define initial condition
-   if (verb) write(*,*) 'Define initial condition'
+   if (verb .and. io_rank()) write(*,*) 'Define initial condition'
    call generate_random_initial_condition(U0, S0, rk_X0)
    call get_state(U_out, U0)
 
@@ -417,7 +420,7 @@ program demo
 
          do j = ndt, 1, -1
             dt = dtv(j)
-            if (verb) write(*,*) '    dt = ', dt, 'Tend = ', Tend
+            if (verb .and. io_rank()) write(*,*) '    dt = ', dt, 'Tend = ', Tend
 
             ! Reset input
             call X%initialize_LR_state(U0, S0, rk)

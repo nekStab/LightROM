@@ -8,6 +8,7 @@ program demo
     ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only : wp => dp
+   use LightKrylov_Constants
    use LightKrylov_Logger
    use LightKrylov_AbstractVectors
    use LightKrylov_ExpmLib
@@ -68,35 +69,37 @@ program demo
    real(wp)                                  :: Tmax, etime
 
    logical        :: ifsave, ifload, ifverb, iflogs
-   
+
    call logger%configure(level=error_level, time_stamp=.false.)
+
+   call comm_setup
    
    !----------------------------------
    !-----     INITIALIZATION     -----
    !----------------------------------
 
    ! Initialize mesh and system parameters A, B, CT
-   if (verb) write(*,*) 'Initialize parameters'
+   if (verb .and. io_rank()) write(*,*) 'Initialize parameters'
    call initialize_parameters()
 
    ! Initialize propagator
-   if (verb) write(*,*) 'Initialize exponential propagator'
+   if (verb .and. io_rank()) write(*,*) 'Initialize exponential propagator'
    prop = exponential_prop(1.0_wp)
 
    ! Initialize LTI system
    A = GL_operator()
-   if (verb) write(*,*) 'Initialize LTI system (A, prop, B, CT, _)'
+   if (verb .and. io_rank()) write(*,*) 'Initialize LTI system (A, prop, B, CT, _)'
    LTI = lti_system()
    call LTI%initialize_lti_system(A, prop, B, CT)
 
    ! Define initial condition of the form X0 + U0 @ S0 @ U0.T SPD 
-   if (verb) write(*,*) '    Define initial condition'
+   if (verb .and. io_rank()) write(*,*) '    Define initial condition'
    call generate_random_initial_condition(U0, S0, rk_X0)
    call get_state(U_out(:,:rk_X0), U0)
    
-   if (verb) write(*,*) '    Start tests'
-   if (verb) write(*,*) '    Output folder:', basepath
-   
+   if (verb .and. io_rank()) write(*,*) '    Start tests'
+   if (verb .and. io_rank()) write(*,*) '    Output folder:', basepath
+
    !----------------------------------
    !
    ! DLRA CONVERGENCE TEST FOR LYAPUNOV EQUATION
@@ -250,13 +253,21 @@ program demo
 
    run_test = .true.
    if (run_test) then
-      rkv  = (/ 6, 10 /)
-      tauv = (/ 0.001, 1.0 /)
-      !tauv = (/ 0.01, 0.1 /)
-      !tauv = (/ 1.0 /)
-      tolv = (/ 1e-2, 1e-4, 1e-6, 1e-8, 1e-10 /)
+      ! 01
+      rkv  = (/ 4, 6, 8, 10 /)
+      tauv = (/ 0.001, 0.01, 0.1, 1.0 /)
+      tolv = (/ 1e-6 /)
       TOv = (/ 1 /)
       Tend = 1.0_wp
+      ! 03
+      !rkv  = (/ 6, 10 /)
+      !tauv = (/ 0.001, 1.0 /)
+      !tolv = (/ 1e-2, 1e-4, 1e-6, 1e-8, 1e-10 /)
+      !TOv = (/ 1 /)
+      !Tend = 1.0_wp
+      
+      !tauv = (/ 0.01, 0.1 /)
+      !tauv = (/ 1.0 /)
       ! run DLRA
       ifsave = .true. ! save X and Y matrices to disk (LightROM/local)
       ifverb = .true. ! verbosity

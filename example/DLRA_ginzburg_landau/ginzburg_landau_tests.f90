@@ -28,7 +28,7 @@ module Ginzburg_Landau_Tests
    ! IO
    integer,       parameter :: iunit1 = 1
    integer,       parameter :: iunit2 = 2
-   character*128, parameter :: basepath = 'local/03_RA-DLRA/'
+   character*128, parameter :: basepath = 'local/01_RA-DLRA/'
    integer,       parameter :: rkmax = 64
    integer,       parameter :: rk_X0 = 10
 
@@ -1168,7 +1168,7 @@ contains
                   nsteps = nint(Tend/tau)
                   etime_tot = 0.0_wp
                   ! set solver options
-                  opts = dlra_opts(mode=ito, if_rank_adaptive=.true., tol=rk_tol, chktime=0.5_wp, &
+                  opts = dlra_opts(mode=ito, if_rank_adaptive=.true., tol=rk_tol, chktime=1.0_wp, &
                                     & use_err_est = .false., verbose=verb, chk_convergence=.false., print_svals=.true.)
                   do irep = 1, nrep
                      if (irep == nrep) opts%chk_convergence = .true.
@@ -1214,8 +1214,11 @@ contains
                      if (stat /= success) error stop 'Unable to close logfile.'
                   end if
                   if (if_save_npy) then
-                     write(onameU,'("data_GLXY_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
-                     write(onameS,'("data_GLXY_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
+                     call get_state(U_out(:,1:X%rk), X%U(1:X%rk))
+                     write(onameU,'("data_GLXY_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,"_tol_",E8.2,".npy")') &
+                                       & nx, torder, rk, tau, rk_tol
+                     write(onameS,'("data_GLXY_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,"_tol_",E8.2,".npy")') &
+                                       & nx, torder, rk, tau, rk_tol
                      call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
                      if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
                      call save_npy(trim(basepath)//onameS, X%S(1:rk,1:rk), iostatus)
