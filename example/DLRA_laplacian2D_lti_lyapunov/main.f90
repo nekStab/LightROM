@@ -101,7 +101,7 @@ program demo
    ! DLRA opts
    type(dlra_opts) :: opts
 
-   call comm_setup
+   call logger_setup()
 
    call logger%configure(level=error_level); write(*,*) 'Logging set to error_level.'
 

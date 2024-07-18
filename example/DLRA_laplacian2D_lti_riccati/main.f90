@@ -96,7 +96,7 @@ program demo
    ! DLRA opts
    type(dlra_opts) :: opts
 
-   call comm_setup
+   call logger_setup()
    
    call system_clock(count_rate=clock_rate)
 

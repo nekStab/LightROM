@@ -70,9 +70,7 @@ program demo
 
    logical        :: ifsave, ifload, ifverb, iflogs
 
-   call logger%configure(level=error_level, time_stamp=.false.)
-
-   call comm_setup
+   call logger_setup()
    
    !----------------------------------
    !-----     INITIALIZATION     -----
