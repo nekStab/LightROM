@@ -176,7 +176,7 @@ module LightROM_LyapunovSolvers
       real(wp)                                               :: tol                 ! current tolerance
       real(wp)                                               :: scale
       logical                                                :: verbose, converged
-      character(len=2048)                                    :: msg
+      character(len=4096)                                    :: msg
       character(len=128)                                     :: fmt
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
 
@@ -317,8 +317,8 @@ module LightROM_LyapunovSolvers
                if (.not.allocated( ssvd)) allocate( ssvd(size(X%U))); ssvd = 0.0_wp
                ssvd(:rk) = svdvals(X%S(:rk,:rk))
                rk = size(X%U)
-               write(fmt,'(A,I4,A)') '(A,I6,A,F6.2,A,I3,A,',rk,'(1X,E8.2))'
-               write(msg, fmt) "  Step ", istep, ", T = ", X%time, ', rk = ', X%rk, ': ', ssvd
+               write(fmt,'(A,I4,A)') '(A,I6,A,F6.2,A,I3,A,',rk,'(1X,E10.4))'
+               write(msg, fmt) "  Step ", istep, ", T = ", X%time, ', rk = ', X%rk, ': ', ssvd(:rk)
                if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
             else
                if (opts%if_rank_adaptive) then

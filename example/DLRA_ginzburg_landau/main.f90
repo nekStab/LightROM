@@ -237,7 +237,7 @@ program demo
       ifsave = .false. ! save X and Y matrices to disk (LightROM/local)
       ifverb = .false. ! verbosity
       iflogs = .false. ! write logs with convergence and signular value evolution
-      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, ifsave, ifverb, iflogs)
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, 'dlra_test', ifsave, ifverb, iflogs)
       deallocate(rkv)
       deallocate(tauv)
       deallocate(TOv)
@@ -255,8 +255,40 @@ program demo
       rkv  = (/ 4, 6, 8, 10 /)
       tauv = (/ 0.001, 0.01, 0.1, 1.0 /)
       tolv = (/ 1e-6 /)
-      TOv = (/ 1 /)
+      TOv  = (/ 1 /)
       Tend = 1.0_wp
+      ! run DLRA
+      ifsave = .true. ! save X and Y matrices to disk (LightROM/local)
+      ifverb = .true. ! verbosity
+      iflogs = .true. ! write logs with convergence and signular value evolution
+      call logger%configure(level=warning_level)
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, 100, '01_rk_tauv', ifsave, ifverb, iflogs)
+
+      ! 02
+      rkv  = (/ 4, 6, 8, 10 /)
+      tauv = (/ 0.001, 0.01, 0.1, 1.0 /)
+      tolv = (/ 1e-12 /)
+      TOv  = (/ 1 /)
+      Tend = 1.0_wp
+      ! run DLRA
+      ifsave = .true. ! save X and Y matrices to disk (LightROM/local)
+      ifverb = .true. ! verbosity
+      iflogs = .true. ! write logs with convergence and signular value evolution
+      call logger%configure(level=warning_level)
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, 100, '02_rk_tauv_low_tol', ifsave, ifverb, iflogs)
+
+      ! 03
+      rkv  = (/ 10 /)
+      tauv = (/ 0.001, 0.01, 0.1, 1.0 /)
+      tolv = (/ 1e-6 /)
+      TOv  = (/ 2 /)
+      Tend = 1.0_wp
+      ! run DLRA
+      ifsave = .true. ! save X and Y matrices to disk (LightROM/local)
+      ifverb = .true. ! verbosity
+      iflogs = .true. ! write logs with convergence and signular value evolution
+      call logger%configure(level=warning_level)
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, 100, '03_TO2', ifsave, ifverb, iflogs)
       ! 03
       !rkv  = (/ 6, 10 /)
       !tauv = (/ 0.001, 1.0 /)
@@ -266,15 +298,6 @@ program demo
       
       !tauv = (/ 0.01, 0.1 /)
       !tauv = (/ 1.0 /)
-      ! run DLRA
-      ifsave = .true. ! save X and Y matrices to disk (LightROM/local)
-      ifverb = .true. ! verbosity
-      iflogs = .true. ! write logs with convergence and signular value evolution
-      call logger%configure(level=warning_level)
-      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, 100, ifsave, ifverb, iflogs)
-      deallocate(rkv)
-      deallocate(tauv)
-      deallocate(TOv)
    end if 
 
    return

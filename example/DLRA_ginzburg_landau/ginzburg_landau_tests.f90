@@ -28,7 +28,7 @@ module Ginzburg_Landau_Tests
    ! IO
    integer,       parameter :: iunit1 = 1
    integer,       parameter :: iunit2 = 2
-   character*128, parameter :: basepath = 'local/01_RA-DLRA/'
+   character*128, parameter :: basepath = 'local/TESTS/'
    integer,       parameter :: rkmax = 64
    integer,       parameter :: rk_X0 = 10
 
@@ -1068,7 +1068,7 @@ contains
       
    end subroutine run_lyap_convergence_test
 
-   subroutine run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, ifsave, ifverb, iflogs)
+   subroutine run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, testid, ifsave, ifverb, iflogs)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Initial condition
@@ -1084,6 +1084,7 @@ contains
       real(wp),                      intent(in) :: tolv(:)
       real(wp),                      intent(in) :: Tend
       integer,                       intent(in) :: nrep
+      character(len=*),              intent(in) :: testid
       ! Optional
       logical, optional,             intent(in) :: ifsave
       logical                                   :: if_save_npy
@@ -1147,18 +1148,19 @@ contains
                   lagsvd = 0.0_wp
                   if (verb) write(*,*) 'Run DRLA'
                   if (if_save_logs) then
-                     write(oname,'("logfile_GL_n",I4.4,"_dt_",E8.2,"_rk0_",I2.2,"_tol_",E8.2,".txt")') nx, tau, rk, rk_tol
+                     write(oname,'(A, "_logfile_GL_n",I4.4,"_dt_",E8.2,"_rk0_",I2.2,"_tol_",E8.2,".txt")') &
+                                 & trim(testid), nx, tau, rk, rk_tol
                      call logger%add_log_file(trim(basepath)//oname, iunit, stat=stat )
                      if (stat /= success) error stop 'Unable to open logfile.'
                      call logger%configure(level=warning_level, time_stamp=.false.)
-                     write(oname,'("output_GL_X_norm__n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,"_tol_",E8.2,".txt")') &
-                                       & nx, torder, rk, tau, rk_tol
+                     write(oname,'(A, "_output_GL_X_norm__n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,"_tol_",E8.2,".txt")') &
+                                 & trim(testid), nx, torder, rk, tau, rk_tol
                      open(unit=iunit1, file=trim(basepath)//oname)
                      call stamp_logfile_header(iunit1, 'Controllability Gramian', rk, tau, Tend, torder)
                      write(iunit1,'(A16,A4,A10,A18,A18,A20)') 'DLRA:','  rk',' Tend','|| X_DLRA ||_2/N','|| res ||_2/N', &
                                        & 'Elapsed time'
-                     write(oname,'("output_GL_X_sigma_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,"_tol_",E8.2,".txt")') &
-                                       & nx, torder, rk, tau, rk_tol
+                     write(oname,'(A, "_output_GL_X_sigma_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,"_tol_",E8.2,".txt")') &
+                                 & trim(testid), nx, torder, rk, tau, rk_tol
                      open(unit=iunit2, file=trim(basepath)//oname)
                      call stamp_logfile_header(iunit2, 'Controllability Gramian', rk, tau, Tend, torder)
                      write(iunit2,*) 'DLRA: T    sigma_i    d(sigma-i)/sigma-1    d(sigma_i)/sigma_i    ||Sum(sigma_i)||_2'
@@ -1169,7 +1171,8 @@ contains
                   etime_tot = 0.0_wp
                   ! set solver options
                   opts = dlra_opts(mode=ito, if_rank_adaptive=.true., tol=rk_tol, chktime=1.0_wp, &
-                                    & use_err_est = .false., verbose=verb, chk_convergence=.false., print_svals=.true.)
+                                    & use_err_est = .false., verbose=verb, chk_convergence=.false., print_svals=.true., &
+                                    & ninit = 10)
                   do irep = 1, nrep
                      if (irep == nrep) opts%chk_convergence = .true.
                      ! run integrator
@@ -1215,10 +1218,10 @@ contains
                   end if
                   if (if_save_npy) then
                      call get_state(U_out(:,1:X%rk), X%U(1:X%rk))
-                     write(onameU,'("data_GLXY_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,"_tol_",E8.2,".npy")') &
-                                       & nx, torder, rk, tau, rk_tol
-                     write(onameS,'("data_GLXY_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,"_tol_",E8.2,".npy")') &
-                                       & nx, torder, rk, tau, rk_tol
+                     write(onameU,'(A, "_data_GLXY_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,"_tol_",E8.2,".npy")') &
+                                       & trim(testid), nx, torder, rk, tau, rk_tol
+                     write(onameS,'(A, "_data_GLXY_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,"_tol_",E8.2,".npy")') &
+                                       & trim(testid), nx, torder, rk, tau, rk_tol
                      call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
                      if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
                      call save_npy(trim(basepath)//onameS, X%S(1:rk,1:rk), iostatus)
