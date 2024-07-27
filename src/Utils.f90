@@ -23,7 +23,8 @@ module LightROM_Utils
    public :: dlra_opts
 
    public :: chk_opts
-   public :: compute_norm
+   public :: dense_frobenius_norm
+   public :: CALE_res_norm
    public :: is_converged
    public :: project_onto_common_basis
    public :: random_low_rank_state
@@ -291,84 +292,77 @@ contains
       return
    end subroutine project_onto_common_basis_rdp
 
-   real(dp) function compute_norm(X, scale) result(nrm)
+   real(wp) function dense_frobenius_norm(S, scale) result(nrm)
       !! This function computes the Frobenius norm of a low-rank approximation via an SVD of the (small) coefficient matrix
-      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
-      !! Low-Rank factors of the solution.
+      real(wp), intent(in) :: S(:,:)
+      !! Dense (coefficient) matrix to compute frobenius norm of
       real(wp), optional, intent(in) :: scale
       real(wp)                       :: scale_
       !! Scaling factor
       
-      real(wp) :: s(X%rk)
+      scale_ = optval(scale, 1.0_wp)
+      if (scale_ < atol_dp) call stop_error('Wrong input for scale', module=this_module, procedure='compute_norm')
+      
+      nrm = sqrt(sum(svdvals(S)**2))/scale_
 
+   end function dense_frobenius_norm
+
+   real(dp) function CALE_res_norm(X, A, B, scale) result(res)
+      !! This function computes the Frobenius norm of a low-rank approximation via an SVD of the (small) coefficient matrix
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_linop_rdp),              intent(in) :: A
+      !! Linear operator of the Lyapunov equation
+      class(abstract_vector_rdp),             intent(in) :: B(:)
+      !! Forcing term of the Lyapunov equation
+      real(wp), optional, intent(in) :: scale
+      real(wp)                       :: scale_
+      !! Scaling factor
+      
+      ! internals
+      integer :: i, info, rk
+      class(abstract_vector_rdp), allocatable :: Q(:)   ! partial basis
+      real(wp), dimension(:),    allocatable :: svals
+      real(wp), dimension(:,:),  allocatable :: R, Rperm ! coefficient matrix of QR decomposition, sqrt(S)
+
+      ! optional inputs
       scale_ = optval(scale, 1.0_wp)
       if (scale < atol_dp) call stop_error('Wrong input for scale', module=this_module, procedure='compute_norm')
-      
-      s = svdvals(X%S(:X%rk,:X%rk))
-      nrm = sqrt(sum(s**2))/scale
-   end function compute_norm
 
-!   real(dp) function compute_CALE_residual(X, A, B) result(res)
-!      !! This function computes the Frobenius norm of a low-rank approximation via an SVD of the (small) coefficient matrix
-!      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
-!      !! Low-Rank factors of the solution.
-!      class(abstract_linop_rdp),              intent(in) :: A
-!      !! Linear operator of the Lyapunov equation
-!      class(abstract_vector_rdp),             intent(in) :: B(:)
-!      !! Forcing term of the Lyapunov equation
-!      
-!      ! internals
-!      integer :: i, info, rk, rkX, rkQ
-!      class(abstract_vector_rdp), allocatable :: AU(:) ! A@U
-!      class(abstract_vector_rdp), allocatable :: Q(:)   ! partial basis
-!      real(wp), dimension(:,:),  allocatable :: R, Rperm, Rtmp ! coefficient matrix of QR decomposition, sqrt(S)
-!
-!      rkX = X%rk
-!      rkQ = 2*rkX
-!      rk  = rkQ + size(B)
-!      allocate(R(rk,rk), Rperm(rk,rk)); R = 0.0_wp; Rperm = 0.0_wp
-!      allocate(Q(rkQ), source=X%U)
-!
-!      ! first column of quasi-QR is given Ru = X%S
-!      !call sqrtm(X%S, R(:rkX,:rkX))
-!      Rperm(:rkX,rkX+1:rkQ) = R(:rkX,:rkX)  ! block 1,1 --> block 1,2
-!      call copy_basis(Q(:rkX), X%U)
-!      
-!      ! second column
-!      allocate(AU(rkX), source=X%U)
-!      ! apply A to X%U
-!      do i = 1, rkX
-!         call A%matvec(X%U(i), AU(i))
-!      end do
-!      block
-!         real(wp) :: Rtmp(rkX,rkX)
-!         call orthogonalize_against_basis(AU(:rkX), Q(:rkX), info, if_chk_orthonormal=.false., beta=Rtmp)
-!         call check_info(info, 'orthogonalize_against_basis (AU)', module=this_module, procedure='compute_CALE_residual')
-!         R    (:rkX,rkX+1:rkQ) = Rtmp   !     block 1,2
-!         Rperm(:rkX,     :rkX) = Rtmp   ! --> block 1,1
-!      end block
-!      call qr(AU, R(rkX+1:rkQ,rkX+1:rkQ), info)       !     block 2,2
-!      Rperm(rkX+1:rkQ,:rkX) = R(rkX+1:rkQ,rkX+1:rkQ) ! --> block 2,1
-!      call check_info(info, 'qr (AU)', module=this_module, procedure='compute_CALE_residual')
-!      
-!      ! third column
-!      block
-!         real(wp) :: Rtmp(rkQ,size(B))
-!         !all orthogonalize_against_basis(B(:), Q(:rkQ), info, if_chk_orthonormal=.false., beta=Rtmp)
-!         call check_info(info, 'orthogonalize_against_basis (B)', module=this_module, procedure='compute_CALE_residual')
-!         R    (:rkQ,rkQ+1:rk) = Rtmp ! block 1:2,3
-!         Rperm(:rkQ,rkQ+1:rk) = Rtmp !
-!      end block
-!      allocate(Rtmp(size(B), size(B))); Rtmp = 0.0_wp
-!      !call qr(B(:), R(rkQ+1:rk,rkQ+1:rk), info)          ! block 3,3
-!      !call qr(B(:), Rtmp, info)
-!      Rperm(rkQ+1:rk,rkQ+1:rk) = R(rkQ+1:rk,rkQ+1:rk) !
-!      call check_info(info, 'qr (B)', module=this_module, procedure='compute_CALE_residual')
-!      
-!      R = matmul(Rperm, transpose(R))
-!
-!      res = 0.0_wp
-!   end function compute_CALE_residual
+      rk  = 2*X%rk + size(B)
+      allocate(R(rk,rk), Rperm(rk,rk), svals(rk)); R = 0.0_wp; Rperm = 0.0_wp; svals = 0.0_wp
+      allocate(Q(rk), source=X%U(1)); call zero_basis(Q)
+
+      ! First X%rk columns are X%U @ sqrtm(X%S) 
+      block
+          class(abstract_vector_rdp), allocatable :: Xwrk(:)
+          real(wp) :: Rwrk(X%rk,X%rk)
+          call sqrtm(X%S, Rwrk, info)
+          call check_info(info, 'sqrtm(X%S)', module=this_module, procedure='compute_CALE_residual')
+          call linear_combination(Xwrk, X%U(:X%rk), Rwrk)
+          call copy_basis(Q(:X%rk), Xwrk)
+      end block
+      ! Second set of X%rk columns are given by A @ X%U @ sqrtm(X%S)
+      do i = 1, X%rk
+         call A%matvec(Q(i), Q(X%rk+i))
+      end do
+      ! Last columns are B
+      call copy_basis(Q(2*X%rk+1:), B)
+     
+      ! compute QR decomposiion
+      call qr(Q, R, info)
+      call check_info(info, 'qr(Q)', module=this_module, procedure='compute_CALE_residual')
+      
+      ! Shuffle columns around
+      Rperm(:,        :  X%rk) = R(:,  X%rk+1:2*X%rk)
+      Rperm(:,  X%rk+1:2*X%rk) = R(:,        :  X%rk)
+      Rperm(:,2*X%rk+1:      ) = R(:,2*X%rk+1:      ) ! last size(B) columns do not change
+      
+      ! compute norm of inner product
+      R = matmul(Rperm, transpose(R))
+      res = dense_frobenius_norm(R, scale_)
+
+   end function CALE_res_norm
 
    logical function is_converged(nrm, nrmX, opts) result(converged)
       !! This function checks the convergence of the solution based on the (relative) increment norm
@@ -435,7 +429,7 @@ contains
          end if
          opts%chkstep = max(1, NINT(opts%chktime/tau))
          if (opts%verbose) then
-            write(msg, '(A,F0.2,A,I4,A)') 'Output every ', opts%chktime, ' time units ( ', opts%chkstep, ' steps)'
+            write(msg, '(A,F0.2,A,I6,A)') 'Output every ', opts%chktime, ' time units ( ', opts%chkstep, ' steps)'
             if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       else
@@ -445,7 +439,7 @@ contains
             if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
          if (opts%verbose) then
-            write(msg,'(A,I4,A)') 'Output every ', opts%chkstep, ' steps (based on steps).'
+            write(msg,'(A,I6,A)') 'Output every ', opts%chkstep, ' steps (based on steps).'
             if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA chk_opts')
          end if
       end if
@@ -582,5 +576,5 @@ contains
       end if
 
    end subroutine random_low_rank_state_rdp
-
+   
 end module LightROM_Utils
