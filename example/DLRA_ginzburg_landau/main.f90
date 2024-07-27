@@ -30,15 +30,16 @@ program demo
    !
    logical :: run_test
    !
-   character*128      :: oname
-   character*128      :: onameU
-   character*128      :: onameS
+   character(len=128)      :: oname
+   character(len=128)      :: onameU
+   character(len=128)      :: onameS
+   character(len=128)      :: testinfo
    ! rk_B & rk_C are set in ginzburg_landau_base.f90
 
    integer  :: nrk, ntau, rk,  torder
    real(wp) :: tau, Tend, Ttot
    ! vector of dt values
-   real(wp), allocatable :: tauv(:), tolv(:)
+   real(wp), allocatable :: tauv(:), tolv(:), taucv(:)
    ! vector of rank values
    integer, allocatable :: rkv(:), TOv(:)
 
@@ -227,78 +228,83 @@ program demo
 
    run_test = .false.
    if (run_test) then
-      nrk  = 1; allocate(rkv(1:nrk));   rkv  = (/ 6 /)
-      ntau = 1; allocate(tauv(1:ntau)); tauv = (/ 0.1 /)
+      rkv  = (/ 6 /)
+      tauv = (/ 0.1 /)
       tolv = (/ 1e-6 /)
-      allocate(TOv(1)); TOv = (/ 1 /)
+      TOv = (/ 1 /)
       Tend = 1.0_wp
       nrep = 60
       ! run DLRA
       ifsave = .false. ! save X and Y matrices to disk (LightROM/local)
       ifverb = .false. ! verbosity
       iflogs = .false. ! write logs with convergence and signular value evolution
-      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, 'dlra_test', ifsave, ifverb, iflogs)
-      deallocate(rkv)
-      deallocate(tauv)
-      deallocate(TOv)
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, 'dlra_test', ifsave, ifverb, iflogs, .false.)
    end if 
 
    !----------------------------------
    !
-   ! RANK-ADAPTIVE DLRA LYAPUNOV -- CONVERGENCE with increment norm
+   ! RANK-ADAPTIVE DLRA LYAPUNOV with convergence run
    !
    !----------------------------------
 
    run_test = .true.
    if (run_test) then
+      call logger%configure(level=warning_level)
+      ifsave = .true. ! save X and Y matrices to disk (LightROM/local)
+      ifverb = .true. ! verbosity
+      iflogs = .true. ! write logs with convergence and signular value evolution
       ! 01
+      testinfo = '01_rk_tauv'
       rkv  = (/ 4, 6, 8, 10 /)
       tauv = (/ 0.001, 0.01, 0.1, 1.0 /)
       tolv = (/ 1e-6 /)
       TOv  = (/ 1 /)
       Tend = 1.0_wp
+      nrep = 50
       ! run DLRA
-      ifsave = .true. ! save X and Y matrices to disk (LightROM/local)
-      ifverb = .true. ! verbosity
-      iflogs = .true. ! write logs with convergence and signular value evolution
-      call logger%configure(level=warning_level)
-      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, 100, '01_rk_tauv', ifsave, ifverb, iflogs)
-
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, testinfo, ifsave, ifverb, iflogs, .false.)
+      ! exclude small dt that do not converge to right rank
+      !rkv  = (/ 10 /) 
+      rkv = (/ 4, 6, 8, 10 /)
+      !tauv = (/ 1.0 /) 
+      tauv = (/ 0.1, 1.0 /)
+      nrep = 50
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, testinfo, ifsave, ifverb, iflogs, .true.)
       ! 02
-      rkv  = (/ 4, 6, 8, 10 /)
+      testinfo = '02_rk_tauv_tol'
+      rkv  = (/ 6, 10 /)
       tauv = (/ 0.001, 0.01, 0.1, 1.0 /)
-      tolv = (/ 1e-12 /)
+      tolv = (/ 1e-8, 1e-12 /)
       TOv  = (/ 1 /)
       Tend = 1.0_wp
+      nrep = 50
       ! run DLRA
-      ifsave = .true. ! save X and Y matrices to disk (LightROM/local)
-      ifverb = .true. ! verbosity
-      iflogs = .true. ! write logs with convergence and signular value evolution
-      call logger%configure(level=warning_level)
-      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, 100, '02_rk_tauv_low_tol', ifsave, ifverb, iflogs)
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, testinfo, ifsave, ifverb, iflogs, .false.)
+      ! exclude small dt that do not converge to right rank
+      !rkv  = (/ 10 /) 
+      rkv = (/ 6, 10 /)
+      !tauv = (/ 1.0 /) 
+      tauv = (/ 0.1, 1.0 /)
+      tolv = (/ 1e-12 /)
+      nrep = 50
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, testinfo, ifsave, ifverb, iflogs, .true.)
 
       ! 03
+      testinfo = '03_TO2'
       rkv  = (/ 10 /)
       tauv = (/ 0.001, 0.01, 0.1, 1.0 /)
       tolv = (/ 1e-6 /)
       TOv  = (/ 2 /)
       Tend = 1.0_wp
+      nrep = 50
       ! run DLRA
-      ifsave = .true. ! save X and Y matrices to disk (LightROM/local)
-      ifverb = .true. ! verbosity
-      iflogs = .true. ! write logs with convergence and signular value evolution
-      call logger%configure(level=warning_level)
-      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, 100, '03_TO2', ifsave, ifverb, iflogs)
-      ! 03
-      !rkv  = (/ 6, 10 /)
-      !tauv = (/ 0.001, 1.0 /)
-      !tolv = (/ 1e-2, 1e-4, 1e-6, 1e-8, 1e-10 /)
-      !TOv = (/ 1 /)
-      !Tend = 1.0_wp
-      
-      !tauv = (/ 0.01, 0.1 /)
-      !tauv = (/ 1.0 /)
-   end if 
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, testinfo, ifsave, ifverb, iflogs, .false.)
+      ! exclude small dt that do not converge to right rank
+      tauv = (/ 0.1, 1.0 /)
+      nrep = 50
+      call run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, testinfo, ifsave, ifverb, iflogs, .true.)
+   end if
+
 
    return
 end program demo

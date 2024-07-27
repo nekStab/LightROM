@@ -236,13 +236,14 @@ contains
    !-----      LOGFILES     -----
    !-----------------------------
 
-   subroutine stamp_logfile_header(iunit, problem, rk, tau, Tend, torder)
-      integer,       intent(in) :: iunit
-      character(*),  intent(in) :: problem
-      integer,       intent(in) :: rk
-      real(wp),      intent(in) :: tau
-      real(wp),      intent(in) :: Tend
-      integer,       intent(in) :: torder
+   subroutine stamp_logfile_header(iunit, problem, rk, tau, Tend, torder, opts)
+      integer,         intent(in) :: iunit
+      character(*),    intent(in) :: problem
+      integer,         intent(in) :: rk
+      real(wp),        intent(in) :: tau
+      real(wp),        intent(in) :: Tend
+      integer,         intent(in) :: torder
+      type(dlra_opts), optional, intent(in) :: opts
 
       write(iunit,*) '-----------------------'
       write(iunit,*) '    GINZBURG LANDAU'
@@ -265,11 +266,28 @@ contains
       write(iunit,*) '-----------------------'
       write(iunit,*) 'Time Integration: DLRA'
       write(iunit,*) '-----------------------'
-      write(iunit,*) 'Tend   =', Tend
-      write(iunit,*) 'torder =', torder
-      write(iunit,*) 'tau    =', tau
-      write(iunit,*) 'rk     =', rk
+      write(iunit,*) 'Tend   = ', Tend
+      write(iunit,*) 'torder = ', torder
+      write(iunit,*) 'tau    = ', tau
+      write(iunit,*) 'rk0    = ', rk
       write(iunit,*) '---------------------'
+      if (present(opts)) then
+        write(iunit,*) 'rank-adaptive: ', opts%if_rank_adaptive
+        if (opts%if_rank_adaptive) then
+            if (opts%initctrl_step) then
+                write(iunit,*), "init_ctrl = 'step'"
+                write(iunit,*), 'init_step = ', opts%ninit
+            else
+                write(iunit,*), "init_ctrl = 'time'"
+                write(iunit,*), 'init_tine = ', opts%tinit
+            end if
+            write(iunit,*), 'rk tol    = ', opts%tol
+            write(iunit,*), 'err_est   = ', opts%use_err_est
+            if (opts%use_err_est) then
+                write(iunit,*), 'est_step  = ', opts%err_est_step
+            end if
+        end if
+      end if
       write(iunit,*) '---------------------'
       return
    end subroutine stamp_logfile_header
