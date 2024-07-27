@@ -170,7 +170,7 @@ module LightROM_LyapunovSolvers
       integer                                                :: istep, nsteps, rk
       integer                                                :: rk_reduction_lock   ! 'timer' to disable rank reduction
       real(wp)                                               :: tau0                ! input timestep
-      real(wp)                                               :: nrm, nrmX           ! increment and solution norm
+      real(wp)                                               :: nrm, nrmX, res      ! increment and solution norm
       real(wp)                                               :: El                  ! aggregate error estimate
       real(wp)                                               :: err_est             ! current error estimate
       real(wp)                                               :: tol                 ! current tolerance
@@ -230,9 +230,8 @@ module LightROM_LyapunovSolvers
             end if
          end if
          if (opts%use_err_est) then
-            err_est = 0.0_wp
             El      = 0.0_wp
-            call compute_splitting_error(err_est, X, A, B, tau, opts%mode, exptA, trans)
+            err_est = splitting_error(X, A, B, tau, opts%mode, exptA, trans)
             tol = err_est / sqrt(X%U(1)%get_size() - real(X%rk + 1))
             if (opts%verbose) then
                write(msg, *) 'Initialization complete: rk = ', X%rk, ', local error estimate: ', tol
@@ -271,8 +270,7 @@ module LightROM_LyapunovSolvers
                                                       & p_exptA, trans, verbose, tol)
             if ( opts%use_err_est ) then
                if ( mod(istep, opts%err_est_step) == 0 ) then
-                  call compute_splitting_error(err_est, X, A, B, tau, opts%mode, exptA, trans)
-                  El = El + err_est
+                  El = El + splitting_error(X, A, B, tau, opts%mode, exptA, trans)
                   tol = El / sqrt(X%U(1)%get_size() - real(X%rk + 1))
                   if (opts%verbose) then
                      write(msg, '(3X,I3,A,E8.2)') istep, ': recomputed error estimate: ', tol
@@ -306,17 +304,17 @@ module LightROM_LyapunovSolvers
 
          ! here we can do some checks such as whether we have reached steady state
          if ( mod(istep, opts%chkstep) == 0 .or. istep == nsteps ) then
-            nrmX = compute_norm(X, scale)
-            call compute_increment_norm(nrm, X%U(:X%rk), X%S(:X%rk,:X%rk), U_lag, S_lag, scale)
+            nrmX = dense_frobenius_norm(X%S(:X%rk,:X%rk), scale)
+            nrm  = increment_norm(X%U(:X%rk), X%S(:X%rk,:X%rk), U_lag, S_lag, scale)
+            res  = CALE_res_norm(X, A, B)
             if (opts%print_svals) then
                if (opts%if_rank_adaptive) then
                   rk = X%rk + 1
                else
                   rk = X%rk
                end if               
-               if (.not.allocated( ssvd)) allocate( ssvd(size(X%U))); ssvd = 0.0_wp
+               if (.not.allocated( ssvd)) allocate( ssvd(rk)); ssvd = 0.0_wp
                ssvd(:rk) = svdvals(X%S(:rk,:rk))
-               rk = size(X%U)
                write(fmt,'(A,I4,A)') '(A,I6,A,F6.2,A,I3,A,',rk,'(1X,E10.4))'
                write(msg, fmt) "  Step ", istep, ", T = ", X%time, ', rk = ', X%rk, ': ', ssvd(:rk)
                if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
@@ -326,8 +324,8 @@ module LightROM_LyapunovSolvers
                   if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='RA-DLRA')
                end if
             end if
-            write(msg, '(A,I6,A,F6.2,A,E10.4,A,E10.4,A,E10.4)') "Step ", istep, ", T = ", X%time, &
-                                 & ": dX = ", nrm, ' X = ', nrmX, ' dX/X = ', nrm/nrmX
+            write(msg, '(A,I6,A,F6.2,A,E10.4,A,E10.4,A,E10.4,A,E10.4)') "Step ", istep, ", T = ", X%time, &
+                    ": dX/dt = ", nrm/tau, ' X = ', nrmX, ' (dX/dt)/X = ', nrm/tau/nrmX, ' res = ', res
             if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA_INFO')
             ! Check convergence
             if (opts%chk_convergence) then
@@ -349,6 +347,8 @@ module LightROM_LyapunovSolvers
       if (allocated(U1)) deallocate(U1)
       if (allocated(Uwrk)) deallocate(Uwrk)
       if (allocated(BBTU)) deallocate(BBTU)
+      if (allocated(Swrk)) deallocate(Swrk)
+      if (allocated(ssvd)) deallocate(ssvd)
 
       return
    end subroutine projector_splitting_DLRA_lyapunov_integrator_rdp
@@ -626,14 +626,12 @@ module LightROM_LyapunovSolvers
 
    end subroutine set_initial_rank
 
-   subroutine compute_splitting_error(err_est, X, A, B, tau, mode, exptA, trans)
+   real(wp) function splitting_error(X, A, B, tau, mode, exptA, trans, scale) result(err_est)
       !! This function estimates the splitting error of the integrator as a function of the chosen timestep.
       !! This error estimation can be integrated over time to give an estimate of the compound error due to 
       !! the splitting approach.
       !! This error can be used as a tolerance for the rank-adaptivity to ensure that the low-rank truncation 
       !! error is smaller than the splitting error.
-      real(wp),                               intent(out)   :: err_est
-      !! Estimation of the splitting error
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_linop_rdp),              intent(inout) :: A
@@ -648,6 +646,9 @@ module LightROM_LyapunovSolvers
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
       logical,                                intent(in)    :: trans
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      real(wp),                     optional, intent(in)    :: scale
+      real(wp)                                              :: scale_
+      !! Scaling factor
       
       ! internals
       ! save current state to reset it later
@@ -661,10 +662,6 @@ module LightROM_LyapunovSolvers
       ! projected difference
       real(wp),                                 allocatable :: D(:,:)
       integer                                               :: rx, r, info
-
-      ! svd
-      real(wp),                                 allocatable :: ssvd(:)
-      real(wp),                                 allocatable :: Usvd(:,:), VTsvd(:,:)
 
       rx = X%rk
       r  = 2*rx
@@ -686,37 +683,15 @@ module LightROM_LyapunovSolvers
       ! tau/2 steps
       call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans, verbose=.false.)
       call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans, verbose=.false.)
-
-      ! compute common basis
-      call project_onto_common_basis(V1, V2, U1(:rx), X%U(:rx))
-
-      ! project second low-rank state onto common basis and construct difference
-      allocate(D(r,r)); D = 0.0_wp
-      D(    :rx,     :rx) = S1 - matmul(V1, matmul(X%S(:rx,:rx), transpose(V1)))
-      D(rx+1:r ,     :rx) =    - matmul(V2, matmul(X%S(:rx,:rx), transpose(V1)))
-      D(    :rx, rx+1:r ) =    - matmul(V1, matmul(X%S(:rx,:rx), transpose(V2)))
-      D(rx+1:r , rx+1:r ) =    - matmul(V2, matmul(X%S(:rx,:rx), transpose(V2)))
       
-      ! svd
-      allocate( Usvd(r,r))
-      allocate( ssvd(r))
-      allocate(VTsvd(r,r))
-      call svd(D, ssvd, Usvd, VTsvd)
-
       ! compute local error based on frobenius norm of difference
-      err_est = 2**mode / (2**mode - 1) * sqrt( sum( ssvd ** 2 ) )
+      err_est = 2**mode / (2**mode - 1) * increment_norm(X%U(:rx), X%S(:rx,:rx), U1(:rx), S1, scale_)
 
-      ! reset curret state
-      call copy_basis(X%U(:rx), Utmp)
-      X%S(:rx,:rx) = Stmp
+   end function splitting_error
 
-   end subroutine compute_splitting_error
-
-   subroutine compute_increment_norm(nrm, U, S, U_lag, S_lag, scale)
+   real(wp) function increment_norm(U, S, U_lag, S_lag, scale) result(nrm)
       !! This function computes the norm of the solution increment in a cheap way avoiding the
       !! construction of the full low-rank solutions.
-      real(wp),                               intent(out)   :: nrm
-      !! Increment norm of current timestep
       class(abstract_vector_rdp),             intent(in)    :: U(:)
       !! Low-rank basis of current solution
       real(wp),                               intent(in)    :: S(:,:)
@@ -731,11 +706,10 @@ module LightROM_LyapunovSolvers
 
       ! internals
       real(wp), dimension(:,:),                 allocatable :: D, V1, V2
-      real(wp), dimension(:),                   allocatable :: svals       
       integer :: r, rl
 
       scale_ = optval(scale, 1.0_wp)
-      if (scale < atol_dp) call stop_error('Wrong input for scale', module=this_module, procedure='compute_increment_norm')
+      if (scale_ < atol_dp) call stop_error('Wrong input for scale', module=this_module, procedure='compute_increment_norm')
 
       r  = size(U)
       rl = size(U_lag)
@@ -751,11 +725,9 @@ module LightROM_LyapunovSolvers
       D(rl+1:rl+r, rl+1:rl+r) =       - matmul(V2, matmul(S, transpose(V2)))
 
       ! compute Frobenius norm of difference
-      svals = svdvals(D)
-      nrm = sqrt(sum(svals**2))/scale
+      nrm = dense_frobenius_norm(D, scale_)
 
-      return
-   end subroutine compute_increment_norm
+   end function increment_norm
 
    subroutine M_forward_map_rdp(X, A, tau, info, exptA, iftrans)
       !! This subroutine computes the solution of the stiff linear part of the 
