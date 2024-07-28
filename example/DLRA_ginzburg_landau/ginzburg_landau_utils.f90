@@ -10,7 +10,7 @@ module Ginzburg_Landau_Utils
    use LightKrylov
    use LightKrylov, only : wp => dp
    use LightKrylov_AbstractVectors
-   use LightKrylov_Utils, only : assert_shape
+   use LightKrylov_Utils, only : assert_shape, eigh
    ! LightROM
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
@@ -201,7 +201,8 @@ contains
       real(wp),              intent(out) :: S(:,:)
       integer,               intent(in)  :: rk
       ! internal
-      real(wp) :: mu(rk,rk), var(rk,rk)
+      real(wp), dimension(rk, rk) :: mu, var, V
+      real(wp), dimension(rk)     :: lambda
       integer :: i
 
       ! checks
@@ -227,6 +228,12 @@ contains
       var = 1.0_sp
       S = 0.0_wp
       S(:rk,:rk) = normal(mu, var)
+      ! ensure symmetry
+      S = 0.5*(S + transpose(S))
+      ! ensure positive definiteness
+      call eigh(S, V, lambda)
+      S = matmul(V, matmul(diag(abs(lambda)), transpose(V)))
+      ! ensure symmetry that is not exactly preserved in matmul
       S = 0.5*(S + transpose(S))
 
       return      

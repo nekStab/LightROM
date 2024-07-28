@@ -28,7 +28,7 @@ module Ginzburg_Landau_Tests
    ! IO
    integer,       parameter :: iunit1 = 1
    integer,       parameter :: iunit2 = 2
-   character(len=128), parameter :: basepath = 'local/TEST_conv/'
+   character(len=128), parameter :: basepath = 'local/GL_convergence/'
    integer,       parameter :: rkmax = 64
    integer,       parameter :: rk_X0 = 10
 
@@ -103,7 +103,7 @@ contains
          do i = 1, size(rkv)
             rk = rkv(i)
             if (allocated(vals)) deallocate(vals)
-            allocate(vals(1:rk))
+            allocate(vals(rk))
             do j = 1, size(tauv)
                tau = tauv(j)
                ! Initialize low-rank representation with rank rk
@@ -136,7 +136,7 @@ contains
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
-                  vals = svdvals(X%S(1:rk,1:rk))
+                  vals = svdvals(X%S(:rk,:rk))
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') X%time
                      do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
@@ -145,15 +145,15 @@ contains
                      write (iunit2,'(A)', ADVANCE='NO') ' | '
                      do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(k); end do
                      write (iunit2,'(A)', ADVANCE='NO') ' | '
-                     lagsvd(1:rk) = lagsvd(1:rk) - vals
+                     lagsvd(:rk) = lagsvd(:rk) - vals
                      sfro = 0.0_wp
                      do k = 1, rk
                         sfro = sfro + lagsvd(k)**2
                      end do
                      sfro = sqrt(sfro)
-                     write(iunit2,'(E14.6)'), sfro           
+                     write(iunit2,'(E14.6)') sfro           
                   end if
-                  lagsvd(1:rk) = vals
+                  lagsvd(:rk) = vals
                   ! Reconstruct solution
                   call reconstruct_solution(X_out, X)
                   call CALE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
@@ -173,9 +173,9 @@ contains
                if (if_save_npy) then
                   write(onameU,'("data_GLXY_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
                   write(onameS,'("data_GLXY_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
-                  call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
+                  call save_npy(trim(basepath)//onameU, U_out(:,:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
-                  call save_npy(trim(basepath)//onameS, X%S(1:rk,1:rk), iostatus)
+                  call save_npy(trim(basepath)//onameS, X%S(:rk,:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
                end if
                deallocate(X%U)
@@ -196,7 +196,7 @@ contains
          do i = 1, size(rkv)
             rk = rkv(i)
             if (allocated(vals)) deallocate(vals)
-            allocate(vals(1:rk))
+            allocate(vals(rk))
             do j = 1, size(tauv)
                tau = tauv(j)
                ! Initialize low-rank representation with rank rk
@@ -228,7 +228,7 @@ contains
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
                   ! Compute LR basis spectrum
-                  vals = svdvals(Y%S(1:rk,1:rk))
+                  vals = svdvals(Y%S(:rk,:rk))
                   if (if_save_logs) then
                      write(iunit2,'("sigma ",F8.4)',ADVANCE='NO') Y%time
                      do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
@@ -237,7 +237,7 @@ contains
                      write (iunit2,'(A)', ADVANCE='NO') ' | '
                      do k = 1, rk; write(iunit2,'(E14.6)', ADVANCE='NO') abs(vals(k) - lagsvd(k))/lagsvd(k); end do
                      write (iunit2,'(A)', ADVANCE='NO') ' | '
-                     lagsvd(1:rk) = lagsvd(1:rk) - vals
+                     lagsvd(:rk) = lagsvd(:rk) - vals
                      sfro = 0.0_wp
                      do k = 1, rk
                         sfro = sfro + lagsvd(k)**2
@@ -245,7 +245,7 @@ contains
                      sfro = sqrt(sfro)
                      write(iunit2,'(E14.6)'), sfro          
                   end if
-                  lagsvd(1:rk) = vals
+                  lagsvd(:rk) = vals
                   ! Reconstruct solution
                   call reconstruct_solution(X_out, Y)
                   call CALE(res, reshape(X_out, shape(res)), CTCW_flat, .true.)
@@ -265,9 +265,9 @@ contains
                if (if_save_npy) then
                   write(onameU,'("data_GLXY_YU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
                   write(onameS,'("data_GLXY_YS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
-                  call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
+                  call save_npy(trim(basepath)//onameU, U_out(:,:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
-                  call save_npy(trim(basepath)//onameS, Y%S(1:rk,1:rk), iostatus)
+                  call save_npy(trim(basepath)//onameS, Y%S(:rk,:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
                end if
                deallocate(Y%U)
@@ -379,11 +379,10 @@ contains
             call load_npy(onameS, S_load, iostatus)
             if (iostatus /= 0) then; write(*,*) "Error loading file", trim(onameS); STOP 2; end if
          else
-            write(*,*) 'Files to load X not found.'
-            STOP 1
+            write(*,*) 'Files to load X not found.'; STOP 1
          end if
-         if (.not.allocated(Utmp)) allocate(Utmp(1:rk), source=U0(1))
-         call set_state(Utmp, U_load(:,1:rk))
+         if (.not.allocated(Utmp)) allocate(Utmp(rk), source=U0(1))
+         call set_state(Utmp, U_load(:,:rk))
          call X%initialize_LR_state(Utmp, S_load, rk)
       else
          ! Initialize low-rank representation with rank rk
@@ -404,7 +403,6 @@ contains
                                                                   & exptA=exptA, iftrans=.false., options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
             etime = etime + real(clock_stop-clock_start)/real(clock_rate)
-
             ! Reconstruct solution
             call reconstruct_solution(X_out, X)
             Ttot = Ttot + Tend
@@ -418,9 +416,9 @@ contains
             write(*,*) 'Save data to file:'
             write(*,*) '    ', trim(onameU)
             write(*,*) '    ', trim(onameS)
-            call save_npy(onameU, U_out(:,1:rk), iostatus)
+            call save_npy(onameU, U_out(:,:rk), iostatus)
             if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
-            call save_npy(onameS, X%S(1:rk,1:rk), iostatus)
+            call save_npy(onameS, X%S(:rk,:rk), iostatus)
             if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
          end if
       end if
@@ -450,8 +448,8 @@ contains
             write(*,*) 'Files to load Y not found.'
             STOP 1
          end if
-         if (.not.allocated(Utmp)) allocate(Utmp(1:rk), source=U0(1))
-         call set_state(Utmp, U_load(:,1:rk))
+         if (.not.allocated(Utmp)) allocate(Utmp(rk), source=U0(1))
+         call set_state(Utmp, U_load(:,:rk))
          call Y%initialize_LR_state(Utmp, S_load, rk)
       else
          ! Initialize low-rank representation with rank rk
@@ -486,9 +484,9 @@ contains
             write(*,*) 'Save data to file:'
             write(*,*) '    ', trim(onameU)
             write(*,*) '    ', trim(onameS)
-            call save_npy(onameU, U_out(:,1:rk), iostatus)
+            call save_npy(onameU, U_out(:,:rk), iostatus)
             if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
-            call save_npy(onameS, Y%S(1:rk,1:rk), iostatus)
+            call save_npy(onameS, Y%S(:rk,:rk), iostatus)
             if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
          end if
       end if
@@ -499,57 +497,51 @@ contains
       write(*,*) '------------------------------'
       write(*,*) ''
 
-      allocate(Swrk(1:rk,1:rk))
-      if (.not.allocated(Utmp)) allocate(Utmp(1:rk), source=U0(1))
+      allocate(Swrk(rk,rk))
+      if (.not.allocated(Utmp)) allocate(Utmp(rk), source=U0(1))
 
       ! compute sqrt of coefficient matrix X%S and right-multiply it to X%U
       Swrk = 0.0_wp
-      call sqrtm(X%S(1:rk,1:rk), Swrk(1:rk,1:rk), info)
+      call sqrtm(X%S(:rk,:rk), Swrk(:rk,:rk), info)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, X%U(1:rk), Swrk(1:rk,1:rk))
+         call linear_combination(Xwrk, X%U(:rk), Swrk(:rk,:rk))
          call copy_basis(Utmp, Xwrk)
       end block
-      !call linear_combination(Utmp, X%U, Swrk(1:rk,1:rk))
-      call get_state(U0_in(:,1:rk), Utmp)
+      !call linear_combination(Utmp, X%U, Swrk(:rk,:rk))
+      call get_state(U0_in(:,:rk), Utmp)
       ! compute SVD of updated X%U
-      call svd(U0_in(:,1:rk), S_svd(1:rk), U_svd(:,1:2*nx), V_svd(1:rk,1:rk))
-      call set_state(X%U(1:rk), matmul(U_svd(:,1:rk), diag(S_svd(1:rk))))
+      call svd(U0_in(:,:rk), S_svd(:rk), U_svd(:,:2*nx), V_svd(:rk,:rk))
+      call set_state(X%U(:rk), matmul(U_svd(:,:rk), diag(S_svd(:rk))))
 
       ! compute sqrt of coefficient matrix Y%S and right-multiply it to Y%U
       Swrk = 0.0_wp
-      call sqrtm(Y%S(1:rk,1:rk), Swrk(1:rk,1:rk), info)
+      call sqrtm(Y%S(:rk,:rk), Swrk(:rk,:rk), info)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, Y%U(1:rk), Swrk(1:rk,1:rk))
+         call linear_combination(Xwrk, Y%U(:rk), Swrk(:rk,:rk))
          call copy_basis(Utmp, Xwrk)
       end block
-      !call linear_combination(Utmp, Y%U, Swrk(1:rk,1:rk))
-      call get_state(U0_in(:,1:rk), Utmp)
+      !call linear_combination(Utmp, Y%U, Swrk(:rk,:rk))
+      call get_state(U0_in(:,:rk), Utmp)
       ! compute SVD of updated Y%U
-      call svd(U0_in(:,1:rk), S_svd(1:rk), U_svd(:,1:2*nx), V_svd(1:rk,1:rk))
-      call set_state(Y%U(1:rk), matmul(U_svd(:,1:rk), diag(S_svd(1:rk))))   
+      call svd(U0_in(:,:rk), S_svd(:rk), U_svd(:,:2*nx), V_svd(:rk,:rk))
+      call set_state(Y%U(:rk), matmul(U_svd(:,:rk), diag(S_svd(:rk))))   
 
       ! compute balancing transformation based on SVD of Gramians
-      allocate(T(1:rk), source=U0(1)); allocate(Tinv(1:rk), source=U0(1)); allocate(S(1:rk))
-      call Balancing_Transformation(T, S, Tinv, X%U(1:rk), Y%U(1:rk))
+      allocate(T(rk), source=U0(1)); allocate(Tinv(rk), source=U0(1)); allocate(S(rk))
+      call Balancing_Transformation(T, S, Tinv, X%U(:rk), Y%U(:rk))
       
       call ROM_Petrov_Galerkin_Projection(Ahat, Bhat, Chat, D, LTI, T, Tinv)
 
       if (if_save_npy) then
          write(*,*) 'Save data to file:'
-         onameU = trim(basepath)//"GL_Ahat.npy"
-         write(*,*) '    ', trim(onameU)
-         call save_npy(onameU, Ahat)
-         if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
-         onameU = trim(basepath)//"GL_Bhat.npy"
-         write(*,*) '    ', trim(onameU)
-         call save_npy(onameU, Bhat)
-         if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
-         onameU = trim(basepath)//"GL_Chat.npy"
-         write(*,*) '    ', trim(onameU)
-         call save_npy(onameU, Chat)
-         if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
+         onameU = trim(basepath)//"GL_Ahat.npy"; write(*,*) '    ', trim(onameU)
+         call save_npy(onameU, Ahat); if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
+         onameU = trim(basepath)//"GL_Bhat.npy"; write(*,*) '    ', trim(onameU)
+         call save_npy(onameU, Bhat); if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
+         onameU = trim(basepath)//"GL_Chat.npy"; write(*,*) '    ', trim(onameU)
+         call save_npy(onameU, Chat); if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
       end if
       write(*,*) ''
 
@@ -630,12 +622,11 @@ contains
                   ! run integrator
                   etime = 0.0_wp
                   call system_clock(count=clock_start)     ! Start Timer
-                  !call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, &
-                  !                                                   & Tend, tau, info, &
-                  !                                                   & exptA=exptA, iftrans=.false., options=opts)
+                 ! call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, &
+                 !                                                    & Tend, tau, info, &
+                 !                                                    & exptA=exptA, iftrans=.false., options=opts)
                   call system_clock(count=clock_stop)      ! Stop Timer
                   etime = etime + real(clock_stop-clock_start)/real(clock_rate)
-
                   ! Reconstruct solution
                   call reconstruct_solution(X_out, X)
                   Ttot = Ttot + Tend
@@ -648,9 +639,9 @@ contains
                if (if_save_npy) then
                   write(onameU,'("data_GL_Riccati_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
                   write(onameS,'("data_GL_Riccati_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
-                  call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
+                  call save_npy(trim(basepath)//onameU, U_out(:,:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
-                  call save_npy(trim(basepath)//onameS, X%S(1:rk,1:rk), iostatus)
+                  call save_npy(trim(basepath)//onameS, X%S(:rk,:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
                end if
                deallocate(X%U)
@@ -660,7 +651,6 @@ contains
       end do
 
    end subroutine run_DLRA_riccati_test
-
 
    subroutine run_kexpm_test(A, prop, U0, tauv, torder, N)
       class(abstract_linop_rdp),     intent(inout) :: A
@@ -747,7 +737,6 @@ contains
          write(*,'(F8.6," | ",3(F10.6,1X),3X,3(F10.6,1X))') tau, &
                                  & etime_kryl, etime_kryl/N, sqrt(stddev_kryl/(N-1)), &
                                  & etime_rk,   etime_rk/N,   sqrt(stddev_rk/(N-1))
-         
       end do
 
       return
@@ -853,7 +842,6 @@ contains
          write(*,'(F8.6," | ",3(F10.6,1X),3X,3(F10.6,1X))') tau, &
                                  & etime_kfdt, etime_kfdt/N, sqrt(stddev_kfdt/(N-1)), &
                                  & etime_rk,   etime_rk/N,   sqrt(stddev_rk/(N-1))
-         
       end do
 
       return
@@ -863,8 +851,8 @@ contains
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Initial condition
-      type(state_vector),            intent(inout)    :: U0(:)
-      real(wp),                      intent(inout)    :: S0(:,:)
+      type(state_vector),            intent(inout) :: U0(:)
+      real(wp),                      intent(inout) :: S0(:,:)
       real(wp),                      intent(in)    :: Tend
       ! vector of dt values
       real(wp),                      intent(in)    :: tauv(:)
@@ -936,13 +924,13 @@ contains
          write(oname,'("data_GL_lyapconv_X0_RK_n",I4.4,"_rk0_",I2.2,".npy")') nx, rk_X0
          inquire(file=trim(basepath)//oname, exist=existfile)
          if (existfile) then
-            call load_npy(trim(basepath)//trim(oname), U_load, iostatus)
             print *, 'Load initial condition: ', trim(basepath)//trim(oname)
+            call load_npy(trim(basepath)//trim(oname), U_load, iostatus)
             if (iostatus /= 0) then; write(*,*) "Error loading file", trim(basepath)//trim(oname); STOP 2; end if
          else
             write(*,*) 'Cannot find ', trim(basepath)//trim(oname); STOP 12
          end if
-         X_out = U_load(1:N, 1:N)
+         X_out = U_load(:N, :N)
          ! Load reference RK solution
          write(oname,'("data_GL_lyapconv_X_RK_n",I4.4,"_rk0_",I2.2,"_r",I3.3,".npy")') nx, rk_X0, nrep
          inquire(file=trim(basepath)//trim(oname), exist=existfile)
@@ -954,7 +942,7 @@ contains
             write(*,*) 'Cannot find ', trim(basepath)//trim(oname); STOP 12
          end if
          ! Set reference RK solution
-         X_mat_ref = U_load(1:N, 1:N)
+         X_mat_ref = U_load(:N, :N)
       else
          ! Set random initial condition
          call get_state(U0_mat(:,:rk_X0), U0)
@@ -980,7 +968,7 @@ contains
             if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
             ! Save forcing DLRA
             Bmat = 0.0_wp
-            call get_state(Bmat, LTI%B(1:rk_b))
+            call get_state(Bmat, LTI%B(:rk_b))
             X_out = matmul(Bmat, transpose(Bmat))
             write(oname,'("data_GL_lyapconv_BBTW_DLRA_n",I4.4,".npy")') nx
             write(*,*) 'Save ', trim(basepath)//trim(oname)
@@ -1047,10 +1035,10 @@ contains
                   write(onameU,'("data_GL_lyapconv_XU_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') nx, torder, rk, tau
                   write(onameS,'("data_GL_lyapconv_XS_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') nx, torder, rk, tau
                   write(*,*) 'Save ', trim(basepath)//trim(onameU)
-                  call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
+                  call save_npy(trim(basepath)//onameU, U_out(:,:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
                   write(*,*) 'Save ', trim(basepath)//trim(onameS)
-                  call save_npy(trim(basepath)//onameS, X_state%S(1:rk,1:rk), iostatus)
+                  call save_npy(trim(basepath)//onameS, X_state%S(:rk,:rk), iostatus)
                   if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
                end if
                deallocate(X_state%U)
@@ -1061,7 +1049,7 @@ contains
       
    end subroutine run_lyap_convergence_test
 
-   subroutine run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, nrep, testid, ifsave, ifverb, iflogs, ifconv)
+   subroutine run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, tolv, Tend, testid, ifsave, ifverb, ifrk, ifconv)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Initial condition
@@ -1076,15 +1064,14 @@ contains
       ! vector of tol values
       real(wp),                      intent(in) :: tolv(:)
       real(wp),                      intent(in) :: Tend
-      integer,                       intent(in) :: nrep
       character(len=*),              intent(in) :: testid
       ! Optional
       logical, optional,             intent(in) :: ifsave
       logical                                   :: if_save_npy
       logical, optional,             intent(in) :: ifverb
       logical                                   :: verb
-      logical, optional,             intent(in) :: iflogs
-      logical                                   :: if_save_logs
+      logical, optional,             intent(in) :: ifrk
+      logical                                   :: if_runge_kutta
       logical, optional,             intent(in) :: ifconv
       logical                                   :: if_convergence
       ! Initial condition
@@ -1096,12 +1083,9 @@ contains
       type(LR_state),     allocatable           :: Y     ! Observability
       real(wp)                                  :: U_out(2*nx,rkmax)
       real(wp)                                  :: X_out(2*nx,2*nx)
-      real(wp)                                  :: vals(rkmax)
-      real(wp)                                  :: sfro
-      real(wp)                                  :: tau, etime, etime_tot, rk_tol, tauc
+      real(wp)                                  :: tau, etime, rk_tol, tauc, dt
       integer                                   :: i, j, k, l, ito, rk, irep, nsteps, rk_rst
       integer                                   :: info, torder, iostatus
-      real(wp)                                  :: lagsvd(rkmax)
       real(wp)                                  :: res(N**2)
       logical                                   :: existU, existS, ifskip
       character(len=128) :: oname
@@ -1115,7 +1099,7 @@ contains
 
       if_save_npy    = optval(ifsave, .false.)
       verb           = optval(ifverb, .false.)
-      if_save_logs   = optval(iflogs, .false.)
+      if_runge_kutta = optval(ifrk, .true.)
       if_convergence = optval(ifconv, .false.)
 
       call system_clock(count_rate=clock_rate)
@@ -1151,7 +1135,7 @@ contains
                                     & trim(testid), nx, torder, rk, tau, rk_tol
                   write(onameS,'(A, "_data_GL_XS_n",I4.4,"_TO",I1,"_rk0_",I2.2,"_dt",E8.2,"_tol_",E8.2,".npy")') &
                                     & trim(testid), nx, torder, rk, tau, rk_tol
-                  if (.not.ifconv) then
+                  if (.not.if_convergence) then
                     ! Initialize low-rank representation with rank rk
                     if (verb) write(*,*) 'Initialize LR state, rk =', rk
                     call X%initialize_LR_state(U0, S0, rk, rkmax)
@@ -1181,11 +1165,8 @@ contains
                     if (verb) write(*,*) 'Initialize LR state for convergence run, rk =', rk_rst
                     call X%initialize_LR_state(U_in, S_load, rk_rst)
                     X%rank_is_initialized = .true.
-                    X%time = Tend*nrep
+                    X%time = Tend
                     write(suffix,'(A,E8.2)') '_conv_dtc', tauc
-                    ! compute lagsvds
-                    vals = 0.0_wp
-                    vals(:X%rk) = svdvals(X%S(:X%rk,:X%rk))
                   end if
                   ! reset output filenames to avoid overwriting if necessary
                   write(onameU,'(A, "_data_GL_XU_n",I4.4,"_TO",I1,"_rk0_",I2.2,"_dt",E8.2,"_tol_",E8.2,A,".npy")') &
@@ -1195,7 +1176,7 @@ contains
                   inquire(file=trim(basepath)//onameU, exist=ifskip)
                   if (.not.ifskip) then
                     ! set solver options
-                    if (.not.ifconv) then ! regular run --> rank adaptive
+                    if (.not.if_convergence) then ! regular run --> rank adaptive
                       opts = dlra_opts(mode=ito, if_rank_adaptive=.true., tol=rk_tol, chktime=1.0_wp, &
                                      & use_err_est = .false., verbose=verb, chk_convergence=.false., print_svals=.true., &
                                      & ninit = 10)
@@ -1204,79 +1185,33 @@ contains
                                      & use_err_est = .false., verbose=verb, chk_convergence=.false., print_svals=.true., &
                                      & ninit = 10)
                     end if
-                    ! Reset time
-                    lagsvd = 0.0_wp
                     if (verb) write(*,*) 'Run DRLA'
-                    if (if_save_logs) then
-                       write(oname,'(A, "_output_GL_X_log__n",I4.4,"_TO",I1,"_rk0_",I2.2,"_dt",E8.2,"_tol_",E8.2,A,".txt")') &
-                                   & trim(testid), nx, torder, rk, tau, rk_tol, trim(suffix)
-                       call logger%add_log_file(trim(basepath)//oname, iunit, stat=stat )
-                       if (stat /= success) error stop 'Unable to open logfile.'
-                       call logger%configure(level=warning_level, time_stamp=.false.)
-                       write(oname,'(A, "_output_GL_X_norm_n",I4.4,"_TO",I1,"_rk0_",I2.2,"_dt",E8.2,"_tol_",E8.2,A,".txt")') &
-                                   & trim(testid), nx, torder, rk, tau, rk_tol, trim(suffix)
-                       open(unit=iunit1, file=trim(basepath)//oname)
-                       call stamp_logfile_header(iunit1, 'Controllability Gramian', rk, tau, Tend, torder, opts)
-                       write(iunit1,'(A16,A4,A10,A18,A18,A20)') 'DLRA:','  rk',' Tend','|| X_DLRA ||_2/N','|| res ||_2/N', &
-                                         & 'Elapsed time'
-                       write(oname,'(A, "_output_GL_X_sgma_n",I4.4,"_TO",I1,"_rk0_",I2.2,"_dt",E8.2,"_tol_",E8.2,A,".txt")') &
-                                   & trim(testid), nx, torder, rk, tau, rk_tol, trim(suffix)
-                       open(unit=iunit2, file=trim(basepath)//oname)
-                       call stamp_logfile_header(iunit2, 'Controllability Gramian', rk, tau, Tend, torder, opts)
-                       write(iunit2,*) 'DLRA: T    rk    sigma_i    d(sigma_i)   ||Sum(sigma_i)||_2'
-                    end if
                     write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
                                          & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
                     nsteps = nint(Tend/tau)
-                    etime_tot = 0.0_wp
                     ! run integrator
-                    do irep = 1, nrep
-                       etime = 0.0_wp
-                       call system_clock(count=clock_start)     ! Start Timer
-                       if (.not.ifconv) then ! regular run, dt
-                         call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
-                                                                         & exptA=exptA, iftrans=.false., options=opts)
-                       else ! convergence run, dt = dtc
-                         call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tauc, info, &
-                                                                         & exptA=exptA, iftrans=.false., options=opts)
-                       end if
-                       call system_clock(count=clock_stop)      ! Stop Timer
-                       etime = etime + real(clock_stop-clock_start)/real(clock_rate)
-                       ! Compute LR basis spectrum
-                       vals = 0.0_wp
-                       vals(:X%rk) = svdvals(X%S(:X%rk,:X%rk))
-                       if (if_save_logs) then
-                          write(iunit2,'("sigma ",F8.4,1X,I4)',ADVANCE='NO') X%time, X%rk
-                          write (iunit2,'(A)', ADVANCE='NO') ' | '
-                          do k = 1, X%rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
-                          write (iunit2,'(A)', ADVANCE='NO') ' | '
-                          lagsvd(:X%rk) = lagsvd(:X%rk) - vals(:X%rk)
-                          do k = 1, X%rk; write(iunit2,'(E14.6)', ADVANCE='NO') lagsvd(k); end do
-                          write (iunit2,'(A)', ADVANCE='NO') ' | '
-                          sfro = 0.0_wp
-                          do k = 1, X%rk; sfro = sfro + lagsvd(k)**2; end do
-                          sfro = sqrt(sfro)
-                          write(iunit2,'(E10.2)') sfro           
-                       end if
-                       lagsvd(:X%rk) = vals(:X%rk)
-                       ! Reconstruct solution
-                       call reconstruct_solution(X_out, X)
-                       call CALE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
-                       write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.3,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
-                                         & rk, torder, tau, nsteps, X%time, norm2(X_out)/N, norm2(res)/N, etime
-                       if (if_save_logs) then
-                          write(iunit1,'(I4," ",A11,I6,F8.3,E18.8,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
-                                         & nsteps, X%time, norm2(X_out)/N, norm2(res)/N, etime
-                       end if
-                       etime_tot = etime_tot + etime
-                    end do
-                    if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
-                    if (if_save_logs) then
-                       write(iunit1,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit1)
-                       write(Iunit2,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit2)
-                       call logger%remove_log_unit(iunit, close_unit=.true., stat=stat)
-                       if (stat /= success) error stop 'Unable to close logfile.'
+                    etime = 0.0_wp
+                    call system_clock(count=clock_start)     ! Start Timer
+                    if (.not.if_convergence) then ! regular run, dt
+                      dt = tau
+                    else 
+                      dt = tauc
                     end if
+                    if (if_runge_kutta) then
+                      call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, dt, info, &
+                                                                          & exptA=exptA, iftrans=.false., options=opts)
+                    else
+                      call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, info, &
+                                                                          & iftrans=.false., options=opts)
+                    end if
+                    call system_clock(count=clock_stop)      ! Stop Timer
+                    etime = etime + real(clock_stop-clock_start)/real(clock_rate)
+                    ! Reconstruct solution
+                    call reconstruct_solution(X_out, X)
+                    call CALE(res, reshape(X_out, shape(res)), BBTW_flat, .false.)
+                    write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.3,E18.8,E18.8,F18.4," s")') irep, 'Xctl OUTPUT', &
+                                      & rk, torder, tau, nsteps, X%time, norm2(X_out)/N, norm2(res)/N, etime
+                    if (verb) write(*,*) 'Total integration time (DLRA):', etime, 's'
                     if (if_save_npy) then
                        call get_state(U_out(:,:X%rk), X%U(:X%rk))
                        call save_npy(trim(basepath)//onameU, U_out(:,:X%rk), iostatus)
@@ -1316,7 +1251,7 @@ contains
                                     & trim(testid), nx, torder, rk, tau, rk_tol
                   write(onameS,'(A, "_data_GL_YS_n",I4.4,"_TO",I1,"_rk0_",I2.2,"_dt",E8.2,"_tol_",E8.2,".npy")') &
                                     & trim(testid), nx, torder, rk, tau, rk_tol
-                  if (.not.ifconv) then
+                  if (.not.if_convergence) then
                     ! Initialize low-rank representation with rank rk
                     if (verb) write(*,*) 'Initialize LR state, rk =', rk
                     call Y%initialize_LR_state(U0, S0, rk, rkmax)
@@ -1335,8 +1270,7 @@ contains
                       call load_npy(trim(basepath)//onameS, S_load, iostatus)
                       if (iostatus /= 0) then; write(*,*) "Error loading from file", trim(onameS); STOP 2; end if
                     else
-                      print *, 'Files to load Y not found.'
-                      STOP 1
+                      print *, 'Files to load Y not found.'; STOP 1
                     end if
                     ! Initialize low-rank representation with rank rk
                     rk_rst = size(U_load, 2)
@@ -1346,11 +1280,8 @@ contains
                     if (verb) write(*,*) 'Initialize LR state for convergence run, rk =', rk_rst
                     call Y%initialize_LR_state(U_in, S_load, rk_rst)
                     Y%rank_is_initialized = .true.
-                    Y%time = Tend*nrep
+                    Y%time = Tend
                     write(suffix,'(A,E8.2)') '_conv_dtc', tauc
-                    ! compute lagsvds
-                    vals = 0.0_wp
-                    vals(:Y%rk) = svdvals(Y%S(:Y%rk,:Y%rk))
                   end if
                   ! reset output filenames to avoid overwriting if necessary
                   write(onameU,'(A, "_data_GL_YU_n",I4.4,"_TO",I1,"_rk0_",I2.2,"_dt",E8.2,"_tol_",E8.2,A,".npy")') &
@@ -1360,7 +1291,7 @@ contains
                   inquire(file=trim(basepath)//onameU, exist=ifskip)
                   if (.not.ifskip) then
                     ! set solver options
-                    if (.not.ifconv) then ! regular run --> rank adaptive
+                    if (.not.if_convergence) then ! regular run --> rank adaptive
                       opts = dlra_opts(mode=ito, if_rank_adaptive=.true., tol=rk_tol, chktime=1.0_wp, &
                                      & use_err_est = .false., verbose=verb, chk_convergence=.false., print_svals=.true., &
                                      & ninit = 10)
@@ -1369,79 +1300,33 @@ contains
                                      & use_err_est = .false., verbose=verb, chk_convergence=.false., print_svals=.true., &
                                      & ninit = 10)
                     end if
-                    ! Reset time
-                    lagsvd = 0.0_wp
                     if (verb) write(*,*) 'Run DRLA'
-                    if (if_save_logs) then
-                       write(oname,'(A, "_output_GL_Y_log__n",I4.4,"_TO",I1,"_rk0_",I2.2,"_dt",E8.2,"_tol_",E8.2,A,".txt")') &
-                                   & trim(testid), nx, torder, rk, tau, rk_tol, trim(suffix)
-                       call logger%add_log_file(trim(basepath)//oname, iunit, stat=stat )
-                       if (stat /= success) error stop 'Unable to open logfile.'
-                       call logger%configure(level=warning_level, time_stamp=.false.)
-                       write(oname,'(A, "_output_GL_Y_norm_n",I4.4,"_TO",I1,"_rk0_",I2.2,"_dt",E8.2,"_tol_",E8.2,A,".txt")') &
-                                   & trim(testid), nx, torder, rk, tau, rk_tol, trim(suffix)
-                       open(unit=iunit1, file=trim(basepath)//oname)
-                       call stamp_logfile_header(iunit1, 'Observability Gramian', rk, tau, Tend, torder, opts)
-                       write(iunit1,'(A16,A4,A10,A18,A18,A20)') 'DLRA:','  rk',' Tend','|| X_DLRA ||_2/N','|| res ||_2/N', &
-                                         & 'Elapsed time'
-                       write(oname,'(A, "_output_GL_Y_sgma_n",I4.4,"_TO",I1,"_rk0_",I2.2,"_dt",E8.2,"_tol_",E8.2,A,".txt")') &
-                                   & trim(testid), nx, torder, rk, tau, rk_tol, trim(suffix)
-                       open(unit=iunit2, file=trim(basepath)//oname)
-                       call stamp_logfile_header(iunit2, 'Observability Gramian', rk, tau, Tend, torder, opts)
-                       write(iunit2,*) 'DLRA: T    rk    sigma_i    d(sigma_i)   ||Sum(sigma_i)||_2'
-                    end if
                     write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
                                          & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
                     nsteps = nint(Tend/tau)
-                    etime_tot = 0.0_wp
                     ! run integrator
-                    do irep = 1, nrep
-                       etime = 0.0_wp
-                       call system_clock(count=clock_start)     ! Start Timer
-                       if (.not.ifconv) then ! regular run, dt
-                         call projector_splitting_DLRA_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tau, info, &
-                                                                         & exptA=exptA, iftrans=.true., options=opts)
-                       else ! convergence run, dt = dtc
-                         call projector_splitting_DLRA_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, tauc, info, &
-                                                                         & exptA=exptA, iftrans=.true., options=opts)
-                       end if
-                       call system_clock(count=clock_stop)      ! Stop Timer
-                       etime = etime + real(clock_stop-clock_start)/real(clock_rate)
-                       ! Compute LR basis spectrum
-                       vals = 0.0_wp
-                       vals(:Y%rk) = svdvals(Y%S(:Y%rk,:Y%rk))
-                       if (if_save_logs) then
-                          write(iunit2,'("sigma ",F8.4,1X,I4)',ADVANCE='NO') Y%time, Y%rk
-                          write (iunit2,'(A)', ADVANCE='NO') ' | '
-                          do k = 1, Y%rk; write(iunit2,'(E14.6)', ADVANCE='NO') vals(k); end do
-                          write (iunit2,'(A)', ADVANCE='NO') ' | '
-                          lagsvd(:Y%rk) = lagsvd(:Y%rk) - vals(:Y%rk)
-                          do k = 1, Y%rk; write(iunit2,'(E14.6)', ADVANCE='NO') lagsvd(k); end do
-                          write (iunit2,'(A)', ADVANCE='NO') ' | '
-                          sfro = 0.0_wp
-                          do k = 1, Y%rk; sfro = sfro + lagsvd(k)**2; end do
-                          sfro = sqrt(sfro)
-                          write(iunit2,'(E10.2)') sfro           
-                       end if
-                       lagsvd(:Y%rk) = vals(:Y%rk)
-                       ! Reconstruct solution
-                       call reconstruct_solution(X_out, Y)
-                       call CALE(res, reshape(X_out, shape(res)), CTCW_flat, .true.)
-                       write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.3,E18.8,E18.8,F18.4," s")') irep, 'Yobs OUTPUT', &
-                                         & rk, torder, tau, nsteps, Y%time, norm2(X_out)/N, norm2(res)/N, etime
-                       if (if_save_logs) then
-                          write(iunit1,'(I4," ",A11,I6,F8.3,E18.8,E18.8,E18.8,F18.4," s")') irep, 'Yobs OUTPUT', &
-                                         & nsteps, Y%time, norm2(X_out)/N, norm2(res)/N, etime
-                       end if
-                       etime_tot = etime_tot + etime
-                    end do
-                    if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
-                    if (if_save_logs) then
-                       write(iunit1,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit1)
-                       write(Iunit2,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit2)
-                       call logger%remove_log_unit(iunit, close_unit=.true., stat=stat)
-                       if (stat /= success) error stop 'Unable to close logfile.'
+                    etime = 0.0_wp
+                    call system_clock(count=clock_start)     ! Start Timer
+                    if (.not.if_convergence) then ! regular run, dt
+                      dt = tau
+                    else
+                      dt = tauc
                     end if
+                    if (if_runge_kutta) then
+                      call projector_splitting_DLRA_lyapunov_integrator(Y, LTI%prop, LTI%CT, Tend, dt, info, &
+                                                                      & exptA=exptA, iftrans=.true., options=opts)
+                    else ! kexpm
+                      call projector_splitting_DLRA_lyapunov_integrator(Y, LTI%A, LTI%CT, Tend, dt, info, &
+                                                                      & iftrans=.true., options=opts)
+                    end if
+                    call system_clock(count=clock_stop)      ! Stop Timer
+                    etime = etime + real(clock_stop-clock_start)/real(clock_rate)
+                    ! Reconstruct solution
+                    call reconstruct_solution(X_out, Y)
+                    call CALE(res, reshape(X_out, shape(res)), CTCW_flat, .true.)
+                    write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.3,E18.8,E18.8,F18.4," s")') irep, 'Yobs OUTPUT', &
+                                      & rk, torder, tau, nsteps, Y%time, norm2(X_out)/N, norm2(res)/N, etime
+                    if (verb) write(*,*) 'Total integration time (DLRA):', etime, 's'
                     if (if_save_npy) then
                        call get_state(U_out(:,:Y%rk), Y%U(:Y%rk))
                        call save_npy(trim(basepath)//onameU, U_out(:,:Y%rk), iostatus)
