@@ -11,7 +11,7 @@ module LightROM_Utils
    use LightKrylov_Logger
    use LightKrylov_AbstractVectors
    use LightKrylov_BaseKrylov, only : orthonormalize_basis, orthogonalize_against_basis
-   use LightKrylov_Utils, only : abstract_opts, assert_shape, sqrtm
+   use LightKrylov_Utils, only : abstract_opts, assert_shape, sqrtm, eigh
    ! LightROM
    use LightROM_AbstractLTIsystems
    
@@ -20,18 +20,21 @@ module LightROM_Utils
    private :: this_module
    character(len=*), parameter :: this_module = 'LightROM_Utils'
 
-   public :: dlra_opts
-
-   public :: chk_opts
-   public :: dense_frobenius_norm
-   public :: CALE_res_norm
-   public :: is_converged
-   public :: project_onto_common_basis
-   public :: random_low_rank_state
-
+   ! Balancing Transformations and projections   
    public :: Balancing_Transformation
    public :: ROM_Petrov_Galerkin_Projection
    public :: ROM_Galerkin_Projection
+   public :: project_onto_common_basis
+
+   ! Utilities for matrix norm computations
+   public :: dense_frobenius_norm
+   public :: increment_norm
+   public :: CALE_res_norm
+
+   ! Miscellenous utils
+   public :: chk_opts
+   public :: is_converged
+   public :: random_low_rank_state
 
    interface Balancing_Transformation
       module procedure Balancing_Transformation_rdp
@@ -307,6 +310,46 @@ contains
 
    end function dense_frobenius_norm
 
+   real(wp) function increment_norm(U, S, U_lag, S_lag, scale) result(nrm)
+      !! This function computes the norm of the solution increment in a cheap way avoiding the
+      !! construction of the full low-rank solutions.
+      class(abstract_vector_rdp),             intent(in)    :: U(:)
+      !! Low-rank basis of current solution
+      real(wp),                               intent(in)    :: S(:,:)
+      !! Coefficients of current solution
+      class(abstract_vector_rdp),             intent(in)    :: U_lag(:)
+      !! Low-rank basis of lagged solution
+      real(wp),                               intent(in)    :: S_lag(:,:)
+      !! Coefficients of lagged solution
+      real(wp),                     optional, intent(in)    :: scale
+      real(wp)                                              :: scale_
+      !! Scaling factor
+
+      ! internals
+      real(wp), dimension(:,:),                 allocatable :: D, V1, V2
+      integer :: r, rl
+
+      scale_ = optval(scale, 1.0_wp)
+      if (scale_ < atol_dp) call stop_error('Wrong input for scale', module=this_module, procedure='compute_increment_norm')
+
+      r  = size(U)
+      rl = size(U_lag)
+
+      ! compute common basis
+      call project_onto_common_basis(V1, V2, U_lag, U)
+
+      ! project second low-rank state onto common basis and construct difference
+      allocate(D(r+rl,r+rl)); D = 0.0_wp
+      D(    :rl  ,     :rl  ) = S_lag - matmul(V1, matmul(S, transpose(V1)))
+      D(rl+1:rl+r,     :rl  ) =       - matmul(V2, matmul(S, transpose(V1)))
+      D(    :rl  , rl+1:rl+r) =       - matmul(V1, matmul(S, transpose(V2)))
+      D(rl+1:rl+r, rl+1:rl+r) =       - matmul(V2, matmul(S, transpose(V2)))
+
+      ! compute Frobenius norm of difference
+      nrm = dense_frobenius_norm(D, scale_)
+
+   end function increment_norm
+
    real(dp) function CALE_res_norm(X, A, B, scale) result(res)
       !! This function computes the Frobenius norm of a low-rank approximation via an SVD of the (small) coefficient matrix
       class(abstract_sym_low_rank_state_rdp), intent(in) :: X
@@ -325,9 +368,10 @@ contains
       real(wp), dimension(:),    allocatable :: svals
       real(wp), dimension(:,:),  allocatable :: R, Rperm ! coefficient matrix of QR decomposition, sqrt(S)
 
+      real(wp) :: V(X%rk,X%rk), lambda(X%rk)
       ! optional inputs
       scale_ = optval(scale, 1.0_wp)
-      if (scale < atol_dp) call stop_error('Wrong input for scale', module=this_module, procedure='compute_norm')
+      if (scale_ < atol_dp) call stop_error('Wrong input for scale', module=this_module, procedure='compute_norm')
 
       rk  = 2*X%rk + size(B)
       allocate(R(rk,rk), Rperm(rk,rk), svals(rk)); R = 0.0_wp; Rperm = 0.0_wp; svals = 0.0_wp
@@ -337,8 +381,8 @@ contains
       block
           class(abstract_vector_rdp), allocatable :: Xwrk(:)
           real(wp) :: Rwrk(X%rk,X%rk)
-          call sqrtm(X%S, Rwrk, info)
-          call check_info(info, 'sqrtm(X%S)', module=this_module, procedure='compute_CALE_residual')
+          call sqrtm(X%S(:X%rk,:X%rk) , Rwrk, info)
+          call check_info(info, 'sqrtm', module=this_module, procedure='compute_CALE_residual')
           call linear_combination(Xwrk, X%U(:X%rk), Rwrk)
           call copy_basis(Q(:X%rk), Xwrk)
       end block
@@ -351,7 +395,7 @@ contains
      
       ! compute QR decomposiion
       call qr(Q, R, info)
-      call check_info(info, 'qr(Q)', module=this_module, procedure='compute_CALE_residual')
+      call check_info(info, 'qi', module=this_module, procedure='compute_CALE_residual')
       
       ! Shuffle columns around
       Rperm(:,        :  X%rk) = R(:,  X%rk+1:2*X%rk)
