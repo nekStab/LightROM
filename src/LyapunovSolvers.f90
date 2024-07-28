@@ -626,109 +626,6 @@ module LightROM_LyapunovSolvers
 
    end subroutine set_initial_rank
 
-   real(wp) function splitting_error(X, A, B, tau, mode, exptA, trans, scale) result(err_est)
-      !! This function estimates the splitting error of the integrator as a function of the chosen timestep.
-      !! This error estimation can be integrated over time to give an estimate of the compound error due to 
-      !! the splitting approach.
-      !! This error can be used as a tolerance for the rank-adaptivity to ensure that the low-rank truncation 
-      !! error is smaller than the splitting error.
-      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-      !! Low-Rank factors of the solution.
-      class(abstract_linop_rdp),              intent(inout) :: A
-      !! Linear operator
-      class(abstract_vector_rdp),             intent(in)    :: B(:)
-      !! Low-Rank inhomogeneity.
-      real(wp),                               intent(in)    :: tau
-      !! Time step.
-      integer,                                intent(in)    :: mode
-      !! TIme integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) orders are implemented.
-      procedure(abstract_exptA_rdp)                         :: exptA
-      !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
-      logical,                                intent(in)    :: trans
-      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
-      real(wp),                     optional, intent(in)    :: scale
-      real(wp)                                              :: scale_
-      !! Scaling factor
-      
-      ! internals
-      ! save current state to reset it later
-      class(abstract_vector_rdp),               allocatable :: Utmp(:)
-      real(wp),                                 allocatable :: Stmp(:,:)
-      ! first solution to compute the difference against
-      class(abstract_vector_rdp),               allocatable :: U1(:)
-      real(wp),                                 allocatable :: S1(:,:)
-      ! projected bases
-      real(wp),                                 allocatable :: V1(:,:), V2(:,:)
-      ! projected difference
-      real(wp),                                 allocatable :: D(:,:)
-      integer                                               :: rx, r, info
-
-      rx = X%rk
-      r  = 2*rx
-
-      ! save curret state
-      allocate(Utmp(rx), source=X%U(:rx))
-      allocate(Stmp(rx,rx)); Stmp = X%S(:rx,:rx)
-
-      ! tau step
-      call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, verbose=.false.)
-      ! save result
-      allocate(U1(rx), source=X%U(:rx))
-      allocate(S1(rx,rx)); S1 = X%S(:rx,:rx)
-
-      ! reset curret state
-      call copy_basis(X%U(:rx), Utmp)
-      X%S(:rx,:rx) = Stmp
-
-      ! tau/2 steps
-      call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans, verbose=.false.)
-      call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans, verbose=.false.)
-      
-      ! compute local error based on frobenius norm of difference
-      err_est = 2**mode / (2**mode - 1) * increment_norm(X%U(:rx), X%S(:rx,:rx), U1(:rx), S1, scale_)
-
-   end function splitting_error
-
-   real(wp) function increment_norm(U, S, U_lag, S_lag, scale) result(nrm)
-      !! This function computes the norm of the solution increment in a cheap way avoiding the
-      !! construction of the full low-rank solutions.
-      class(abstract_vector_rdp),             intent(in)    :: U(:)
-      !! Low-rank basis of current solution
-      real(wp),                               intent(in)    :: S(:,:)
-      !! Coefficients of current solution
-      class(abstract_vector_rdp),             intent(in)    :: U_lag(:)
-      !! Low-rank basis of lagged solution
-      real(wp),                               intent(in)    :: S_lag(:,:)
-      !! Coefficients of lagged solution
-      real(wp),                     optional, intent(in)    :: scale
-      real(wp)                                              :: scale_
-      !! Scaling factor
-
-      ! internals
-      real(wp), dimension(:,:),                 allocatable :: D, V1, V2
-      integer :: r, rl
-
-      scale_ = optval(scale, 1.0_wp)
-      if (scale_ < atol_dp) call stop_error('Wrong input for scale', module=this_module, procedure='compute_increment_norm')
-
-      r  = size(U)
-      rl = size(U_lag)
-
-      ! compute common basis
-      call project_onto_common_basis(V1, V2, U_lag, U)
-
-      ! project second low-rank state onto common basis and construct difference
-      allocate(D(r+rl,r+rl)); D = 0.0_wp
-      D(    :rl  ,     :rl  ) = S_lag - matmul(V1, matmul(S, transpose(V1)))
-      D(rl+1:rl+r,     :rl  ) =       - matmul(V2, matmul(S, transpose(V1)))
-      D(    :rl  , rl+1:rl+r) =       - matmul(V1, matmul(S, transpose(V2)))
-      D(rl+1:rl+r, rl+1:rl+r) =       - matmul(V2, matmul(S, transpose(V2)))
-
-      ! compute Frobenius norm of difference
-      nrm = dense_frobenius_norm(D, scale_)
-
-   end function increment_norm
-
    subroutine M_forward_map_rdp(X, A, tau, info, exptA, iftrans)
       !! This subroutine computes the solution of the stiff linear part of the 
       !! differential equation exactly using the matrix exponential.
@@ -914,5 +811,68 @@ module LightROM_LyapunovSolvers
 
       return
    end subroutine L_step_lyapunov_rdp
+
+   real(wp) function splitting_error(X, A, B, tau, mode, exptA, trans, scale) result(err_est)
+      !! This function estimates the splitting error of the integrator as a function of the chosen timestep.
+      !! This error estimation can be integrated over time to give an estimate of the compound error due to 
+      !! the splitting approach.
+      !! This error can be used as a tolerance for the rank-adaptivity to ensure that the low-rank truncation 
+      !! error is smaller than the splitting error.
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_linop_rdp),              intent(inout) :: A
+      !! Linear operator
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
+      !! Low-Rank inhomogeneity.
+      real(wp),                               intent(in)    :: tau
+      !! Time step.
+      integer,                                intent(in)    :: mode
+      !! TIme integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) orders are implemented.
+      procedure(abstract_exptA_rdp)                         :: exptA
+      !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
+      logical,                                intent(in)    :: trans
+      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      real(wp),                     optional, intent(in)    :: scale
+      real(wp)                                              :: scale_
+      !! Scaling factor
+      
+      ! internals
+      ! save current state to reset it later
+      class(abstract_vector_rdp),               allocatable :: Utmp(:)
+      real(wp),                                 allocatable :: Stmp(:,:)
+      ! first solution to compute the difference against
+      class(abstract_vector_rdp),               allocatable :: U1(:)
+      real(wp),                                 allocatable :: S1(:,:)
+      ! projected bases
+      real(wp),                                 allocatable :: V1(:,:), V2(:,:)
+      ! projected difference
+      real(wp),                                 allocatable :: D(:,:)
+      integer                                               :: rx, r, info
+
+      rx = X%rk
+      r  = 2*rx
+
+      ! save curret state
+      allocate(Utmp(rx), source=X%U(:rx))
+      allocate(Stmp(rx,rx)); Stmp = X%S(:rx,:rx)
+
+      ! tau step
+      call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans, verbose=.false.)
+      ! save result
+      allocate(U1(rx), source=X%U(:rx))
+      allocate(S1(rx,rx)); S1 = X%S(:rx,:rx)
+
+      ! reset curret state
+      call copy_basis(X%U(:rx), Utmp)
+      X%S(:rx,:rx) = Stmp
+
+      ! tau/2 steps
+      call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans, verbose=.false.)
+      call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans, verbose=.false.)
+      
+      ! compute local error based on frobenius norm of difference
+      err_est = 2**mode / (2**mode - 1) * increment_norm(X%U(:rx), X%S(:rx,:rx), U1(:rx), S1, scale_)
+
+   end function splitting_error
 
 end module LightROM_LyapunovSolvers
