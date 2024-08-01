@@ -253,7 +253,7 @@ module LightROM_LyapunovSolvers
       end if
 
       dlra : do istep = 1, nsteps
-         if ( opts%chkstep == 1 ) then
+         if ( opts%chkstep == 1 .or. nsteps == 1 ) then
             if (allocated(U_lag)) deallocate(U_lag)
             if (allocated(S_lag)) deallocate(S_lag)
             ! allocate lag data (we do it here so we do not need to store the data size and can pass the whole array)
@@ -306,7 +306,7 @@ module LightROM_LyapunovSolvers
          if ( mod(istep, opts%chkstep) == 0 .or. istep == nsteps ) then
             nrmX = dense_frobenius_norm(X%S(:X%rk,:X%rk), scale)
             nrm  = increment_norm(X%U(:X%rk), X%S(:X%rk,:X%rk), U_lag, S_lag, scale)
-            res  = CALE_res_norm(X, A, B)
+            res  = 0.0_wp !CALE_res_norm(X, A, B)
             if (opts%print_svals) then
                if (opts%if_rank_adaptive) then
                   rk = X%rk + 1
