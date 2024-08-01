@@ -352,7 +352,7 @@ contains
 
    real(dp) function CALE_res_norm(X, A, B, scale) result(res)
       !! This function computes the Frobenius norm of a low-rank approximation via an SVD of the (small) coefficient matrix
-      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_linop_rdp),              intent(in) :: A
       !! Linear operator of the Lyapunov equation
@@ -381,7 +381,7 @@ contains
       block
           class(abstract_vector_rdp), allocatable :: Xwrk(:)
           real(wp) :: Rwrk(X%rk,X%rk)
-          call sqrtm(X%S(:X%rk,:X%rk) , Rwrk, info)
+          call sqrtm(X%S(:X%rk,:X%rk), Rwrk, info)
           call check_info(info, 'sqrtm', module=this_module, procedure='compute_CALE_residual')
           call linear_combination(Xwrk, X%U(:X%rk), Rwrk)
           call copy_basis(Q(:X%rk), Xwrk)
@@ -395,7 +395,7 @@ contains
      
       ! compute QR decomposiion
       call qr(Q, R, info)
-      call check_info(info, 'qi', module=this_module, procedure='compute_CALE_residual')
+      call check_info(info, 'qr', module=this_module, procedure='compute_CALE_residual')
       
       ! Shuffle columns around
       Rperm(:,        :  X%rk) = R(:,  X%rk+1:2*X%rk)
