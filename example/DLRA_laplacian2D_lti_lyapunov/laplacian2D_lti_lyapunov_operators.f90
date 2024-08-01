@@ -152,6 +152,11 @@ contains
       logical                                    :: transpose
       !! Direct or Adjoint?
 
+      ! misc
+      real(wp), parameter :: tol  = 100*atol_dp
+      integer,  parameter :: kdim = 200          ! this is needed for the integration with sitep 0.1
+      logical,  parameter :: verb = .false.
+
       ! optional argument
       transpose = optval(trans, .false.)
 
@@ -162,7 +167,9 @@ contains
          type is (state_vector)
             select type (A)
             type is (laplace_operator)
-               call k_exptA(vec_out, A, vec_in, tau, info, transpose)
+               call kexpm(vec_out, A, vec_in, tau, tol, info, trans=transpose, verbosity=verb, kdim=kdim)
+               ! we do not call the wrapper so we can set our own values for kdim, verb, tol 
+               !call k_exptA(vec_out, A, vec_in, tau, info, transpose)
             end select
          end select
       end select
