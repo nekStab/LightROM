@@ -24,11 +24,11 @@ module laplacian2D_LTI_Lyapunov_Base
 
    ! --> Mesh related parameters.
    real(wp),      parameter :: L  = 1.0_wp  !> Domain length
-   integer,       parameter :: nx = 4      !> Number of grid points per direction
+   integer,       parameter :: nx = 10      !> Number of grid points per direction
    integer,       parameter :: N  = nx**2   !> total number of grid points
    real(wp),      parameter :: dx = L/nx    !> Grid size.
    real(wp),      parameter :: dx2= dx**2   !> Grid size.
-   integer,       parameter :: rk_b = 5     !> rank of the RHS
+   integer,       parameter :: rk_b = 1     !> rank of the RHS
 
    !-------------------------------------------------------
    !-----     LIGHTKRYLOV SYM LOW RANK STATE TYPE     -----
@@ -217,8 +217,13 @@ contains
          rka = rk + 1
       end if
 
+      ! reset time
+      self%time = 0.0_wp
+
       select type (U)
       type is (state_vector)
+         if (allocated(self%U)) deallocate(self%U)
+         if (allocated(self%S)) deallocate(self%S)
          ! allocate & initialize
          allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
          allocate(self%S(rka,rka)); self%S = 0.0_wp
