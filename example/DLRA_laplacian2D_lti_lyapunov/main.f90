@@ -1,10 +1,10 @@
 program demo
    ! Standard Library
    use stdlib_optval, only : optval 
-   use stdlib_linalg, only : eye
+   use stdlib_linalg, only : eye, svdvals
    use stdlib_math, only : all_close, logspace
    use stdlib_io_npy, only : save_npy
-   use stdlib_logger, only : error_level
+   use stdlib_logger, only : error_level, none_level
    ! LightKrylov for linear algebra
    use LightKrylov
    use LightKrylov, only : wp => dp
@@ -31,15 +31,19 @@ program demo
    !----------------------------------------------------------
 
    ! DLRA
-   integer, parameter :: rkmax = 14
-   integer, parameter :: rk_X0 = 14
-   logical, parameter :: verb  = .false.
-   logical, parameter :: save  = .false.
+   integer, parameter :: rkmax = 20
+   integer, parameter :: rk_X0 = 10
+   logical            :: verb      = .false.
+   logical            :: if_save   = .false. ! save outputs
+   logical            :: if_convRK = .false. ! run RK to convergence or just enough for the test
+   logical            :: if_rkad   = .false. 
+   logical            :: if_kexpm  = .false.
+   logical            :: if_t_all  = .true.
    character*128      :: oname
    ! rk_B is set in laplacian2D.f90
 
-   integer  :: nrk, ndt, rk,  torder
-   real(wp) :: dt, Tend
+   integer  :: ndt, rk,  torder
+   real(wp) :: dt, Tend, tchk
    ! vector of dt values
    real(wp), allocatable :: dtv(:)
    ! vector of rank values
@@ -55,6 +59,7 @@ program demo
 
    ! Laplacian
    type(laplace_operator), allocatable :: A
+   type(rklib_exptA_laplacian), allocatable :: prop
 
    ! LR representation
    type(LR_state)                  :: X
@@ -79,7 +84,7 @@ program demo
 
    !> Information flag.
    integer                         :: info
-   integer                         :: i, j, k, irep, nrep
+   integer                         :: i, j, k, irep, nrep, rki
 
    ! PROBLEM DEFINITION
    real(wp)  :: Adata(N,N)
@@ -87,24 +92,43 @@ program demo
    real(wp)  :: BBTdata(N,N)
    
    ! LAPACK SOLUTION
-   real(wp)  :: Xref(N,N)
    ! DSYTD2
-   real(wp)  :: Dm(N), work(N), wr(N), wi(N)
-   real(wp)  :: E(N-1), tw(N-1)
-   real(wp)  :: T(N,N), Q(N,N), Z(N,N), Vdata(N,N), Wdata(N,N), Ydata(N,N)
+   real(wp), dimension(N)   :: Dm, work, wr, wi
+   real(wp), dimension(N-1) :: E, tw
+   real(wp), dimension(N,N) :: Xref, T, Q, Z, Vdata, Wdata, Ydata
    real(wp)  :: scale
    integer   :: isgn
+   ! SVD
+   real(wp), allocatable :: svals(:)
 
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
+   real(wp)  :: etime
 
    ! DLRA opts
    type(dlra_opts) :: opts
 
+   !----------------------------------------------------
+   ! TEST PARAMETERS
+   !----------------------------------------------------
+   !
+   ! Rank of initial condition
+   rkv = (/ 14 /)
+   ! Time Step
+   ndt = 5
+   dtv = logspace(-5.0_wp, -1.0_wp, ndt)
+   ! Flags
+   verb      = .false. ! verbosity
+   if_save   = .false. ! save outputs
+   if_convRK = .false. ! run RK to convergence or just enough for the test
+   if_rkad   = .false. ! run rank adaptive
+   if_kexpm  = .true.  ! use kexpm for the action of the matrix exponential (or RKlib)
+   ! override
+   if_t_all  = .true.  ! test all 4 options (+- rank adaptive, kexpm + RKlib)
+   !----------------------------------------------------
+
    call logger_setup()
-
-   call logger%configure(level=error_level); write(*,*) 'Logging set to error_level.'
-
+   call logger%configure(level=error_level, time_stamp=.false.); write(*,*) 'Logging set to error_level.'
    call system_clock(count_rate=clock_rate)
 
    write(*,*) '---------------------------------------------'
@@ -129,28 +153,28 @@ program demo
 
    ! Define RHS B
    call init_rand(B, ifnorm = .false.)
-   call get_state(Bdata(:,1:rk_b), B)
-   BBTdata = -matmul(Bdata(:,1:rk_b), transpose(Bdata(:,1:rk_b)))
-   BBT(1:N**2) = -reshape(BBTdata, shape(BBT))
+   call get_state(Bdata(:,:rk_b), B)
+   BBTdata = -matmul(Bdata(:,:rk_b), transpose(Bdata(:,:rk_b)))
+   BBT(:N**2) = -reshape(BBTdata, shape(BBT))
 
    ! Define LTI system
-   LTI = lti_system()
-   call LTI%initialize_lti_system(A, B, B)
+   prop = rklib_exptA_laplacian(1.0_wp)
+   call LTI%initialize(A, prop, B, B)
    call zero_basis(LTI%CT)
 
    ! Define initial condition of the form X0 + U0 @ S0 @ U0.T SPD 
    if (verb .and. io_rank()) write(*,*) '    Define initial condition'
-   call generate_random_initial_condition(U0, S0, rk_X0)
-   call get_state(U_out, U0)
+   call generate_random_initial_condition(U0(:rk_X0), S0(:rk_X0,:rk_X0), rk_X0)
+   call get_state(U_out(:,:rk_X0), U0(:rk_X0))
    
    ! Compute the full initial condition X0 = U_in @ S0 @ U_in.T
-   X0 = matmul( U_out(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U_out(:,1:rk_X0))))
+   X0 = matmul( U_out(:,:rk_X0), matmul(S0(:rk_X0,:rk_X0), transpose(U_out(:,:rk_X0))))
    
    !------------------
    ! COMPUTE EXACT SOLUTION OF THE LYAPUNOV EQUATION WITH LAPACK
    !------------------
 
-   write(*,*) 'I.   Exact solution of the algebraic Lyapunov equation (LAPACK):'
+   if (io_rank()) write(*,*) 'I.   Exact solution of the algebraic Lyapunov equation (LAPACK):'
    call system_clock(count=clock_start)     ! Start Timer
 
    ! Explicit 2D laplacian
@@ -160,7 +184,7 @@ program demo
    call dsytd2('L', N, Adata, N, Dm, E, tw, info)
    
    ! Reconstruct T and Q
-   call reconstruct_TQ(T, Q, Adata(1:N,1:N), Dm, E, tw)
+   call reconstruct_TQ(T, Q, Adata(:N,:N), Dm, E, tw)
    
    ! compute real Schur form A = Z @ T @ Z.T
    call dhseqr('S', 'I', N, 1, N, T, N, wr, wi, Z, N, work, N, info )
@@ -178,28 +202,36 @@ program demo
    Xref  = matmul(Q, matmul(Ydata, transpose(Q)))
 
    call system_clock(count=clock_stop)      ! Stop Timer
-   write(*,'(A40,F10.4," s")') '--> X_ref.    Elapsed time:', real(clock_stop-clock_start)/real(clock_rate)
-   write(*,*)
+   etime = real(clock_stop-clock_start)/real(clock_rate)
+   if (io_rank()) write(*,'(A40,F10.4," s")') '--> X_ref.    Elapsed time:', etime
+   if (io_rank()) write(*,*)
 
    ! sanity check
-   X0 = CALE(Xref, Adata, BBT)
-   write(*,*) '    Direct problem:', norm2(X0)/N
-
+   call build_operator(Adata) ! rebuild overwritten operator
+   if (io_rank()) then
+       write(*,*) '    Direct problem: || res ||_2/N =', norm2(CALE(Xref, Adata, BBT, .false.))/N
+       write(*,*)
+       call print_svdvals(Xref, 'Xref')
+       write(*,*)
+   end if
+   
    !------------------
    ! COMPUTE SOLUTION WITH RK FOR DIFFERENT INTEGRATION TIMES AND COMPARE TO STUART-BARTELS
    !------------------
 
-   write(*,*) 'II.  Compute solution of the differential Lyapunov equation (Runge-Kutta):'
-   write(*,*)
+   if (io_rank()) write(*,*) 'II.  Compute solution of the differential Lyapunov equation (Runge-Kutta):'
+   if (io_rank()) write(*,*)
    ! initialize exponential propagator
-   nrep = 10
    Tend = 0.1_wp
    RK_propagator = rklib_lyapunov_mat(Tend)
+   nrep = 1
+   if (if_convRK) nrep = 10
 
    allocate(X_RKlib(N, N, nrep))
+   ! set initial condition
    call set_state(X_mat_RKlib(1:1), X0)
-   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','|| X_RK - X_ref ||_2/N', 'Elapsed time'
-   write(*,*) '         ------------------------------------------------------------------------'
+   if (io_rank()) write(*,'(A17,A26,A26,A20)') 'RKlib:','Tend','|| X_RK - X_ref ||_2/N', 'Elapsed time'
+   if (io_rank()) write(*,*) '         ------------------------------------------------------------------------'
    do irep = 1, nrep
       call system_clock(count=clock_start)     ! Start Timer
       ! integrate
@@ -209,65 +241,126 @@ program demo
       ! replace input
       call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,irep))
       call system_clock(count=clock_stop)      ! Stop Timer
-      write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tend, &
-                     & norm2(X_RKlib(:,:,irep) - Xref)/N, &
-                     & real(clock_stop-clock_start)/real(clock_rate)
+      etime = real(clock_stop-clock_start)/real(clock_rate)
+      if (io_rank()) write(*,'("  OUTPUT_X   RK ",I2,F26.4,E26.8,F18.4," s")') irep, irep*Tend, &
+                     & norm2(X_RKlib(:,:,irep) - Xref)/N, etime
+      call print_svdvals(X_RKlib(:,:,irep), 'X_RK ')
+      if (io_rank()) write(*,*)
    end do
-   
+ 
    !------------------
    ! COMPUTE DLRA FOR SHORTEST INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
    !------------------
 
-   write(*,*)
-   write(*,*) 'III. Compute approximate solution of the differential Lyapunov equation using DLRA:'
-   write(*,*)
-   write(*,'(A10,A4,A4,A10,A8,A26,A20)') 'DLRA:','  rk',' TO','dt','Tend','|| X_DLRA - X_RK ||_2/N', 'Elapsed time'
-   write(*,*) '         ------------------------------------------------------------------------'
+   if (io_rank()) then
+       write(*,*)
+       write(*,*) 'III. Compute approximate solution of the differential Lyapunov equation using DLRA:'
+       write(*,*)
+       write(*,'(A10,A4,A4,A10,A8,A26,A20)') 'DLRA:','  rk',' TO','dt','Tend','|| X_DLRA - X_RK ||_2/N', 'Elapsed time'
+       write(*,*) '       ------------------------------------------------------------------------'
+   end if
 
    ! Choose relevant reference case from RKlib
    X_RKlib_ref = X_RKlib(:,:,1)
 
-   ! Choose input ranks and integration steps
-   nrk = 4; ndt = 5
-   allocate(rkv(1:nrk)); allocate(dtv(1:ndt)); 
-   rkv = (/ 2, 6, 10, 14 /)
-   dtv = logspace(-5.0_wp, -1.0_wp, ndt)
-
-   X = LR_state()
-
    do torder = 1, 2
-      do i = 1, nrk
+      do i = 1, size(rkv)
          rk = rkv(i)
-
-         write(*,'(A10,I1)') ' torder = ', torder
-
+         if (verb .and. io_rank()) write(*,'(A10,I1)') ' torder = ', torder
          do j = ndt, 1, -1
             dt = dtv(j)
             if (verb .and. io_rank()) write(*,*) '    dt = ', dt, 'Tend = ', Tend
-
-            ! Reset input
-            call X%initialize_LR_state(U0, S0, rk)
-
-            ! run step
-            opts = dlra_opts(mode=torder, verbose=verb)
-            call system_clock(count=clock_start)     ! Start Timer
-            call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, info, exptA=exptA, options=opts)
-            call system_clock(count=clock_stop)      ! Stop Timer
-
-            ! Reconstruct solution
-            call get_state(U_out(:,1:rk), X%U)
-            X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
-      
-            write(*,'(A10,I4," TO",I1,F10.6,F8.4,E26.8,F18.4," s")') 'OUTPUT', &
-                              & rk, torder, dt, Tend, &
-                              & norm2(X_RKlib_ref - X_out)/N, &
-                              & real(clock_stop-clock_start)/real(clock_rate)
-
-            deallocate(X%U)
-            deallocate(X%S)
+            tchk = 1.0_wp
+            if (verb) tchk = max(0.01_wp, dt)
+            ! run each option or only one of them
+            if ((.not. if_rkad .and. .not. if_kexpm) .or. if_t_all) then
+                if (io_rank()) call print_info(if_rkad, if_kexpm, Tend, dt, rk, torder)
+                ! set DLRA opts
+                opts = dlra_opts(mode=torder, verbose=verb, if_rank_adaptive=if_rkad, chktime=tchk)
+                ! Initialize solution
+                call X%initialize_LR_state(U0, S0, rk, rkmax)
+                ! Run integrator
+                call system_clock(count=clock_start)     ! Start Timer
+                call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, dt, info, & 
+                       & exptA=exptA_rklib, options=opts)
+                call system_clock(count=clock_stop)      ! Stop Timer
+                etime = real(clock_stop-clock_start)/real(clock_rate)
+                ! Reconstruct solution
+                call get_state(U_out(:,:rk), X%U(:rk))
+                X_out = matmul(U_out(:,:rk), matmul(X%S(:rk,:rk), transpose(U_out(:,:rk))))
+                ! Print info
+                if (io_rank()) then
+                    write(*,'(A17,I4," TO",I1,F10.6,F8.4,E20.8,E20.8,F18.4," s")') 'OUTPUT_X   DLRA', &
+                        & rk, torder, dt, Tend, norm2(X_RKlib_ref - X_out)/N, norm2(Xref - X_out)/N, etime
+                    call print_svdvals(X_out, 'DLRA')
+                end if
+            else if ((.not. if_rkad .and. if_kexpm) .or. if_t_all) then
+                if (io_rank()) call print_info(if_rkad, if_kexpm, Tend, dt, rk, torder)
+                ! set DLRA opts
+                opts = dlra_opts(mode=torder, verbose=verb, if_rank_adaptive=if_rkad, chktime=tchk)
+                ! Initialize solution
+                call X%initialize_LR_state(U0, S0, rk, rkmax)
+                ! Run integrator
+                call system_clock(count=clock_start)     ! Start Timer
+                call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A,    LTI%B, Tend, dt, info, &
+                       & exptA=exptA,       options=opts)
+                call system_clock(count=clock_stop)      ! Stop Timer
+                etime = real(clock_stop-clock_start)/real(clock_rate)
+                ! Reconstruct solution
+                call get_state(U_out(:,:rk), X%U(:rk))
+                X_out = matmul(U_out(:,:rk), matmul(X%S(:rk,:rk), transpose(U_out(:,:rk))))
+                ! Print info
+                if (io_rank()) then
+                    write(*,'(A17,I4," TO",I1,F10.6,F8.4,E20.8,E20.8,F18.4," s")') 'OUTPUT_X   DLRA', &
+                        & rk, torder, dt, Tend, norm2(X_RKlib_ref - X_out)/N, norm2(Xref - X_out)/N, etime
+                    call print_svdvals(X_out, 'DLRA')
+                end if
+            else if ((if_rkad .and. .not. if_kexpm) .or. if_t_all) then
+                if (io_rank()) call print_info(if_rkad, if_kexpm, Tend, dt, rk, torder)
+                ! set DLRA opts
+                opts = dlra_opts(mode=torder, verbose=verb, if_rank_adaptive=if_rkad, chktime=tchk)
+                ! Initialize solution
+                call X%initialize_LR_state(U0, S0, rk, rkmax)
+                ! Run integrator
+                call system_clock(count=clock_start)     ! Start Timer
+                call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, dt, info, & 
+                       & exptA=exptA_rklib, options=opts)
+                call system_clock(count=clock_stop)      ! Stop Timer
+                etime = real(clock_stop-clock_start)/real(clock_rate)
+                ! Reconstruct solution
+                call get_state(U_out(:,:rk), X%U(:rk))
+                X_out = matmul(U_out(:,:rk), matmul(X%S(:rk,:rk), transpose(U_out(:,:rk))))
+                ! Print info
+                if (io_rank()) then
+                    write(*,'(A17,I4," TO",I1,F10.6,F8.4,E20.8,E20.8,F18.4," s")') 'OUTPUT_X   DLRA', &
+                        & rk, torder, dt, Tend, norm2(X_RKlib_ref - X_out)/N, norm2(Xref - X_out)/N, etime
+                    call print_svdvals(X_out, 'DLRA')
+                end if
+            else if ((if_rkad .and. if_kexpm) .or. if_t_all) then
+                if (io_rank()) call print_info(if_rkad, if_kexpm, Tend, dt, rk, torder)
+                ! set DLRA opts
+                opts = dlra_opts(mode=torder, verbose=verb, if_rank_adaptive=if_rkad, chktime=tchk)
+                ! Initialize solution
+                call X%initialize_LR_state(U0, S0, rk, rkmax)
+                ! Run integrator
+                call system_clock(count=clock_start)     ! Start Timer
+                call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A,    LTI%B, Tend, dt, info, &
+                       & exptA=exptA,       options=opts)
+                call system_clock(count=clock_stop)      ! Stop Timer
+                etime = real(clock_stop-clock_start)/real(clock_rate)
+                ! Reconstruct solution
+                call get_state(U_out(:,:rk), X%U(:rk))
+                X_out = matmul(U_out(:,:rk), matmul(X%S(:rk,:rk), transpose(U_out(:,:rk))))
+                ! print info
+                if (io_rank()) then
+                    write(*,'(A17,I4," TO",I1,F10.6,F8.4,E20.8,E20.8,F18.4," s")') 'OUTPUT_X   DLRA', &
+                        & rk, torder, dt, Tend, norm2(X_RKlib_ref - X_out)/N, norm2(Xref - X_out)/N, etime
+                    call print_svdvals(X_out, 'DLRA')
+                end if
+            end if
          end do
 
-         if (save) then
+         if (if_save .and. io_rank()) then
             write(oname,'("example/DLRA_laplacian2D/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
             call save_npy(oname, X_out)
          end if
@@ -275,7 +368,7 @@ program demo
       end do
    end do
 
-   if (save) then
+   if (if_save .and. io_rank()) then
       call save_npy("example/DLRA_laplacian2D/data_A.npy", Adata)
       call save_npy("example/DLRA_laplacian2D/data_X0.npy", X0)
       call save_npy("example/DLRA_laplacian2D/data_Q.npy", BBTdata)
