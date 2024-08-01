@@ -16,12 +16,25 @@ module Laplacian2D_LTI_Lyapunov_RKlib
    private :: this_module
 
    character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_RKLib'
+   ! exptA
+   public :: exptA_rklib
+   
+   !-----------------------------------------------
+   !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
+   !-----------------------------------------------
+
+   type, extends(abstract_lti_system_rdp), public :: lti_system
+   contains
+      private
+      procedure, pass(self), public :: initialize => initialize_lti_system
+   end type lti_system
 
    !-----------------------------------------------
    !-----     EXPONENTIAL PROPAGATOR RKLIB    -----
    !-----------------------------------------------
 
    type, extends(abstract_linop_rdp), public :: rklib_exptA_laplacian
+      !! Exponential propagator for the Laplacian
       real(wp) :: tau ! Integration time.
    contains
       private
@@ -30,6 +43,7 @@ module Laplacian2D_LTI_Lyapunov_RKlib
    end type rklib_exptA_laplacian
 
    type, extends(abstract_linop_rdp), public :: rklib_lyapunov_mat
+      !! Direct integrator for the Lyapunov equation for the Laplacian
       real(wp) :: tau ! Integration time.
    contains
       private
@@ -144,6 +158,99 @@ contains
 
       return
    end subroutine direct_solver_mat
+
+   !--------------------------------------
+   !-----     EXP(tA) SUBROUTINE     -----
+   !--------------------------------------
+
+   subroutine exptA_rklib(vec_out, A, vec_in, tau, info, trans)
+      !! Subroutine for the exponential propagator that conforms with the abstract interface
+      !! defined in expmlib.f90
+      class(abstract_vector_rdp),  intent(out)   :: vec_out
+      !! Output vector
+      class(abstract_linop_rdp),   intent(inout) :: A
+      !! Linear operator
+      class(abstract_vector_rdp),  intent(in)    :: vec_in
+      !! Input vector.
+      real(wp),                    intent(in)    :: tau
+      !! Integration horizon
+      integer,                     intent(out)   :: info
+      !! Information flag
+      logical, optional,           intent(in)    :: trans
+      logical                                    :: transpose
+      !! Direct or Adjoint?
+
+      ! optional argument
+      transpose = optval(trans, .false.)
+
+      ! time integrator
+      select type (vec_in)
+      type is (state_vector)
+         select type (vec_out)
+         type is (state_vector)
+            select type (A)
+            type is (rklib_exptA_laplacian)
+               ! set integration time
+               A%tau = tau
+               if (transpose) then
+                  call A%rmatvec(vec_in, vec_out) ! this is not really necessary since operator is self-adjoint
+               else
+                  call A%matvec(vec_in, vec_out)
+               end if
+            end select
+         end select
+      end select
+
+   end subroutine exptA_rklib
+
+
+   !--------------------------------------------------------
+   !-----     TYPE BOUND PROCEDURES FOR LTI SYSTEMS    -----
+   !--------------------------------------------------------
+
+   subroutine initialize_lti_system(self, A, prop, B, CT, D)
+      class(lti_system),           intent(inout) :: self
+      class(abstract_linop_rdp),   intent(in)    :: A
+      class(abstract_linop_rdp),   intent(in)    :: prop
+      class(abstract_vector_rdp),  intent(in)    :: B(:)
+      class(abstract_vector_rdp),  intent(in)    :: CT(:)
+      real(wp),          optional, intent(in)    :: D(:,:)
+
+      ! internal variables
+      integer                                :: rk_b, rk_c
+
+      ! Operator
+      select type (A)
+      type is (laplace_operator)
+         allocate(self%A, source=A)
+      end select
+      ! Exp Prop
+      select type (prop)
+      type is (rklib_exptA_laplacian)
+         allocate(self%prop, source=prop)
+      end select
+      ! Input
+      select type (B)
+      type is (state_vector)
+         rk_b = size(B)
+         allocate(self%B(1:rk_b), source=B(1:rk_b))
+      end select
+      ! Output
+      select type (CT)
+         type is (state_vector)
+         rk_c = size(CT)
+         allocate(self%CT(1:rk_c), source=CT(1:rk_c))
+      end select
+      ! Throughput
+      allocate(self%D(1:rk_c, 1:rk_b))
+      if (present(D)) then
+         call assert_shape(D, (/ rk_c, rk_b /), 'initialize_lti_system', 'D')
+         self%D = D
+      else
+         self%D = 0.0_wp
+      end if
+      return
+   end subroutine initialize_lti_system
 
 
 end module Laplacian2D_LTI_Lyapunov_RKlib
