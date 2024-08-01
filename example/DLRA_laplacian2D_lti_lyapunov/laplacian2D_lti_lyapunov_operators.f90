@@ -15,18 +15,9 @@ module Laplacian2D_LTI_Lyapunov_Operators
    character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Operators'
    ! operator
    public  :: laplacian, laplacian_mat
-
+   ! exptA
+   public  :: exptA
    
-   !-----------------------------------------------
-   !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
-   !-----------------------------------------------
-
-   type, extends(abstract_lti_system_rdp), public :: lti_system
-   contains
-      private
-      procedure, pass(self), public :: initialize_lti_system
-   end type lti_system
-
    !-----------------------------------
    !-----     LAPLACE OPERATOR    -----
    !-----------------------------------
@@ -177,47 +168,5 @@ contains
       end select
 
    end subroutine exptA
-
-   !--------------------------------------------------------
-   !-----     TYPE BOUND PROCEDURES FOR LTI SYSTEMS    -----
-   !--------------------------------------------------------
-
-   subroutine initialize_lti_system(self, A, B, CT, D)
-      class(lti_system),           intent(inout) :: self
-      class(abstract_linop_rdp),   intent(in)    :: A
-      class(abstract_vector_rdp),  intent(in)    :: B(:)
-      class(abstract_vector_rdp),  intent(in)    :: CT(:)
-      real(wp),          optional, intent(in)    :: D(:,:)
-
-      ! internal variables
-      integer                                :: rk_b, rk_c
-
-      ! Operator
-      select type (A)
-      type is (laplace_operator)
-         allocate(self%A, source=A)
-      end select
-      ! Input
-      select type (B)
-      type is (state_vector)
-         rk_b = size(B)
-         allocate(self%B(1:rk_b), source=B(1:rk_b))
-      end select
-      ! Output
-      select type (CT)
-         type is (state_vector)
-         rk_c = size(CT)
-         allocate(self%CT(1:rk_c), source=CT(1:rk_c))
-      end select
-      ! Throughput
-      allocate(self%D(1:rk_c, 1:rk_b))
-      if (present(D)) then
-         call assert_shape(D, (/ rk_c, rk_b /), 'initialize_lti_system', 'D')
-         self%D = D
-      else
-         self%D = 0.0_wp
-      end if
-      return
-   end subroutine initialize_lti_system
 
 end module Laplacian2D_LTI_Lyapunov_Operators
