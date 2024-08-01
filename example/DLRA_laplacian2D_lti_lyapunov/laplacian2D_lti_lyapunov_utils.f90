@@ -2,7 +2,7 @@ module Laplacian2D_LTI_Lyapunov_Utils
    ! Standard Library.
    use stdlib_math, only : linspace
    use stdlib_optval, only : optval
-   use stdlib_linalg, only : eye, diag, svd
+   use stdlib_linalg, only : eye, diag, svd, svdvals
    ! RKLIB module for time integration.
    use rklib_module
    ! LightKrylov for linear algebra.
@@ -165,9 +165,18 @@ contains
    !-----     MISC     -----
    !------------------------
 
-   function CALE(X,A,Q) result(Y)
+   function CALE(X, A, Q, iftrans) result(Y)
       real(wp), dimension(n,n) :: X, A, Q, Y
-      Y = matmul(transpose(A), X) + matmul(X, A) + Q
+      logical, optional :: iftrans
+      logical           :: trans
+
+      trans = optval(iftrans, .false.)
+
+      if (trans) then
+         Y = matmul(transpose(A), X) + matmul(X, A) + Q
+      else
+         Y = matmul(A, X) + matmul(X, transpose(A)) + Q
+      end if
    end function CALE
 
    subroutine build_operator(A)
@@ -225,5 +234,55 @@ contains
       end do
 
    end subroutine reconstruct_TQ
+
+   subroutine print_svdvals(X_out, tag)
+      !! Compute singular values and print the non-zero ones
+      real(wp),         intent(in) :: X_out(:,:)
+      character(len=*), intent(in) :: tag
+      ! internal
+      real(wp), allocatable :: svals(:)
+      integer i, n, rki
+
+      N = size(X_out)
+      svals = svdvals(X_out)
+      rki = N
+      do i = 1, N
+         if (svals(i) < 1e-14) then
+             rki = i
+             exit
+         end if
+      end do
+      write(*,'(A,1X,A4,1X,I3,1X)', ADVANCE='NO') '  OUTPUT_SVD', trim(tag), rki
+      do i = 1, rki
+         write(*,'(E8.2,1x)', ADVANCE='NO') svals(i)
+      end do
+      write(*,*) 
+      return
+   end subroutine print_svdvals
+
+   subroutine print_info(if_rkad, if_kexpm, Tend, dt, rk, TO)
+      logical,  intent(in) :: if_rkad
+      logical,  intent(in) :: if_kexpm
+      real(wp), intent(in) :: Tend
+      real(wp), intent(in) :: dt
+      integer,  intent(in) :: rk
+      integer,  intent(in) :: TO
+      write(*,*) 
+      write(*,*) "!----------------------------"
+      write(*,*) 
+      write(*,*) "DLRA Lyapunov equation:"
+      write(*,'(A,F12.6)') "    Tend  = ", Tend
+      write(*,'(A,E12.6)') "    dt    = ", dt
+      write(*,*) "   rk0   = ", rk
+      write(*,*) "   order = ", TO
+      write(*,*) 
+      write(*,*) "Parameters:"
+      write(*,*) "   rank_adaptive = ", if_rkad
+      write(*,*) "   Krylov-exptA  = ", if_kexpm
+      write(*,*) 
+      write(*,*) "!----------------------------"
+      write(*,*) 
+      return
+   end subroutine print_info
 
 end module Laplacian2D_LTI_Lyapunov_Utils
