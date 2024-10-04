@@ -37,6 +37,8 @@ module Ginzburg_Landau_Utils
    public  :: stamp_logfile_header
    ! misc
    public  :: CALE, CARE
+   ! IO
+   public  :: load_data, save_data
 
    character*128, parameter :: this_module = 'Ginzburg_Landau_Utils'
 
@@ -230,7 +232,7 @@ contains
       allocate(perm(1:rk)); perm = 0
       allocate(Utmp(1:rk), source=U(1:rk))
       call qr(Utmp, S, perm, info, verbosity=.false.)
-      if (info /= 0) write(*,*) '  [generate_random_initial_condition] Info: Colinear vectors detected in QR, column ', info
+      if (info /= 0) print *,'  [generate_random_initial_condition] Info: Colinear vectors detected in QR, column ', info
       ! perform SVD
       call svd(S(:,1:rk), S_svd(1:rk), U_svd(:,1:rk), V_svd(1:rk,1:rk))
       S = diag(S_svd)
@@ -344,5 +346,49 @@ contains
       res_flat = AX_flat + XAH_flat + CTQcC_flat + NL_flat
 
    end subroutine CARE
+
+   subroutine load_data(filename, U_load, verb)
+      character(len=*),      intent(in)  :: filename
+      real(wp), allocatable, intent(out) :: U_load(:,:)
+      logical, optional,     intent(in)  :: verb
+      ! internal
+      logical :: existfile
+      integer :: iostatus
+      logical :: verbose
+
+      verbose = optval(verb, .false.)
+
+      inquire(file=filename, exist=existfile)
+      if (existfile) then
+         call load_npy(trim(filename), U_load, iostatus)
+         if (iostatus /= 0) then
+            print *, 'Error loading file', trim(filename)
+            STOP 2
+         end if
+      else
+         print *, 'Cannot find ', trim(filename); STOP 12
+      end if
+      if (verbose) print *, 'INFO: Loaded data from', trim(filename)
+      return
+   end subroutine load_data
+
+   subroutine save_data(filename, data, verb)
+      character(len=*),      intent(in)  :: filename
+      real(wp),              intent(in)  :: data(:,:)
+      logical, optional,     intent(in)  :: verb
+      ! internal
+      integer :: iostatus
+      logical :: verbose
+
+      verbose = optval(verb, .false.)
+
+      call save_npy(trim(filename), data, iostatus)
+      if (iostatus /= 0) then
+         print *, 'Error saving file', trim(filename)
+         STOP 2
+      end if
+      if (verbose) print *, 'INFO: Saved data to', trim(filename)
+      return
+   end subroutine save_data
 
 end module Ginzburg_Landau_Utils
