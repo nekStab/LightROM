@@ -758,12 +758,16 @@ contains
       return
    end subroutine run_kexpm_test
 
-   subroutine run_lyap_convergence_test(LTI, U0, S0, Tend, tauv, rkv, TOv, ifsave, ifverb)
+   subroutine run_lyap_convergence_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, tauv, rkv, TOv, ifsave, ifverb)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
+      ! Reference solution (BS)
+      real(wp),                      intent(in)    :: Xref_BS(N,N)
+      ! Reference solution (RK)
+      real(wp),                      intent(in)    :: Xref_RK(N,N)
       ! Initial condition
-      type(state_vector),            intent(inout)    :: U0(:)
-      real(wp),                      intent(inout)    :: S0(:,:)
+      type(state_vector),            intent(inout) :: U0(:)
+      real(wp),                      intent(inout) :: S0(:,:)
       real(wp),                      intent(in)    :: Tend
       ! vector of dt values
       real(wp),                      intent(in)    :: tauv(:)
@@ -779,14 +783,11 @@ contains
 
       ! Internals
       type(LR_state),                allocatable   :: X_state
-      type(rk_lyapunov),             allocatable   :: RK_propagator
       type(state_matrix)                           :: X_mat(2)
-      real(wp),                      allocatable   :: X_RKlib(:,:,:)
-      real(wp)                                     :: X_mat_ref(N,N)
       real(wp)                                     :: U0_mat(N, rkmax)
       integer                                      :: info
-      integer                                      :: i, j, ito, rk, nsteps, torder
-      integer                                      :: irep, nrep
+      integer                                      :: i, j, ito, rk, torder
+      integer                                      :: irep, nsteps
       real(wp)                                     :: etime, tau
       ! OUTPUT
       real(wp)                                     :: U_out(N,rkmax)
@@ -797,127 +798,32 @@ contains
       real(wp)                                     :: X_mat_flat(N**2)
       real(wp)                                     :: res_flat(N**2)
       character*128      :: oname
-      character*128      :: onameU
-      character*128      :: onameS
-      integer            :: iostatus
+      character*128      :: logfile
       ! timer
-      integer            :: clock_rate, clock_start, clock_stop
-      logical            :: existfile, load_data
+      integer            :: clock_rate, clock_start, clock_stop, iunit, stat
       ! DLRA opts
       type(dlra_opts)                              :: opts
 
       if_save_npy  = optval(ifsave, .false.)
       verb         = optval(ifverb, .false.)
 
-      load_data = .false.
-
       call system_clock(count_rate=clock_rate)
 
-      ! initialize exponential propagator
-      RK_propagator = RK_lyapunov(Tend)
-
-      oname = trim(basepath)//"Xctl_RK_W/data_BS_X_W.npy"
-      inquire(file=oname, exist=existfile)
-      if (existfile) then
-         call load_npy(trim(oname), U_load, iostatus)
-         print *, 'Load Bartels-Stuart solution ', trim(oname)
-         if (iostatus /= 0) then; write(*,*) "Error loading file", trim(oname); STOP 2; end if
-      else
-         write(*,*) 'Cannot find ', trim(oname); STOP 12
-      end if
-      call CALE(res_flat, reshape(U_load, shape(res_flat)), BBTW_flat, .false.)
-      print *, '   || res ||_2/N = ', norm2(res_flat)/N
-
-      nrep = 1
-      allocate(X_RKlib(N, N, nrep))
-      if (load_data) then
-         ! Load initial condition
-         write(oname,'("data_GL_lyapconv_X0_RK_n",I4.4,".npy")') nx
-         inquire(file=trim(basepath)//oname, exist=existfile)
-         if (existfile) then
-            call load_npy(trim(basepath)//trim(oname), U_load, iostatus)
-            print *, 'Load initial condition: ', trim(basepath)//trim(oname)
-            if (iostatus /= 0) then; write(*,*) "Error loading file", trim(basepath)//trim(oname); STOP 2; end if
-         else
-            write(*,*) 'Cannot find ', trim(basepath)//trim(oname); STOP 12
-         end if
-         X_out = U_load(1:N, 1:N)
-         ! Load reference RK solution
-         write(oname,'("data_GL_lyapconv_X_RK_n",I4.4,"_r",I3.3,".npy")') nx, nrep
-         inquire(file=trim(basepath)//trim(oname), exist=existfile)
-         if (existfile) then
-            print *, 'Load RK solution ', trim(basepath)//trim(oname)
-            call load_npy(trim(basepath)//trim(oname), U_load, iostatus)
-            if (iostatus /= 0) then; write(*,*) "Error loading file", trim(basepath)//trim(oname); STOP 2; end if
-         else
-            write(*,*) 'Cannot find ', trim(basepath)//trim(oname); STOP 12
-         end if
-         ! Set reference RK solution
-         X_mat_ref = U_load(1:N, 1:N)
-      else
-         ! Set random initial condition
-         call get_state(U0_mat(:,1:rk_X0), U0)
-         X_out = matmul( U0_mat, matmul( S0, transpose(U0_mat ) ) )
-         if (if_save_npy) then
-            ! Save forcing RK
-            write(oname,'("data_GL_lyapconv_BBTW_RK_n",I4.4,".npy")') nx
-            write(*,*) 'Save ', trim(basepath)//trim(oname)
-            call save_npy(trim(basepath)//oname, reshape(BBTW_flat, (/ N,N /)), iostatus)
-            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
-            ! Save initial condition
-            write(oname,'("data_GL_lyapconv_X0_RK_n",I4.4,".npy")') nx
-            write(*,*) 'Save ', trim(basepath)//trim(oname)
-            call save_npy(trim(basepath)//oname, X_out, iostatus)
-            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
-            ! Save forcing DLRA
-            Bmat = 0.0_wp
-            call get_state(Bmat, LTI%B(1:rk_b))
-            X_out = matmul(Bmat, transpose(Bmat))
-            write(oname,'("data_GL_lyapconv_BBTW_DLRA_n",I4.4,".npy")') nx
-            write(*,*) 'Save ', trim(basepath)//trim(oname)
-            call save_npy(trim(basepath)//oname, X_out, iostatus)
-            if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
-         end if
-         X_out = matmul( U0_mat, matmul( S0, transpose(U0_mat ) ) )
-         ! Set initial condition for RK
-         call set_state(X_mat(1:1), X_out)
-         write(*,'(A10,A26,A26,A26,A20)') 'RKlib:','Tend','|| X_RK ||_2/N', '|| res ||_2/N','Elapsed time'
-         write(*,*) '         ------------------------------------------------------------------------'
-         do irep = 1, nrep
-            call system_clock(count=clock_start)     ! Start Timer
-            ! integrate
-            call RK_propagator%matvec(X_mat(1), X_mat(2))
-            call system_clock(count=clock_stop)      ! Stop Timer
-            ! recover output
-            call get_state(X_RKlib(:,:,irep), X_mat(2:2))
-            call CALE(res_flat, reshape(X_RKlib(:,:,irep), shape(res_flat)), BBTW_flat, .false.)
-            ! replace input
-            call set_state(X_mat(1:1), X_RKlib(:,:,irep))
-            write(*,'(I10,F26.4,E26.8,E26.8,F18.4," s")') irep, irep*Tend, norm2(X_RKlib(:,:,irep))/N, norm2(res_flat)/N, &
-                           & real(clock_stop-clock_start)/real(clock_rate)
-            if (if_save_npy) then
-               write(oname,'("data_GL_lyapconv_X_RK_n",I4.4,"_r",I3.3,".npy")') nx, irep
-               write(*,*) 'Save ', trim(basepath)//trim(oname)
-               call save_npy(trim(basepath)//oname, X_RKlib(:,:,irep), iostatus)
-               if (iostatus /= 0) then; write(*,*) "Error saving file", trim(basepath)//trim(oname); STOP 2; end if
-            end if
-         enddo
-         ! Set reference RK solution
-         X_mat_ref = X_RKlib(:,:,nrep)
-      end if
-      
       write(*,*) ''
-      write(*,'(A16,A4,A4,A10,A6,A8,A26,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
-                                 & '|| X_DLRA - X_RK ||_2/N', 'Elapsed time'
+      write(*,'(A16,A4,A4,A10,A6,A8,3(A19),A12)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
+                     & '|| X ||_2/N', '|| X-X_R ||_2/N', '|| X-X_B ||_2/N', 'etime'
       X_state = LR_state()
-      do ito = 1, size(TOv)
-         torder = TOv(ito)
-         do i = 1, size(rkv)
-            rk = rkv(i)
+      do i = 1, size(rkv)
+         rk = rkv(i)
+         do ito = 1, size(TOv)
+            torder = TOv(ito)
             do j = 1, size(tauv)
                tau = tauv(j)
+               write(logfile,'("local/logfile_GL_lyapconv_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".txt")') nx, torder, rk, tau
+               call logger%add_log_file(logfile, unit=iunit, stat=stat)
+               if (stat /= 0) call stop_error('Unable to open logfile '//trim(logfile)//'.', module=this_module, procedure='logger_setup')
                ! set solver options
-               opts = dlra_opts(mode=ito, verbose=verb)
+               opts = dlra_opts(mode=ito, verbose=verb, if_rank_adaptive=.false., chktime=1.0_wp, inc_tol=atol_dp)
                ! Initialize low-rank representation with rank rk
                if (verb) write(*,*) 'Initialize LR state, rk =', rk
                call X_state%initialize_LR_state(U0, S0, rk)
@@ -926,26 +832,25 @@ contains
                ! run integrator
                call system_clock(count=clock_start)     ! Start Timer
                call projector_splitting_DLRA_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, info, &
-                                                                     & exptA=exptA, iftrans=.false., options=opts)
+                                                                  & exptA=exptA, iftrans=.false., options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
                etime = real(clock_stop-clock_start)/real(clock_rate)
                ! Reconstruct solution
                call reconstruct_solution(X_out, X_state)
-               write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E26.8,F18.4," s")') 1, 'Xctl OUTPUT', &
-                                 & rk, torder, tau, nsteps, Tend, norm2(X_out - X_mat_ref)/N, etime
+               write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,3(E19.8),F10.2," s")') 1, 'Xctl OUTPUT', &
+                                 & rk, torder, tau, nsteps, Tend, &
+                                 & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, etime
                if (verb) write(*,*) 'Total integration time (DLRA):', etime, 's'
                if (j == size(tauv) .and. if_save_npy) then
-                  write(onameU,'("data_GL_lyapconv_XU_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') nx, torder, rk, tau
-                  write(onameS,'("data_GL_lyapconv_XS_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') nx, torder, rk, tau
-                  write(*,*) 'Save ', trim(basepath)//trim(onameU)
-                  call save_npy(trim(basepath)//onameU, U_out(:,1:rk), iostatus)
-                  if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameU); STOP 2; end if
-                  write(*,*) 'Save ', trim(basepath)//trim(onameS)
-                  call save_npy(trim(basepath)//onameS, X_state%S(1:rk,1:rk), iostatus)
-                  if (iostatus /= 0) then; write(*,*) "Error saving file", trim(onameS); STOP 2; end if
+                  call get_state(U_out(:,1:rk), X_state%U(1:X_state%rk))
+                  write(oname,'("local/data_GL_lyapconv_XU_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  call save_data(oname, U_out(:,1:rk))
+                  write(oname,'("local/data_GL_lyapconv_XS_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') nx, torder, rk, tau
+                  call save_data(oname, X_state%S(1:rk,1:rk))
                end if
                deallocate(X_state%U)
                deallocate(X_state%S)
+               call logger%remove_log_unit(unit=iunit)
             end do
          end do
       end do
