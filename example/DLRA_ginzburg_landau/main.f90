@@ -31,12 +31,10 @@ program demo
    logical :: run_test
    !
    character*128      :: oname
-   character*128      :: onameU
-   character*128      :: onameS
    ! rk_B & rk_C are set in ginzburg_landau_base.f90
 
-   integer  :: nrk, ntau, rk,  torder
-   real(wp) :: tau, Tend, Ttot
+   integer  :: nrk, ntau, rk,  torder, nsteps, iref
+   real(wp) :: tau, Tend, T_RK
    ! vector of dt values
    real(wp), allocatable :: tauv(:)
    ! vector of rank values
@@ -61,6 +59,10 @@ program demo
    real(wp)                                  :: lagsvd(rkmax)
    real(wp)                                  :: res_flat(N**2)
 
+   ! Reference solutions (BS & RK)
+   real(wp)                                  :: Xref_BS(N,N)
+   real(wp)                                  :: Xref_RK(N,N)
+
    ! IO
    real(wp),           allocatable           :: U_load(:,:)
 
@@ -68,12 +70,13 @@ program demo
    integer                                   :: info
 
    ! Counters
-   integer                                   :: i, j, k, irep, nrep, istep, nsteps
+   integer                                   :: i, j, k, irep, nrep, istep
    integer,                allocatable       :: perm(:)
-   real(wp)                                  :: Tmax, Tstep, etime
+   real(wp)                                  :: etime
 
    logical        :: ifsave, ifload, ifverb, iflogs
    
+   !call logger%configure(level=error_level, time_stamp=.false.)
    call logger%configure(level=error_level, time_stamp=.false.)
    
    !----------------------------------
@@ -102,14 +105,29 @@ program demo
    print *, ''
    print *, 'Check residual computation with Bartels-Stuart solution (python):'
    oname = trim(basepath)//"data_BS_X_W.npy"
-   call load_data(oname, U_load)
-   call CALE(res_flat, reshape(U_load, shape(res_flat)), BBTW_flat, .false.)
+   call load_data(oname, U_load, .true.)
+   Xref_BS = U_load
+   call CALE(res_flat, reshape(Xref_BS, shape(res_flat)), BBTW_flat, .false.)
    print *, ''
-   print *, '  || res ||_2/N = ', norm2(res_flat)/N
+   print *, '  ||  X_B  ||_2/N = ', norm2(Xref_BS)/N
+   print *, '  || res_B ||_2/N = ', norm2(res_flat)/N
 
    ! Run RK integrator for the Lyapunov equation
-   Tstep = 1.00_wp
-   call run_lyap_RK(LTI, U0, S0, Tstep, .true., .true.)
+   T_RK   = 100.0_wp
+   nsteps = 100
+   iref   = 60
+   ifload = .true.
+   ifverb = .true.
+   call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nsteps, iref, ifload, ifverb)
+   
+   rkv = (/ 6, 10, 14, 18 /)
+   tauv = (/ 1.0, 0.1, 0.01 /)
+   TOv  = (/ 1, 2 /)
+   Tend = T_RK/nsteps*iref
+   nsteps = 10
+   ifsave = .true. ! save data to disk (LightROM/local)
+   ifverb = .false. ! verbosity
+   call run_lyap_convergence_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, tauv, rkv, TOv, ifsave, ifverb)
 
    !----------------------------------
    !
