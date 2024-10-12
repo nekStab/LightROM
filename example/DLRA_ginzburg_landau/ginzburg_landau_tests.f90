@@ -28,8 +28,8 @@ module Ginzburg_Landau_Tests
    integer,       parameter :: iunit1 = 1
    integer,       parameter :: iunit2 = 2
    character*128, parameter :: basepath = 'local/'
-   integer,       parameter :: rkmax = 40
-   integer,       parameter :: rk_X0 = 40
+   integer,       parameter :: rkmax = 25
+   integer,       parameter :: rk_X0 = 10
 
    private :: this_module
    public  :: iunit1, iunit2, basepath, rkmax, rk_X0
@@ -37,13 +37,329 @@ module Ginzburg_Landau_Tests
    public  :: run_BT_test
    public  :: run_kexpm_test
    public  :: run_DLRA_riccati_test
-   public  :: run_lyap_convergence_test
+   public  :: run_lyap_DLRA_test
 
    character*128, parameter :: this_module = 'Ginzburg_Landau_Tests'
 
 contains
 
-   subroutine run_DLRA_lyapunov_test(LTI, U0, S0, rkv, tauv, TOv, Tend, nrep, ifsave, ifverb, iflogs)
+   subroutine run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, tauv, rkv, TOv, ifsave)
+      ! LTI system
+      type(lti_system),              intent(inout) :: LTI
+      ! Reference solution (BS)
+      real(wp),                      intent(in)    :: Xref_BS(N,N)
+      ! Reference solution (RK)
+      real(wp),                      intent(in)    :: Xref_RK(N,N)
+      ! Initial condition
+      type(state_vector),            intent(inout) :: U0(:)
+      real(wp),                      intent(inout) :: S0(:,:)
+      real(wp),                      intent(in)    :: Tend
+      ! vector of dt values
+      real(wp),                      intent(in)    :: tauv(:)
+      ! vector of rank values
+      integer,                       intent(in)    :: rkv(:)
+      ! vector of torders
+      integer,                       intent(in)    :: TOv(:)
+      ! Optional
+      logical, optional,             intent(in)    :: ifsave
+      logical                                      :: if_save_npy
+
+      ! Internals
+      type(LR_state),                allocatable   :: X_state
+      type(state_matrix)                           :: X_mat(2)
+      real(wp)                                     :: U0_mat(N,N), A(N,N), res_mat(N,N)
+      integer                                      :: info, i, j, ito, rk, torder, irep, nrep, nsteps
+      real(wp)                                     :: etime, tau, Tstep, Ttot
+      ! OUTPUT
+      real(wp)                                     :: U_out(N,N), X_out(N,N), Bmat(N,2)
+      real(wp),           allocatable              :: U_load(:,:)
+      real(wp)                                     :: X_mat_flat(N**2), res_flat(N**2)
+      character(len=128) :: onameU, onameS, logfile, folder
+      logical            :: existfile
+      ! timer
+      integer            :: clock_rate, clock_start, clock_stop, iunit, stat
+      ! DLRA options
+      type(dlra_opts)    :: opts
+
+
+
+
+
+
+
+      real(wp), allocatable :: ssvd_v(:), IP(:,:)
+      character(len=128) :: fmt
+      integer :: e
+
+
+
+
+
+
+      
+      Tstep = 1.0_wp
+
+      ! basic opts
+      opts = dlra_opts(chktime=1.0_wp, inc_tol=atol_dp, if_rank_adaptive=.false.)
+
+      if_save_npy  = optval(ifsave, .false.)
+
+      call system_clock(count_rate=clock_rate)
+
+      print *, ''
+      print *, '  Running DLRA in standard mode'
+      print *, ''
+      print '(A16,A4,A4,A10,A6,A8,4(A19),A12)', 'DLRA:','  rk',' TO','dt','steps','Tend', &
+                     & '|| X ||_2/N', '|| X-X_R ||_2/N', '|| X-X_B ||_2/N', '|| res ||_2/N', 'etime'
+      X_state = LR_state()
+      do i = 1, size(rkv)
+         rk = rkv(i)
+         do ito = 1, size(TOv)
+            torder = TOv(ito)
+            do j = 1, size(tauv)
+               tau = tauv(j)
+               write(logfile,'("local/DLRA_log/logfile_GL_lyap_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".txt")') &
+                        & nx, torder, rk, tau
+               write(onameU,'("local/DLRA/data_GL_lyap_XU_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') &
+                        & nx, torder, rk, tau
+               write(onameS,'("local/DLRA/data_GL_lyap_XS_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') &
+                        & nx, torder, rk, tau
+               inquire(file=onameS, exist=existfile)
+               if (existfile) then
+                  call load_data(onameU, U_load)
+                  allocate(X_state%U(rk), source=U0(1)); call set_state(X_state%U, U_load(:,:rk))
+                  call load_data(onameS, U_load)
+                  allocate(X_state%S(rk,rk)); X_state%S = U_load(:rk,:rk)
+                  X_state%rk = rk
+                  etime = 0.0_wp
+               else
+                  !if (if_save_npy) then
+                  !   call logger%add_log_file(logfile, unit=iunit, stat=stat)
+                  !   if (stat /= 0) call stop_error('Unable to open logfile '//trim(logfile)//'.', module=this_module, procedure='logger_setup')
+                  !end if
+                  ! set solver options
+                  opts%mode = ito
+                  ! Initialize low-rank representation with rank rk
+                  call X_state%initialize_LR_state(U0, S0, rk, rkmax, .false.)
+
+
+
+                  !ssvd_v = svdvals(X_state%S(:X_state%rk,:X_state%rk))
+                  !write(fmt,'(A,I0,A)') '("SVD_M0  : ",', X_state%rk, '(F10.6,1X))'
+                  !print fmt, ssvd_v
+!
+                  !allocate(IP(X_state%rk,X_state%rk)); IP = 0.0_wp
+                  !call innerprod(IP, X_state%U(:X_state%rk), X_state%U(:X_state%rk))
+                  !do e = 1, X_state%rk
+                  !   print '(6x,10(F10.6,2X))', IP(e,:X_state%rk)
+                  !end do
+                  !STOP 1
+
+
+
+
+
+
+
+
+                  !call reconstruct_solution(X_out, X_state)
+                  !call CALE(res_flat, reshape(X_out, shape(res_flat)), BBTW_flat, .false.)
+                  !write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,4(E19.8),F10.2," s")') 1, 'Xctl OUTPUT', &
+                  !                  & rk, torder, tau, 0, 0.0, &
+                  !                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
+                  !                  & norm2(res_flat)/N, etime
+                  ! compute repetition
+                  !Ttot = 0.0_wp
+                  etime = 0.0_wp
+                  !nrep = nint(Tend/Tstep)
+                  !nsteps = nint(Tstep/tau)
+                  nsteps = nint(Tend/tau)
+                  !do irep = 1, nrep
+                  ! run integrator
+                  call system_clock(count=clock_start)     ! Start Timer
+                  call projector_splitting_DLRA_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, info, &
+                                                                     & exptA=exptA, iftrans=.false., options=opts)
+                  call system_clock(count=clock_stop)      ! Stop Timer
+                  etime = etime + real(clock_stop-clock_start)/real(clock_rate)
+                  Ttot = Ttot + Tstep
+                  !call reconstruct_solution(X_out, X_state)
+                  !call CALE(res_flat, reshape(X_out, shape(res_flat)), BBTW_flat, .false.)
+                  !write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,4(E19.8),F10.2," s")') 1, 'Xctl OUTPUT', &
+                  !                  & rk, torder, tau, nsteps, Ttot, &
+                  !                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
+                  !                  & norm2(res_flat)/N, etime
+                  !STOP 99
+                  !end do
+                  if (if_save_npy) then
+                     call get_state(U_out(:,:rk), X_state%U(:X_state%rk))
+                     !call save_data(onameU, U_out(:,:rk))
+                     !call save_data(onameS, X_state%S(:rk,:rk))
+                     !call logger%remove_log_unit(unit=iunit)
+                  end if
+               end if
+               ! Reconstruct solution
+               call reconstruct_solution(X_out, X_state)
+              
+               nsteps = nint(Tend/tau)
+               call CALE(res_flat, reshape(X_out, shape(res_flat)), BBTW_flat, .false.)
+               write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,4(E19.8),F10.2," s")') 1, 'Xctl OUTPUT', &
+                                 & rk, torder, tau, nsteps, Tend, &
+                                 & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
+                                 & norm2(res_flat)/N, etime
+               !!U_out = 0.0_wp
+               !!call get_state(U_out(:,:rk), X_state%U(:rk))
+               !!X_out = matmul( U_out(:,:rk), matmul( X_state%S(:rk,:rk), transpose(U_out(:,:rk)) ) )*weight(1)
+               !!ssvd_v = svdvals(X_state%S(:rk,:rk))
+               !!write(fmt,'(A,I0,A)') '("S     : ",', X_state%rk, '(F10.6,1X))'
+               !!print fmt, ssvd_v(:X_state%rk)
+               !ssvd_v = svdvals(X_out)
+               !write(fmt,'(A,I0,A)') '("USUT  : ",', X_state%rk, '(F10.6,1X))'
+               !print fmt, ssvd_v(:X_state%rk)
+               !print *, norm2(X_out - Xref_RK)/N
+               !print *, norm2(X_out - Xref_BS)/N
+               !U0_mat = 0.0_wp
+               !A = 0.0_wp
+               !U0_mat = eye(N)
+               !do e = 1, N
+               !   call direct_GL(U0_mat(:,e), A(:,e))
+               !end do
+               !do e = 1, 10
+               !   print '(10(F10.6,2X))', U0_mat(e,:10)
+               !end do
+               !do e = 1, 10
+               !   print '(10(F10.6,2X))', A(e,:10)
+               !end do
+               !!!print *, norm2(X_out)/N
+               !!!print *, maxval(X_out), maxval(Xref_BS), maxval(Xref_RK)
+               !res_mat = matmul(A, X_out) + matmul(X_out, transpose(A)) + reshape(BBTW_flat, (/ N,N /))
+               !print *, norm2(res_mat)/N
+               !call CALE(res_flat, reshape(X_out, shape(res_flat)), BBTW_flat, .false.)
+               !print *, norm2(res_flat)/N
+               !STOP 90
+               deallocate(X_state%U); deallocate(X_state%S)
+               !STOP 5
+            end do
+            print *, ''
+         end do
+      end do
+
+   end subroutine run_lyap_DLRA_test
+
+   subroutine run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, tauv, rkv, TOv, tolv, ifsave)
+      ! LTI system
+      type(lti_system),              intent(inout) :: LTI
+      ! Reference solution (BS)
+      real(wp),                      intent(in)    :: Xref_BS(N,N)
+      ! Reference solution (RK)
+      real(wp),                      intent(in)    :: Xref_RK(N,N)
+      ! Initial condition
+      type(state_vector),            intent(inout) :: U0(:)
+      real(wp),                      intent(inout) :: S0(:,:)
+      real(wp),                      intent(in)    :: Tend
+      ! vector of dt values
+      real(wp),                      intent(in)    :: tauv(:)
+      ! vector of rank values
+      integer,                       intent(in)    :: rkv(:)
+      ! vector of torders
+      integer,                       intent(in)    :: TOv(:)
+      ! vector of adaptation tolerance
+      real(wp),                      intent(in)    :: tolv(:)
+      ! Optional
+      logical, optional,             intent(in)    :: ifsave
+      logical                                      :: if_save_npy
+
+      ! Internals
+      type(LR_state),                allocatable   :: X_state
+      type(state_matrix)                           :: X_mat(2)
+      real(wp)                                     :: U0_mat(N,N)
+      integer                                      :: info, i, j, k, ito, rk, torder, irep, nsteps
+      real(wp)                                     :: etime, tau
+      ! OUTPUT
+      real(wp)                                     :: U_out(N,N), X_out(N,N), Bmat(N,2)
+      real(wp),           allocatable              :: U_load(:,:)
+      real(wp)                                     :: X_mat_flat(N**2), res_flat(N**2)
+      character(len=128) :: onameU, onameS, logfile, folder
+      logical            :: existfile
+      ! timer
+      integer            :: clock_rate, clock_start, clock_stop, iunit, stat
+      ! DLRA options
+      type(dlra_opts)    :: opts
+
+      ! basic opts
+      opts = dlra_opts(chktime=1.0_wp, inc_tol=atol_dp, if_rank_adaptive=.true.)
+
+      if_save_npy  = optval(ifsave, .false.)
+
+      call system_clock(count_rate=clock_rate)
+
+      print *, ''
+      print *, '  Running DLRA in rank-adaptive mode'
+      print *, '' 
+      print '(A16,A4,A4,A10,A6,A8,4(A19),A12)', 'DLRA:','  rk',' TO','dt','steps','Tend', &
+                     & '|| X ||_2/N', '|| X-X_R ||_2/N', '|| X-X_B ||_2/N', '|| res ||_2/N', 'etime'
+      X_state = LR_state()
+      do k = 1, size(tolv)
+         opts%tol = tolv(k)
+         print *, 'tol= ', opts%tol
+         do i = 1, size(rkv)
+            rk = rkv(i)
+            do ito = 1, size(TOv)
+               torder = TOv(ito)
+               do j = 1, size(tauv)
+                  tau = tauv(j)
+                  write(logfile,'("local/DLRArk/logfile_GL_lyap_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".txt")') &
+                           & nx, torder, rk, tau
+                  write(onameU,'("local/DLRArk/data_GL_lyap_XU_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') &
+                           & nx, torder, rk, tau
+                  write(onameS,'("local/DLRArk/data_GL_lyap_XS_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') &
+                           & nx, torder, rk, tau
+                  inquire(file=onameS, exist=existfile)
+                  if (existfile) then
+                     call load_data(onameU, U_load)
+                     allocate(X_state%U(rk), source=U0(1)); call set_state(X_state%U, U_load(:,:rk))
+                     call load_data(onameS, U_load)
+                     allocate(X_state%S(rk,rk)); X_state%S = U_load(:rk,:rk)
+                     X_state%rk = rk
+                     etime = 0.0_wp
+                  else
+                     !if (if_save_npy) then
+                     !   call logger%add_log_file(logfile, unit=iunit, stat=stat)
+                     !   if (stat /= 0) call stop_error('Unable to open logfile '//trim(logfile)//'.', module=this_module, procedure='logger_setup')
+                     !end if
+                     ! set solver options
+                     opts%mode = ito
+                     ! Initialize low-rank representation with rank rk
+                     call X_state%initialize_LR_state(U0, S0, rk, rkmax, opts%if_rank_adaptive)
+                     ! run integrator
+                     call system_clock(count=clock_start)     ! Start Timer
+                     call projector_splitting_DLRA_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, info, &
+                                                                        & exptA=exptA, iftrans=.false., options=opts)
+                     call system_clock(count=clock_stop)      ! Stop Timer
+                     etime = real(clock_stop-clock_start)/real(clock_rate)
+                     if (if_save_npy) then
+                        call get_state(U_out(:,:rk), X_state%U(:X_state%rk))
+                        call save_data(onameU, U_out(:,:rk))
+                        call save_data(onameS, X_state%S(:rk,:rk))
+                        !call logger%remove_log_unit(unit=iunit)
+                     end if
+                  end if
+                  ! Reconstruct solution
+                  call reconstruct_solution(X_out, X_state)
+                  nsteps = ceiling(Tend/tau)
+                  call CALE(res_flat, reshape(X_out, shape(res_flat)), BBTW_flat, .false.)
+                  write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,4(E19.8),F10.2," s")') 1, 'Xctl OUTPUT', &
+                                    & rk, torder, tau, nsteps, Tend, &
+                                    & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
+                                    & norm2(res_flat)/N, etime
+                  deallocate(X_state%U); deallocate(X_state%S)
+               end do
+            end do
+         end do
+      end do
+      return
+   end subroutine run_lyap_DLRArk_test
+
+   subroutine run_DLRA_lyapunov_test(LTI, U0, S0, rkv, tauv, TOv, Tend, nrep, ifsave, iflogs)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Initial condition
@@ -60,8 +376,6 @@ contains
       ! Optional
       logical, optional,             intent(in) :: ifsave
       logical                                   :: if_save_npy
-      logical, optional,             intent(in) :: ifverb
-      logical                                   :: verb
       logical, optional,             intent(in) :: iflogs
       logical                                   :: if_save_logs
       
@@ -85,7 +399,6 @@ contains
       type(dlra_opts)                           :: opts
 
       if_save_npy  = optval(ifsave, .false.)
-      verb         = optval(ifverb, .false.)
       if_save_logs = optval(iflogs, .false.)
 
       call system_clock(count_rate=clock_rate)
@@ -105,12 +418,12 @@ contains
             do j = 1, size(tauv)
                tau = tauv(j)
                ! Initialize low-rank representation with rank rk
-               if (verb) write(*,*) 'Initialize LR state, rk =', rk
+               write(*,*) 'Initialize LR state, rk =', rk
                call X%initialize_LR_state(U0, S0, rk)
                ! Reset time
                Ttot = 0.0_wp
                lagsvd = 0.0_wp
-               if (verb) write(*,*) 'Run DRLA'
+               write(*,*) 'Run DRLA'
                if (if_save_logs) then
                   write(oname,'("output_GL_X_norm__n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
                   open(unit=iunit1, file=trim(basepath)//oname)
@@ -126,7 +439,7 @@ contains
                nsteps = nint(Tend/tau)
                etime_tot = 0.0_wp
                ! set solver options
-               opts = dlra_opts(mode=ito, verbose=verb)
+               opts = dlra_opts(mode=ito)
                do irep = 1, nrep
                   ! run integrator
                   etime = 0.0_wp
@@ -166,7 +479,7 @@ contains
                   end if
                   etime_tot = etime_tot + etime
                end do
-               if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
+               write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
                if (if_save_logs) then
                   write(iunit1,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit1)
                   write(Iunit2,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit2)
@@ -201,11 +514,11 @@ contains
             do j = 1, size(tauv)
                tau = tauv(j)
                ! Initialize low-rank representation with rank rk
-               if (verb) write(*,*) 'Initialize LR state, rk =', rk
+               write(*,*) 'Initialize LR state, rk =', rk
                call Y%initialize_LR_state(U0, S0, rk)
                ! Reset time
                Ttot = 0.0_wp
-               if (verb) write(*,*) 'Run DRLA'
+               write(*,*) 'Run DRLA'
                if (if_save_logs) then
                   write(oname,'("output_GL_Y_norm__n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
                   open(unit=iunit1, file=trim(basepath)//oname)
@@ -221,7 +534,7 @@ contains
                nsteps = nint(Tend/tau)
                etime_tot = 0.0_wp
                ! set solver options
-               opts = dlra_opts(mode=ito, verbose=verb)
+               opts = dlra_opts(mode=ito)
                do irep = 1, nrep
                   ! run integrator
                   etime = 0.0_wp
@@ -253,7 +566,7 @@ contains
                   ! Reconstruct solution
                   call reconstruct_solution(X_out, Y)
                   Ttot = Ttot + Tend
-                  call CALE(res, reshape(X_out, shape(res)), CTCW_flat, .true.)
+                  call CALE(res, reshape(X_out, shape(res)), CTCWinv_flat, .true.)
                   write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Yobs OUTPUT', &
                                     & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
                   if (if_save_logs) then
@@ -262,7 +575,7 @@ contains
                   end if
                   etime_tot = etime_tot + etime
                end do
-               if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
+               write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
                if (if_save_logs) then
                   write(iunit1,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit1)
                   write(Iunit2,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit2)
@@ -288,7 +601,7 @@ contains
    ! BALANCED TRUNCATION
    !
 
-   subroutine run_BT_test(LTI, U0, S0, rk, tau, torder, Tmax, nrep, ifsave, ifload, ifverb, iflogs)
+   subroutine run_BT_test(LTI, U0, S0, rk, tau, torder, Tmax, nrep, ifsave, ifload, iflogs)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Initial condition
@@ -304,8 +617,6 @@ contains
       logical                                   :: if_save_npy
       logical, optional,             intent(in) :: ifload
       logical                                   :: if_load_npy
-      logical, optional,             intent(in) :: ifverb
-      logical                                   :: verb
       logical, optional,             intent(in) :: iflogs
       logical                                   :: if_save_logs
 
@@ -354,7 +665,6 @@ contains
 
       if_save_npy  = optval(ifsave, .false.)
       if_load_npy  = optval(ifload, .false.)
-      verb         = optval(ifverb, .false.)
       if_save_logs = optval(iflogs, .false.)
 
       call system_clock(count_rate=clock_rate)
@@ -392,13 +702,13 @@ contains
          call X%initialize_LR_state(Utmp, S_load, rk)
       else
          ! Initialize low-rank representation with rank rk
-         if (verb) write(*,*) 'Initialize LR state, rk =', rk
+         write(*,*) 'Initialize LR state, rk =', rk
          call X%initialize_LR_state(U0, S0, rk)
          ! Reset time
          Ttot = 0.0_wp
          etime_tot = 0.0_wp
          ! set solver options
-         opts = dlra_opts(mode=torder, verbose=verb)
+         opts = dlra_opts(mode=torder)
          write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
                            & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
          do irep = 1, nrep
@@ -418,7 +728,7 @@ contains
                               & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
             etime_tot = etime_tot + etime
          end do
-         if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
+         write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
          if (if_save_npy) then
             write(*,*) 'Save data to file:'
             write(*,*) '    ', trim(onameU)
@@ -460,13 +770,13 @@ contains
          call Y%initialize_LR_state(Utmp, S_load, rk)
       else
          ! Initialize low-rank representation with rank rk
-         if (verb) write(*,*) 'Initialize LR state, rk =', rk
+         write(*,*) 'Initialize LR state, rk =', rk
          call Y%initialize_LR_state(U0, S0, rk)
          ! Reset time
          Ttot = 0.0_wp
          etime_tot = 0.0_wp
          ! set solver options
-         opts = dlra_opts(mode=torder, verbose=verb)
+         opts = dlra_opts(mode=torder)
          write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
                                     & '|| X_DLRA ||_2/N','|| res ||_2/N', 'Elapsed time'
          do irep = 1, nrep
@@ -481,12 +791,12 @@ contains
             ! Reconstruct solution
             call reconstruct_solution(X_out, Y)
             Ttot = Ttot + Tend
-            call CALE(res, reshape(X_out, shape(res)), CTCW_flat, .true.)
+            call CALE(res, reshape(X_out, shape(res)), CTCWinv_flat, .true.)
             write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Yobs OUTPUT', &
                               & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
             etime_tot = etime_tot + etime
          end do
-         if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
+         write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
          if (if_save_npy) then
             write(*,*) 'Save data to file:'
             write(*,*) '    ', trim(onameU)
@@ -560,7 +870,7 @@ contains
 
    end subroutine run_BT_test
 
-   subroutine run_DLRA_riccati_test(LTI, U0, S0, Qc, Rinv, rkv, tauv, Tend, nrep, ifsave, ifverb, iflogs)
+   subroutine run_DLRA_riccati_test(LTI, U0, S0, Qc, Rinv, rkv, tauv, Tend, nrep, ifsave, iflogs)
       type(lti_system),              intent(inout) :: LTI
       !! Considered LTI system
       type(state_vector),            intent(in)    :: U0(:)
@@ -579,8 +889,6 @@ contains
       ! Optional
       logical, optional,             intent(in)    :: ifsave
       logical                                      :: if_save_npy
-      logical, optional,             intent(in)    :: ifverb
-      logical                                      :: verb
       logical, optional,             intent(in)    :: iflogs
       logical                                      :: if_save_logs
       
@@ -604,7 +912,6 @@ contains
       type(dlra_opts)                              :: opts
 
       if_save_npy  = optval(ifsave, .false.)
-      verb         = optval(ifverb, .false.)
       if_save_logs = optval(iflogs, .false.)
 
       call system_clock(count_rate=clock_rate)
@@ -620,17 +927,17 @@ contains
             do j = 1, size(tauv)
                tau = tauv(j)
                ! Initialize low-rank representation with rank rk
-               if (verb) write(*,*) 'Initialize LR state, rk =', rk
+               write(*,*) 'Initialize LR state, rk =', rk
                call X%initialize_LR_state(U0, S0, rk)
                ! Reset time
                Ttot = 0.0_wp
-               if (verb) write(*,*) 'Run DRLA'
+               write(*,*) 'Run DRLA'
                write(*,'(A16,A4,A4,A10,A6,A8,A18,A18,A20)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
                               & '|| X_DLRA ||_2', '|| res ||_2','Elapsed time'
                nsteps = nint(Tend/tau)
                etime_tot = 0.0_wp
                ! set solver options
-               opts = dlra_opts(mode=torder, verbose=verb)
+               opts = dlra_opts(mode=torder)
                do irep = 1, nrep
                   ! run integrator
                   etime = 0.0_wp
@@ -644,12 +951,12 @@ contains
                   ! Reconstruct solution
                   call reconstruct_solution(X_out, X)
                   Ttot = Ttot + Tend
-                  call CARE(res, reshape(X_out, shape(res)), reshape(CTQcCW_mat, shape(res)), BRinvBTW_mat, .false.)
+                  call CARE(res, reshape(X_out, shape(res)), reshape(CTQcCWinv_mat, shape(res)), BRinvBTW_mat, .false.)
                   write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,E18.8,E18.8,F18.4," s")') irep, 'Xricc OUTPUT', &
                                     & rk, torder, tau, nsteps, Ttot, norm2(X_out)/N, norm2(res)/N, etime
                   etime_tot = etime_tot + etime
                end do
-               if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
+               write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
                if (if_save_npy) then
                   write(onameU,'("data_GL_Riccati_XU_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
                   write(onameS,'("data_GL_Riccati_XS_n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".npy")') nx, torder, rk, tau
@@ -758,106 +1065,8 @@ contains
       return
    end subroutine run_kexpm_test
 
-   subroutine run_lyap_convergence_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, tauv, rkv, TOv, ifsave, ifverb)
-      ! LTI system
-      type(lti_system),              intent(inout) :: LTI
-      ! Reference solution (BS)
-      real(wp),                      intent(in)    :: Xref_BS(N,N)
-      ! Reference solution (RK)
-      real(wp),                      intent(in)    :: Xref_RK(N,N)
-      ! Initial condition
-      type(state_vector),            intent(inout) :: U0(:)
-      real(wp),                      intent(inout) :: S0(:,:)
-      real(wp),                      intent(in)    :: Tend
-      ! vector of dt values
-      real(wp),                      intent(in)    :: tauv(:)
-      ! vector of rank values
-      integer,                       intent(in)    :: rkv(:)
-      ! vector of torders
-      integer,                       intent(in)    :: TOv(:)
-      ! Optional
-      logical, optional,             intent(in)    :: ifsave
-      logical                                      :: if_save_npy
-      logical, optional,             intent(in)    :: ifverb
-      logical                                      :: verb
 
-      ! Internals
-      type(LR_state),                allocatable   :: X_state
-      type(state_matrix)                           :: X_mat(2)
-      real(wp)                                     :: U0_mat(N, rkmax)
-      integer                                      :: info
-      integer                                      :: i, j, ito, rk, torder
-      integer                                      :: irep, nsteps
-      real(wp)                                     :: etime, tau
-      ! OUTPUT
-      real(wp)                                     :: U_out(N,rkmax)
-      real(wp)                                     :: X_out(N,N)
-      real(wp)                                     :: Bmat(N,2)
-      real(wp)                                     :: tmp(N,2)
-      real(wp),           allocatable              :: U_load(:,:)
-      real(wp)                                     :: X_mat_flat(N**2)
-      real(wp)                                     :: res_flat(N**2)
-      character*128      :: oname
-      character*128      :: logfile
-      ! timer
-      integer            :: clock_rate, clock_start, clock_stop, iunit, stat
-      ! DLRA opts
-      type(dlra_opts)                              :: opts
-
-      if_save_npy  = optval(ifsave, .false.)
-      verb         = optval(ifverb, .false.)
-
-      call system_clock(count_rate=clock_rate)
-
-      write(*,*) ''
-      write(*,'(A16,A4,A4,A10,A6,A8,3(A19),A12)') 'DLRA:','  rk',' TO','dt','steps','Tend', &
-                     & '|| X ||_2/N', '|| X-X_R ||_2/N', '|| X-X_B ||_2/N', 'etime'
-      X_state = LR_state()
-      do i = 1, size(rkv)
-         rk = rkv(i)
-         do ito = 1, size(TOv)
-            torder = TOv(ito)
-            do j = 1, size(tauv)
-               tau = tauv(j)
-               write(logfile,'("local/logfile_GL_lyapconv_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".txt")') nx, torder, rk, tau
-               call logger%add_log_file(logfile, unit=iunit, stat=stat)
-               if (stat /= 0) call stop_error('Unable to open logfile '//trim(logfile)//'.', module=this_module, procedure='logger_setup')
-               ! set solver options
-               opts = dlra_opts(mode=ito, verbose=verb, if_rank_adaptive=.false., chktime=1.0_wp, inc_tol=atol_dp)
-               ! Initialize low-rank representation with rank rk
-               if (verb) write(*,*) 'Initialize LR state, rk =', rk
-               call X_state%initialize_LR_state(U0, S0, rk)
-               if (verb) write(*,*) 'Run DRLA'
-               nsteps = nint(Tend/tau)
-               ! run integrator
-               call system_clock(count=clock_start)     ! Start Timer
-               call projector_splitting_DLRA_lyapunov_integrator(X_state, LTI%prop, LTI%B, Tend, tau, info, &
-                                                                  & exptA=exptA, iftrans=.false., options=opts)
-               call system_clock(count=clock_stop)      ! Stop Timer
-               etime = real(clock_stop-clock_start)/real(clock_rate)
-               ! Reconstruct solution
-               call reconstruct_solution(X_out, X_state)
-               write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,3(E19.8),F10.2," s")') 1, 'Xctl OUTPUT', &
-                                 & rk, torder, tau, nsteps, Tend, &
-                                 & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, etime
-               if (verb) write(*,*) 'Total integration time (DLRA):', etime, 's'
-               if (j == size(tauv) .and. if_save_npy) then
-                  call get_state(U_out(:,1:rk), X_state%U(1:X_state%rk))
-                  write(oname,'("local/data_GL_lyapconv_XU_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') nx, torder, rk, tau
-                  call save_data(oname, U_out(:,1:rk))
-                  write(oname,'("local/data_GL_lyapconv_XS_n",I4.4,"_TO",I1,"_rk",I3.3,"_t",E8.2,".npy")') nx, torder, rk, tau
-                  call save_data(oname, X_state%S(1:rk,1:rk))
-               end if
-               deallocate(X_state%U)
-               deallocate(X_state%S)
-               call logger%remove_log_unit(unit=iunit)
-            end do
-         end do
-      end do
-      
-   end subroutine run_lyap_convergence_test
-
-   subroutine run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, Tend, nrep, ifsave, ifverb, iflogs)
+   subroutine run_DLRA_rank_adaptive_test(LTI, U0, S0, rkv, tauv, TOv, Tend, nrep, ifsave, iflogs)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Initial condition
@@ -874,8 +1083,6 @@ contains
       ! Optional
       logical, optional,             intent(in) :: ifsave
       logical                                   :: if_save_npy
-      logical, optional,             intent(in) :: ifverb
-      logical                                   :: verb
       logical, optional,             intent(in) :: iflogs
       logical                                   :: if_save_logs
       
@@ -899,7 +1106,6 @@ contains
       type(dlra_opts)                           :: opts
 
       if_save_npy  = optval(ifsave, .false.)
-      verb         = optval(ifverb, .false.)
       if_save_logs = optval(iflogs, .false.)
 
       call system_clock(count_rate=clock_rate)
@@ -921,12 +1127,12 @@ contains
             do j = 1, size(tauv)
                tau = tauv(j)
                ! Initialize low-rank representation with rank rk
-               if (verb) write(*,*) 'Initialize LR state, rk =', rk
+               write(*,*) 'Initialize LR state, rk =', rk
                call X%initialize_LR_state(U0, S0, rk, rkmax)
                ! Reset time
                Ttot = 0.0_wp
                lagsvd = 0.0_wp
-               if (verb) write(*,*) 'Run DRLA'
+               write(*,*) 'Run DRLA'
                if (if_save_logs) then
                   write(oname,'("output_GL_X_norm__n",I4.4,"_TO",I1,"_rk",I2.2,"_t",E8.2,".txt")') nx, torder, rk, tau
                   open(unit=iunit1, file=trim(basepath)//oname)
@@ -943,7 +1149,7 @@ contains
                etime_tot = 0.0_wp
                ! set solver options
                opts = dlra_opts(mode=ito, if_rank_adaptive=.true., tol=1e-6_wp, &
-                                 & use_err_est = .false., verbose=verb)
+                                 & use_err_est = .false.)
                do irep = 1, nrep
                   ! run integrator
                   etime = 0.0_wp
@@ -983,7 +1189,7 @@ contains
                   end if
                   etime_tot = etime_tot + etime
                end do
-               if (verb) write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
+               write(*,*) 'Total integration time (DLRA):', etime_tot, 's'
                if (if_save_logs) then
                   write(iunit1,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit1)
                   write(Iunit2,*) 'Total integration time (DLRA):', etime_tot, 's'; close(iunit2)
