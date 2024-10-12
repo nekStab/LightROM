@@ -47,11 +47,9 @@ module LightROM_Utils
       integer :: mode = 1
       !! Time integration mode. Only 1st order (Lie splitting - mode 1) and 
       !! 2nd order (Strang splitting - mode 2) are implemented. (default: 1)
-      logical :: verbose = .false.
-      !! Verbosity control (default: .false.)
       integer :: chkstep = 10
       !! Time step interval at which convergence is checked and runtime information is printed (default: 10)
-      integer :: chktime = 1.0_wp
+      real(wp) :: chktime = 1.0_wp
       !! Simulation time interval at which convergence is checked and runtime information is printed (default: 1.0)
       logical :: chkctrl_time = .true.
       !! IO control: use time instead of timestep control (default: .true.)
@@ -265,13 +263,16 @@ contains
       return
    end subroutine project_onto_common_basis_rdp
 
-   real(dp) function compute_norm(X) result(nrm)
+   real(dp) function compute_norm(X, ifnorm) result(nrm)
       !! This function computes the Frobenius norm of a low-rank approximation via an SVD of the (small) coefficient matrix
       class(abstract_sym_low_rank_state_rdp), intent(in) :: X
-      !! Low-Rank factors of the solution.
-      real(wp) :: s(X%rk)
-      s = svdvals(X%S(:X%rk,:X%rk))
-      nrm = sqrt(sum(s**2))
+      !! Low rank solution of which to compute the norm
+      logical, optional, intent(in) :: ifnorm
+      logical                       :: ifnorm_
+      !! Normalize the norm by the vector size?
+      ifnorm_ = optval(ifnorm, .true.)
+      nrm = sqrt(sum(svdvals(X%S(:X%rk,:X%rk))**2))
+      if (ifnorm_) nrm = nrm/X%U(1)%get_size()
    end function compute_norm
 
    logical function is_converged(nrm, nrmX, opts) result(converged)
@@ -307,10 +308,9 @@ contains
 
    end function is_converged
 
-   integer function get_chkstep(opts, verbose, tau) result(chkstep)
+   integer function get_chkstep(opts, tau) result(chkstep)
    
       type(dlra_opts), intent(inout) :: opts
-      logical,         intent(in)    :: verbose
       real(wp),        intent(in)    :: tau
 
       ! internal
@@ -322,25 +322,21 @@ contains
       if (opts%chkctrl_time) then
          if (opts%chktime <= 0.0_wp) then
             opts%chktime = opts_default%chktime
-            write(msg, *) "Invalid chktime. Reset to default (",  opts%chktime,")"
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+            write(msg,'(A,E12.5,A)') 'Invalid chktime. Reset to default (',  opts%chktime,')'
+            call logger%log_warning(msg, module=this_module, procedure='DLRA')
          end if
          chkstep = max(1, NINT(opts%chktime/tau))
-         if (verbose) then
-            write(msg,*) 'Output every', opts%chkctrl_time, 'time units (', chkstep, 'steps)'
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-         end if
+         write(msg,'(A,E12.5,A,I0,A)') 'Output every ', opts%chktime, ' time units (', chkstep, ' steps)'
+         call logger%log_information(msg, module=this_module, procedure='DLRA')
       else
          if (opts%chkstep <= 0) then
             opts%chkstep = opts_default%chkstep
-            write(msg, *) "Invalid chktime. Reset to default (",  opts%chkstep,")"
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+            write(msg,'(A,I0,A)') "Invalid chktime. Reset to default (",  opts%chkstep,")"
+            call logger%log_warning(msg, module=this_module, procedure='DLRA')
          end if
          chkstep = opts%chkstep
-         if (verbose) then
-            write(msg,*) 'Output every', chkstep, 'steps (based on steps).'
-            call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
-         end if
+         write(msg,'(A,I0,A)') 'Output every ', chkstep, ' steps (based on steps).'
+         call logger%log_information(msg, module=this_module, procedure='DLRA')
       end if
 
    end function get_chkstep

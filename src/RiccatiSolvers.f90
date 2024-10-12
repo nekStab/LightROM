@@ -172,7 +172,7 @@ module LightROM_RiccatiSolvers
 
       ! Internal variables   
       integer                                                :: istep, nsteps
-      logical                                                :: verbose, converged
+      logical                                                :: converged
       real(wp)                                               :: T
       character*128                                          :: msg
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
@@ -187,8 +187,7 @@ module LightROM_RiccatiSolvers
          opts = dlra_opts()
       end if
 
-      ! set tolerance and verbosity
-      verbose = opts%verbose
+      ! set tolerance
       
       if (present(exptA)) then
          p_exptA => exptA
@@ -206,11 +205,11 @@ module LightROM_RiccatiSolvers
       if ( opts%mode > 2 ) then
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
-         call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         call logger%log_message(msg, module=this_module, procedure='DLRA')
       else if ( opts%mode < 1 ) then
          write(msg, *) "Invalid time-integration order specified: ", opts%mode
-         call stop_error(trim(msg), module=this_module, &
-                           & procedure='projector_splitting_DLRA_lyapunov_integrator_rdp')
+         call stop_error(msg, module=this_module, &
+                           & procedure='DLRA')
       endif
 
       dlra : do istep = 1, nsteps
@@ -220,9 +219,8 @@ module LightROM_RiccatiSolvers
          T = T + tau
          !> here we can do some checks such as whether we have reached steady state
          if ( mod(istep,opts%chkstep) .eq. 0 ) then
-            if (verbose) then
-               write(*, *) "INFO : ", ISTEP, " steps of DLRA computed. T = ",T
-            endif
+            write(msg,'(I0,A,E15.8)') istep, ' steps of DLRA computed. T= ',T
+            call logger%log_information(msg, module=this_module, procedure='DLRA')
          endif
       enddo dlra
 

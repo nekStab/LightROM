@@ -43,7 +43,7 @@ contains
       ! internals
       real(wp)                                 :: wrk(size(B))
 
-      call assert_shape(W, (/ size(B), size(B) /), 'apply_outerprod_w_vector_rdp', 'W')
+      call assert_shape(W, (/ size(B), size(B) /), 'W', 'Riccati_Utils', 'apply_outerprod_w_vector_rdp')
 
       call innerprod(wrk, B, u)
       block
@@ -64,7 +64,7 @@ contains
       ! internals
       real(wp)                                 :: wrk(size(B),size(U))
 
-      call assert_shape(W, (/ size(B), size(B) /), 'apply_outerprod_w_basis_rdp', 'W')
+      call assert_shape(W, (/ size(B), size(B) /), 'W', 'Riccati_Utils', 'apply_outerprod_w_basis_rdp')
 
       call zero_basis(Z)
       call innerprod(wrk, B, U)
@@ -88,7 +88,7 @@ contains
       real(wp)                                 :: BTuR(size(B))
       real(wp)                                 :: uLTB(size(B))
       
-      call assert_shape(W, (/ size(B), size(B) /), 'apply_premult_outerprod_w_vector_rdp', 'W')
+      call assert_shape(W, (/ size(B), size(B) /), 'W', 'Riccati_Utils', 'apply_premult_outerprod_w_vector_rdp')
 
       BTuR = 0.0_wp; uLTB = 0.0_wp; m = 0.0_wp
       call innerprod(BTuR, B, uR)
@@ -110,8 +110,8 @@ contains
       real(wp)                                 :: BTUR(size(B),size(UR))
       real(wp)                                 :: ULTB(size(UL),size(B))
 
-      call assert_shape(W, (/ size(B),  size(B)  /), 'apply_premult_outerprod_w_basis_rdp', 'W')
-      call assert_shape(M, (/ size(UL), size(UR) /), 'apply_premult_outerprod_w_basis_rdp', 'M')
+      call assert_shape(W, (/ size(B),  size(B)  /), 'W', 'Ricatti_Utils', 'apply_premult_outerprod_w_basis_rdp')
+      call assert_shape(M, (/ size(UL), size(UR) /), 'M', 'Ricatti_Utils', 'apply_premult_outerprod_w_basis_rdp')
       
       BTUR = 0.0_wp; ULTB = 0.0_wp; M = 0.0_wp
       call innerprod(BTUR, B, UR)
@@ -133,7 +133,7 @@ contains
       ! internals
       real(wp)                                             :: wrk(X%rk,X%rk)
 
-      call assert_shape(W, (/ size(B), size(B) /), 'precompute_NL_K_rdp', 'W')
+      call assert_shape(W, (/ size(B), size(B) /), 'W', 'Riccati_Utils', 'precompute_NL_K_rdp')
       
       call apply_premult_outerprod_w(wrk, X%U(1:X%rk), K, B, W) ! (U.T) @ B @ R^(-1) @ B.T @ K
       block
@@ -156,7 +156,7 @@ contains
       ! internals
       real(wp)                                             :: wrk(X%rk,X%rk)
 
-      call assert_shape(W, (/ size(B), size(B) /), 'precompute_NL_S_rdp', 'W')
+      call assert_shape(W, (/ size(B), size(B) /), 'W', 'Riccati_Utils', 'precompute_NL_S_rdp')
 
       call apply_premult_outerprod_w(wrk, U, X%U(1:X%rk), B, W)       !        U.T @ B @ R^(-1) @ B.T @ X%U
       N = matmul(X%S(1:X%rk,1:X%rk), matmul(wrk, X%S(1:X%rk,1:X%rk))) ! X%S @ (U.T @ B @ R^(-1) @ B.T @ X%U) @ X%S
