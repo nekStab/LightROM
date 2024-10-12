@@ -1,5 +1,6 @@
 module Ginzburg_Landau_RK_Lyapunov
    ! Standard Library.
+   use stdlib_stats_distribution_normal, only: normal => rvs_normal
    use stdlib_optval, only : optval
    ! RKLIB module for time integration.
    use rklib_module
@@ -59,7 +60,7 @@ contains
       class(abstract_vector_rdp), intent(in) :: vec
       select type(vec)
       type is(state_matrix)
-         alpha = dot_product(self%state, weight_mat*vec%state)
+         alpha = dot_product(self%state, weight_flat*vec%state)
       end select
       return
    end function matrix_dot
@@ -94,8 +95,11 @@ contains
       ! internals
       logical :: normalize
       real(wp) :: alpha
+      real(wp), dimension(N**2) :: mean, std
       normalize = optval(ifnorm, .true.)
-      call random_number(self%state)
+      mean = 0.0_wp
+      std  = 1.0_wp
+      self%state = normal(mean,std)
       if (normalize) then
          alpha = self%norm()
          call self%scal(1.0/alpha)
@@ -206,7 +210,7 @@ contains
       ! build ( A.T @ X.T ).T = X @ A
       call GL_mat( XA_flat, x_tmp,  adjoint = .true., transpose = .true.)
       ! construct Lyapunov equation
-      f_flat = AHX_flat + XA_flat + CTCW_flat
+      f_flat = AHX_flat + XA_flat + CTCWinv_flat
 
       return
    end subroutine adjoint_rhs_lyap

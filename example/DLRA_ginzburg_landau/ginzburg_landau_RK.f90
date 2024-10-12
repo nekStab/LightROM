@@ -90,9 +90,9 @@ contains
          ! initialize exponential propagator
          RK_propagator = RK_lyapunov(Tstep)
          ! Set random initial condition
-         call get_state(U0_mat(:,1:rk_X0), U0)
+         call get_state(U0_mat(:,:rk_X0), U0)
          if (if_save_npy) then
-            X_out = matmul( U0_mat(:,1:rk_X0), matmul( S0, transpose(U0_mat(:,1:rk_X0)) ) )
+            X_out = matmul( U0_mat(:,:rk_X0), matmul( S0, transpose(U0_mat(:,:rk_X0)) ) )
             ! Save forcing RK
             write(oname,'("local/RK/data_GL_lyapconv_BBTW_RK_n",I4.4,".npy")') nx
             call save_data(oname, reshape(BBTW_flat, (/ N,N /)))
@@ -101,12 +101,12 @@ contains
             call save_data(oname, X_out)
             ! Save forcing DLRA
             Bmat = 0.0_wp
-            call get_state(Bmat, LTI%B(1:rk_b))
+            call get_state(Bmat, LTI%B(:rk_b))
             X_out = matmul(Bmat, transpose(Bmat))
             write(oname,'("local/RK/data_GL_lyapconv_BBTW_DLRA_n",I4.4,".npy")') nx
             call save_data(oname, X_out)
          end if
-         X_out = matmul( U0_mat(:,1:rk_X0), matmul( S0, transpose(U0_mat(:,1:rk_X0)) ) )
+         X_out = matmul( U0_mat(:,:rk_X0), matmul( S0, transpose(U0_mat(:,:rk_X0)) ) )
          ! Set initial condition for RK
          call set_state(X_mat(1:1), X_out)
       end if
@@ -119,6 +119,7 @@ contains
                call load_data(oname, U_load)
                X_RKlib(:,:,irep) = U_load
             end if
+            etime = 0.0_wp
          else
             call system_clock(count=clock_start)     ! Start Timer
             ! integrate

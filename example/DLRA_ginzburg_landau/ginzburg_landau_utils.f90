@@ -65,7 +65,8 @@ contains
 
       ! Define integration weights
       weight     = dx
-      weight_mat = dx
+      weight_mat = eye(N)*dx
+      weight_flat= dx
 
       ! Construct B & C
       ! B = [ [ Br, -Bi ], [ Bi, Br ] ]
@@ -76,34 +77,32 @@ contains
       ! column 1
       x2       = 0.0_wp
       x2(1:nx) = x(2:nx+1)
-      B(1)%state = 0.5*exp(-((x2 - x_b)/s_b)**2)*sqrt(weight)
+      B(1)%state = exp(-((x2 - x_b)/s_b)**2)!*sqrt(weight)
       ! column 2
       x2            = 0.0_wp
       x2(nx+1:2*nx) = x(2:nx+1)
-      B(2)%state = 0.5*exp(-((x2 - x_b)/s_b)**2)*sqrt(weight)
+      B(2)%state = exp(-((x2 - x_b)/s_b)**2)!*sqrt(weight)
 
       ! the sensor is a Gaussian centered at branch II
       ! column 1
       x2       = 0.0_wp
       x2(1:nx) = x(2:nx+1)
-      CT(1)%state = 0.5*exp(-((x2 - x_c)/s_c)**2)*sqrt(weight)
+      CT(1)%state = exp(-((x2 - x_c)/s_c)**2) !/sqrt(weight)
       ! column 2
       x2            = 0.0_wp
       x2(nx+1:2*nx) = x(2:nx+1)
-      CT(2)%state = 0.5*exp(-((x2 - x_c)/s_c)**2)*sqrt(weight)
-
-      ! Note that we have included the integration weights into the actuator/sensor definitions
+      CT(2)%state = exp(-((x2 - x_c)/s_c)**2) !/sqrt(weight)
 
       ! RK lyap & riccati
       Qc   = eye(rk_c)
       Rinv = eye(rk_b)
       tmpv = 0.0_wp
       call get_state(tmpv(:,1:rk_b), B(1:rk_b))
-      BBTW_flat(1:N**2)     = reshape(matmul(tmpv, transpose(tmpv)), shape(BBTW_flat))
-      BRinvBTW_mat(1:N,1:N) = matmul(matmul(tmpv, Rinv), transpose(tmpv))
+      BBTW_flat(1:N**2)      = reshape(matmul(tmpv, dx*transpose(tmpv)), shape(BBTW_flat))
+      BRinvBTW_mat(1:N,1:N)  = matmul(matmul(tmpv, dx*Rinv), transpose(tmpv))
       call get_state(tmpv(:,1:rk_c), CT(1:rk_c))
-      CTCW_flat(1:N**2)     = reshape(matmul(tmpv, transpose(tmpv)), shape(CTCW_flat))
-      CTQcCW_mat(1:N,1:N)   = matmul(matmul(tmpv, Qc), transpose(tmpv))
+      CTCWinv_flat(1:N**2)   = reshape(matmul(tmpv, 1.0/dx*transpose(tmpv)), shape(CTCWinv_flat))
+      CTQcCWinv_mat(1:N,1:N) = matmul(matmul(tmpv, 1.0/dx*Qc), transpose(tmpv))
 
       return
    end subroutine initialize_parameters
@@ -122,12 +121,12 @@ contains
       select type (state_in)
       type is (state_vector)
          kdim = size(state_in)
-         call assert_shape(mat_out, (/ N, kdim /), 'get_state -> state_vector', 'mat_out')
+         call assert_shape(mat_out, (/ N, kdim /), 'mat_out', this_module, 'get_state -> state_vector')
          do k = 1, kdim
             mat_out(:,k) = state_in(k)%state
          end do
       type is (state_matrix)
-         call assert_shape(mat_out, (/ N, N /), 'get_state -> state_matrix', 'mat_out')
+         call assert_shape(mat_out, (/ N, N /), 'mat_out', this_module, 'get_state -> state_matrix')
          mat_out = reshape(state_in(1)%state, (/ N, N /))
       end select
       return
@@ -142,13 +141,13 @@ contains
       select type (state_out)
       type is (state_vector)
          kdim = size(state_out)
-         call assert_shape(mat_in, (/ N, kdim /), 'set_state -> state_vector', 'mat_in')
+         call assert_shape(mat_in, (/ N, kdim /), 'mat_in', this_module, 'set_state -> state_vector')
          call zero_basis(state_out)
          do k = 1, kdim
             state_out(k)%state = mat_in(:,k)
          end do
       type is (state_matrix)
-         call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
+         call assert_shape(mat_in, (/ N, N /), 'mat_in', this_module, 'set_state -> state_matrix')
          call zero_basis(state_out)
          state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
       end select
@@ -185,10 +184,10 @@ contains
       ! internals
       real(wp) :: wrk(N, LR_X%rk)
 
-      call assert_shape(X, (/ N, N /), 'reconstruct_solution', 'X')
+      call assert_shape(X, (/ N, N /), 'X', this_module, 'reconstruct_solution')
 
       call get_state(wrk, LR_X%U(1:LR_X%rk))
-      X = matmul(wrk, matmul(LR_X%S(1:LR_X%rk,1:LR_X%rk), transpose(wrk)))
+      X = matmul(matmul(wrk, matmul(LR_X%S(1:LR_X%rk,1:LR_X%rk), transpose(wrk))), weight_mat)
 
       return
    end subroutine reconstruct_solution
@@ -203,15 +202,16 @@ contains
       integer,               intent(in)  :: rk
       ! internals
       class(state_vector),   allocatable :: Utmp(:)
-      integer,               allocatable :: perm(:)
       ! SVD
       real(wp)                           :: U_svd(rk,rk)
       real(wp)                           :: S_svd(rk)
       real(wp)                           :: V_svd(rk,rk)
       integer                            :: i, info
+      character(len=128) :: msg
 
       if (size(U) < rk) then
-         write(*,*) 'Input krylov basis size incompatible with requested rank', rk
+         write(msg,'(A,I0)') 'Input krylov basis size incompatible with requested rank ', rk
+         call stop_error(msg, module=this_module, procedure='generate_random_initial_condition')
          STOP 1
       else
          call zero_basis(U)
@@ -219,29 +219,24 @@ contains
             call U(i)%rand(.false.)
          end do
       end if
-      if (size(S,1) < rk) then
-         write(*,*) 'Input coefficient matrix size incompatible with requested rank', rk
-         STOP 1
-      else if (size(S,1) /= size(S,2)) then
-         write(*,*) 'Input coefficient matrix must be square.'
-         STOP 2
-      else
-         S = 0.0_wp
-      end if
+      call assert_shape(S, (/ rk,rk /), 'S', this_module, 'generate_random_initial_condition')
+      S = 0.0_wp
+      
       ! perform QR
-      allocate(perm(1:rk)); perm = 0
-      allocate(Utmp(1:rk), source=U(1:rk))
-      call qr(Utmp, S, perm, info, verbosity=.false.)
-      if (info /= 0) print *,'  [generate_random_initial_condition] Info: Colinear vectors detected in QR, column ', info
+      allocate(Utmp(rk), source=U(:rk))
+      call qr(Utmp, S, info)
+      call check_info(info, 'qr', module=this_module, procedure='generate_random_initial_condition')
       ! perform SVD
-      call svd(S(:,1:rk), S_svd(1:rk), U_svd(:,1:rk), V_svd(1:rk,1:rk))
-      S = diag(S_svd)
+      call svd(S(:rk,:rk), S_svd, U_svd, V_svd)
+      S(:rk,:rk) = diag(S_svd)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, Utmp, U_svd)
          call copy_basis(U, Xwrk)
       end block
-      
+      write(msg,'(A,I0,A,I0,A)') 'size(U) = [ ', size(U),' ]: filling the first ', rk, ' columns with noise.'
+      call logger%log_information(msg, module=this_module, procedure='generate_random_initial_condition')
+      return
    end subroutine
 
    !-----------------------------
@@ -347,47 +342,33 @@ contains
 
    end subroutine CARE
 
-   subroutine load_data(filename, U_load, verb)
+   subroutine load_data(filename, U_load)
       character(len=*),      intent(in)  :: filename
       real(wp), allocatable, intent(out) :: U_load(:,:)
-      logical, optional,     intent(in)  :: verb
       ! internal
       logical :: existfile
       integer :: iostatus
-      logical :: verbose
-
-      verbose = optval(verb, .false.)
 
       inquire(file=filename, exist=existfile)
       if (existfile) then
          call load_npy(trim(filename), U_load, iostatus)
-         if (iostatus /= 0) then
-            print *, 'Error loading file', trim(filename)
-            STOP 2
-         end if
+         if (iostatus /= 0) call stop_error('Error loading file '//trim(filename), module=this_module, procedure='load_data')
       else
-         print *, 'Cannot find ', trim(filename); STOP 12
+         call stop_error('Cannot find file '//trim(filename), module=this_module, procedure='load_data')
       end if
-      if (verbose) print *, 'INFO: Loaded data from', trim(filename)
+      call logger%log_information('Loaded data from '//trim(filename), module=this_module, procedure='load_data')
       return
    end subroutine load_data
 
-   subroutine save_data(filename, data, verb)
+   subroutine save_data(filename, data)
       character(len=*),      intent(in)  :: filename
       real(wp),              intent(in)  :: data(:,:)
-      logical, optional,     intent(in)  :: verb
       ! internal
       integer :: iostatus
-      logical :: verbose
-
-      verbose = optval(verb, .false.)
 
       call save_npy(trim(filename), data, iostatus)
-      if (iostatus /= 0) then
-         print *, 'Error saving file', trim(filename)
-         STOP 2
-      end if
-      if (verbose) print *, 'INFO: Saved data to', trim(filename)
+      if (iostatus /= 0) call stop_error('Error saving file '//trim(filename), module=this_module, procedure='save_data')
+      call logger%log_information('Data saved to '//trim(filename), module=this_module, procedure='save_data')
       return
    end subroutine save_data
 
