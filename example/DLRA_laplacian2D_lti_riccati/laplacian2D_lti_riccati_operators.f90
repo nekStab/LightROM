@@ -233,7 +233,7 @@ contains
       ! Throughput
       allocate(self%D(1:rk_c, 1:rk_b))
       if (present(D)) then
-         call assert_shape(D, (/ rk_c, rk_b /), 'initialize_lti_system', 'D')
+         call assert_shape(D, (/ rk_c, rk_b /), 'D', this_module, 'initialize_lti_system')
          self%D = D
       else
          self%D = 0.0_wp

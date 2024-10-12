@@ -50,7 +50,7 @@ contains
       call init_rand(CT, ifnorm = .false.)
       call get_state(CTdata, CT)
       CTQcCdata = matmul(CTdata, matmul( Qc, transpose(CTdata)))
-      CTQcC(1:N**2) = reshape(CTQcCdata, shape(CTQcC))
+      CTQcC(:N**2) = reshape(CTQcCdata, shape(CTQcC))
 
       ! Define B, Rinv & compule BRinvBT
       if (magR .lt. atol_dp) then
@@ -83,12 +83,12 @@ contains
       select type (state_in)
       type is (state_vector)
          kdim = size(state_in)
-         call assert_shape(mat_out, (/ N, kdim /), 'get_state -> state_vector', 'mat_out')
+         call assert_shape(mat_out, (/ N, kdim /), 'mat_out', this_module, 'get_state -> state_vector')
          do k = 1, kdim
             mat_out(:,k) = state_in(k)%state
          end do
       type is (state_matrix)
-         call assert_shape(mat_out, (/ N, N /), 'get_state -> state_matrix', 'mat_out')
+         call assert_shape(mat_out, (/ N, N /), 'mat_out', this_module, 'get_state -> state_matrix')
          mat_out = reshape(state_in(1)%state, (/ N, N /))
       end select
       return
@@ -103,13 +103,13 @@ contains
       select type (state_out)
       type is (state_vector)
          kdim = size(state_out)
-         call assert_shape(mat_in, (/ N, kdim /), 'set_state -> state_vector', 'mat_in')
+         call assert_shape(mat_in, (/ N, kdim /), 'mat_in', this_module, 'set_state -> state_vector')
          call zero_basis(state_out)
          do k = 1, kdim
             state_out(k)%state = mat_in(:,k)
          end do
       type is (state_matrix)
-         call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
+         call assert_shape(mat_in, (/ N, N /), 'mat_in', this_module, 'set_state -> state_matrix')
          call zero_basis(state_out)
          state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
       end select
@@ -172,12 +172,12 @@ contains
          S = 0.0_wp
       end if
       ! perform QR
-      allocate(perm(1:rk)); perm = 0
-      allocate(Utmp(1:rk), source=U(1:rk))
-      call qr(Utmp, S, perm, info, verbosity=.false.)
+      allocate(perm(rk)); perm = 0
+      allocate(Utmp(rk), source=U(:rk))
+      call qr(Utmp, S, perm, info)
       if (info /= 0) write(*,*) '  [generate_random_initial_condition] Info: Colinear vectors detected in QR, column ', info
       ! perform SVD
-      call svd(S(:,1:rk), S_svd(1:rk), U_svd(:,1:rk), V_svd(1:rk,1:rk))
+      call svd(S(:,:rk), S_svd(:rk), U_svd(:,:rk), V_svd(:rk,:rk))
       S = diag(S_svd)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)

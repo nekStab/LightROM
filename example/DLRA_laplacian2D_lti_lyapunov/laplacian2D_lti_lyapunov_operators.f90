@@ -182,15 +182,12 @@ contains
    !-----     TYPE BOUND PROCEDURES FOR LTI SYSTEMS    -----
    !--------------------------------------------------------
 
-   subroutine initialize_lti_system(self, A, B, CT, D)
+   subroutine initialize_lti_system(self, A, B_in, CT_in, D)
       class(lti_system),           intent(inout) :: self
       class(abstract_linop_rdp),   intent(in)    :: A
-      class(abstract_vector_rdp),  intent(in)    :: B(:)
-      class(abstract_vector_rdp),  intent(in)    :: CT(:)
+      class(abstract_vector_rdp),  intent(in)    :: B_in(:)
+      class(abstract_vector_rdp),  intent(in)    :: CT_in(:)
       real(wp),          optional, intent(in)    :: D(:,:)
-
-      ! internal variables
-      integer                                :: rk_b, rk_c
 
       ! Operator
       select type (A)
@@ -198,21 +195,19 @@ contains
          allocate(self%A, source=A)
       end select
       ! Input
-      select type (B)
+      select type (B_in)
       type is (state_vector)
-         rk_b = size(B)
-         allocate(self%B(1:rk_b), source=B(1:rk_b))
+         allocate(self%B(rk_b), source=B_in(:rk_b))
       end select
       ! Output
-      select type (CT)
+      select type (CT_in)
          type is (state_vector)
-         rk_c = size(CT)
-         allocate(self%CT(1:rk_c), source=CT(1:rk_c))
+         allocate(self%CT(rk_c), source=CT_in(:rk_c))
       end select
       ! Throughput
-      allocate(self%D(1:rk_c, 1:rk_b))
+      allocate(self%D(rk_c,rk_b))
       if (present(D)) then
-         call assert_shape(D, (/ rk_c, rk_b /), 'initialize_lti_system', 'D')
+         call assert_shape(D, (/ rk_c, rk_b /), 'D', this_module, 'initialize_lti_system')
          self%D = D
       else
          self%D = 0.0_wp

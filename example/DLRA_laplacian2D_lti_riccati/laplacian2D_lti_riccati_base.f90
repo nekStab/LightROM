@@ -219,7 +219,7 @@ contains
       integer :: i, n, rka, info
 
       n = size(U)
-      call assert_shape(S, [n,n], "initialize_LR_state", "S")
+      call assert_shape(S, [n,n], 'S', this_module, 'initialize_LR_state')
 
       ! optional size argument
       if (present(rkmax)) then

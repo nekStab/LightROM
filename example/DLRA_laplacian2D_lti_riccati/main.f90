@@ -247,7 +247,7 @@ program demo
             call X%initialize_LR_state(U0, S0, rk)
 
             ! set options
-            opts = dlra_opts(mode=torder, verbose=verb)
+            opts = dlra_opts(mode=torder)
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
@@ -423,7 +423,7 @@ program demo
             call X%initialize_LR_state(U0, S0, rk)
 
             ! set options
-            opts = dlra_opts(mode=torder, verbose=verb)
+            opts = dlra_opts(mode=torder)
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer

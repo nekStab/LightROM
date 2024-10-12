@@ -47,43 +47,45 @@ contains
    !-----     UTILITIES FOR STATE_VECTOR AND STATE MATRIX TYPES    -----
    !--------------------------------------------------------------------
 
-   subroutine get_state(mat_out, state_in)
+   subroutine get_state(mat_out, state_in, procedure)
       !! Utility function to transfer data from a state vector to a real array
       real(wp),                   intent(out) :: mat_out(:,:)
       class(abstract_vector_rdp), intent(in)  :: state_in(:)
+      character(len=*),           intent(in)  :: procedure
       ! internal variables
       integer :: k, kdim
       mat_out = 0.0_wp
       select type (state_in)
       type is (state_vector)
          kdim = size(state_in)
-         call assert_shape(mat_out, (/ N, kdim /), 'get_state -> state_vector', 'mat_out')
+         call assert_shape(mat_out, (/ N, kdim /), 'mat_out', this_module, 'get_state -> state_vector')
          do k = 1, kdim
             mat_out(:,k) = state_in(k)%state
          end do
       type is (state_matrix)
-         call assert_shape(mat_out, (/ N, N /), 'get_state -> state_matrix', 'mat_out')
+         call assert_shape(mat_out, (/ N, N /), 'mat_out', this_module, 'get_state -> state_matrix')
          mat_out = reshape(state_in(1)%state, (/ N, N /))
       end select
       return
    end subroutine get_state
 
-   subroutine set_state(state_out, mat_in)
+   subroutine set_state(state_out, mat_in, procedure)
       !! Utility function to transfer data from a real array to a state vector
       class(abstract_vector_rdp), intent(out) :: state_out(:)
       real(wp),                   intent(in)  :: mat_in(:,:)
+      character(len=*),           intent(in)  :: procedure
       ! internal variables
       integer       :: k, kdim
       select type (state_out)
       type is (state_vector)
          kdim = size(state_out)
-         call assert_shape(mat_in, (/ N, kdim /), 'set_state -> state_vector', 'mat_in')
+         call assert_shape(mat_in, (/ N, kdim /), 'mat_in', this_module, 'set_state -> state_vector')
          call zero_basis(state_out)
          do k = 1, kdim
             state_out(k)%state = mat_in(:,k)
          end do
       type is (state_matrix)
-         call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
+         call assert_shape(mat_in, (/ N, N /), 'mat_in', this_module, 'set_state -> state_matrix')
          call zero_basis(state_out)
          state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
       end select
@@ -123,42 +125,40 @@ contains
       integer,               intent(in)  :: rk
       ! internals
       class(state_vector),   allocatable :: Utmp(:)
-      integer,               allocatable :: perm(:)
       ! SVD
       real(wp)                           :: U_svd(rk,rk)
       real(wp)                           :: S_svd(rk)
       real(wp)                           :: V_svd(rk,rk)
       integer                            :: i, info
+      character(len=128) :: msg
 
       if (size(U) < rk) then
-         write(*,*) 'Input krylov basis size incompatible with requested rank', rk
-         STOP 1
+         write(msg,'(A,I0)') 'Input krylov basis size incompatible with requested rank ', rk
+         call stop_error(msg, module=this_module, procedure='generate_random_initial_condition')
       else
-         call init_rand(U, .false.)
+         call zero_basis(U)
+         do i = 1,rk
+            call U(i)%rand(.false.)
+         end do
       end if
-      if (size(S,1) < rk) then
-         write(*,*) 'Input coefficient matrix size incompatible with requested rank', rk
-         STOP 1
-      else if (size(S,1) /= size(S,2)) then
-         write(*,*) 'Input coefficient matrix must be square.'
-         STOP 2
-      else
-         S = 0.0_wp
-      end if
+      call assert_shape(S, (/ rk,rk /), 'S', this_module, 'generate_random_initial_condition')
+      S = 0.0_wp
+
       ! perform QR
-      allocate(perm(1:rk)); perm = 0
-      allocate(Utmp(1:rk), source=U(1:rk))
-      call qr(Utmp, S, perm, info, verbosity=.false.)
-      if (info /= 0) write(*,*) '  [generate_random_initial_condition] Info: Colinear vectors detected in QR, column ', info
+      allocate(Utmp(rk), source=U(:rk))
+      call qr(Utmp, S, info)
+      call check_info(info, 'qr', module=this_module, procedure='generate_random_initial_condition')
       ! perform SVD
-      call svd(S(:,1:rk), S_svd(1:rk), U_svd(:,1:rk), V_svd(1:rk,1:rk))
-      S = diag(S_svd)
+      call svd(S(:rk,:rk), S_svd, U_svd, V_svd)
+      S(:rk,:rk) = diag(S_svd)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, Utmp, U_svd)
          call copy_basis(U, Xwrk)
       end block
-      
+      write(msg,'(A,I0,A,I0,A)') 'size(U) = [ ', size(U),' ]: filling the first ', rk, ' columns with noise.'
+      call logger%log_information(msg, module=this_module, procedure='generate_random_initial_condition')
+      return
    end subroutine
 
    !------------------------
