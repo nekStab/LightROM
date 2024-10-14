@@ -140,18 +140,18 @@ program demo
    print *, ''
    print *, 'Cross-check initial condition:'
    print *, ''
-   print *, '    || X_0 ||_2/N = ', norm2(X_out)/N
+   print *, '    ||  X_0  ||_2/N = ', norm2(X_out)/N
+   call CALE(res_flat, reshape(X_out, shape(res_flat)), BBTW_flat, .false.)
+   print *, '    || res_0 ||_2/N = ', norm2(res_flat)/N
    ! compute svd
    call svd(X_out, S_svd, U_svd, V_svd)
-   write(*,'(A,I0,A)',ADVANCE='NO') '     SVD   (1...',rk_X0,') :'
-   do i = 1, rk_X0
-      write(*,'(E15.7,1X)', ADVANCE='NO') S_svd(i)
-   end do
-   print *, ''
+   print *, 'SVD:'
+   print '(5(E18.13,1X))', ( S_svd(i), i = 1, 5)
+   print '(5(E18.13,1X))', ( S_svd(i), i = 6, 10)
    
    ! Run RK integrator for the Lyapunov equation
-   T_RK   = 100.0_wp
-   nsteps = 100
+   T_RK   = 1.0_wp
+   nsteps = 10
    iref   = 1
    ifload = .true.
    call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nsteps, iref, ifload)
@@ -165,10 +165,10 @@ program demo
    ! basic settings
    Tend = T_RK/nsteps*iref
    ifsave = .false. ! save data to disk (LightROM/local)
-
+   
    ! DLRA with fixed rank
    rkv = (/ 4, 20 /)
-   tauv = logspace(-3.0, 0.0, 4, 10)
+   tauv = logspace(-3.0, -1.0, 3, 10)
    tauv = tauv(size(tauv):1:-1) ! reverse vector
    TOv  = (/ 1, 2 /)
    call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, tauv, rkv, TOv, ifsave)

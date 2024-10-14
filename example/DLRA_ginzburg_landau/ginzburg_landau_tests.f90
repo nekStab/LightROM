@@ -109,8 +109,10 @@ contains
       print *, ''
       print *, '  Running DLRA in standard mode'
       print *, ''
-      print '(A16,A4,A4,A10,A6,A8,4(A19),A12)', 'DLRA:','  rk',' TO','dt','steps','Tend', &
-                     & '|| X ||_2/N', '|| X-X_R ||_2/N', '|| X-X_B ||_2/N', '|| res ||_2/N', 'etime'
+      !print '(A16,A4,A4,A10,A6,A8,4(A19),A12)', 'DLRA:','  rk',' TO','dt','steps','Tend', &
+      !               & '|| X ||_2/N', '|| X-X_R ||_2/N', '|| X-X_B ||_2/N', '|| res ||_2/N', 'etime'
+      print '(A4,A4,A10,A8,4(A19))', '  rk',' TO','dt','steps', &
+                     & '|X|', '|X-X_R|', '|X-X_B|', '|res|'
       X_state = LR_state()
       do i = 1, size(rkv)
          rk = rkv(i)
@@ -202,10 +204,13 @@ contains
               
                nsteps = nint(Tend/tau)
                call CALE(res_flat, reshape(X_out, shape(res_flat)), BBTW_flat, .false.)
-               write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,4(E19.8),F10.2," s")') 1, 'Xctl OUTPUT', &
-                                 & rk, torder, tau, nsteps, Tend, &
+               !write(*,'(I4," ",A11,I4," TO",I1,F10.6,I6,F8.4,4(E19.8),F10.2," s")') 1, 'Xctl OUTPUT', &
+               !                  & rk, torder, tau, nsteps, Tend, &
+               !                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
+               !                  & norm2(res_flat)/N, etime
+               write(*,'(I4," TO",I1,F10.6,I8,4(E19.12))') rk, torder, tau, nsteps, &
                                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
-                                 & norm2(res_flat)/N, etime
+                                 & norm2(res_flat)/N
                !!U_out = 0.0_wp
                !!call get_state(U_out(:,:rk), X_state%U(:rk))
                !!X_out = matmul( U_out(:,:rk), matmul( X_state%S(:rk,:rk), transpose(U_out(:,:rk)) ) )*weight(1)
@@ -237,7 +242,7 @@ contains
                !print *, norm2(res_flat)/N
                !STOP 90
                deallocate(X_state%U); deallocate(X_state%S)
-               !STOP 5
+               STOP 5
             end do
             print *, ''
          end do

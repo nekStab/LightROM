@@ -710,6 +710,10 @@ module LightROM_LyapunovSolvers
       integer,                                allocatable   :: perm(:)   ! Permutation vector
       real(wp),                               allocatable   :: wrk(:,:)
       integer                                               :: i, rk
+
+      real(wp), allocatable :: ssvd_v(:)
+      character(len=128) :: fmt
+      integer :: j
       
       ! Optional argument
       trans = optval(iftrans, .false.)
@@ -718,6 +722,13 @@ module LightROM_LyapunovSolvers
       allocate(R(rk,rk));   R = 0.0_wp 
       allocate(perm(rk));     perm = 0
       allocate(wrk(rk,rk)); wrk = 0.0_wp
+
+      print *, ''
+      ssvd_v = svdvals(X%S(:rk,:rk))
+      print *, 'M'
+      !write(fmt,'(A,I0,A)') '("SVD_M0  : ",', X%rk, '(F10.6,1X))'
+      !print fmt, ssvd_v
+      print *, ssvd_v(:4)
 
       ! Apply propagator to initial basis
       allocate(exptAU, source=X%U(1)); call exptAU%zero()
@@ -729,11 +740,37 @@ module LightROM_LyapunovSolvers
       call qr(X%U(:rk), R, perm, info)
       call check_info(info, 'qr_pivot', module=this_module, procedure='M_forward_map_rdp')
 
+      call innerprod(wrk, X%U(:rk), X%U(:rk))
+      wrk = wrk - eye(4)
+      do i = 1, rk
+         print '(4(E19.12,1X))', (wrk(i,j), j = 1, rk)
+      end do
+
       ! Update low-rank fcators
       call apply_inverse_permutation_matrix(R, perm)
+
+      print *,'R'
+      ssvd_v = svdvals(R)
+      print *, ssvd_v(:4)
+      do i = 1, rk
+         print '(4(E19.12,1X))', (R(i,j), j = 1, rk)
+      end do
+      print *,'S'
+      ssvd_v = svdvals(X%S(:rk,:rk))
+      print *, ssvd_v(:4)
+      do i = 1, rk
+         print '(4(E19.12,1X))', (X%S(i,j), j = 1, rk)
+      end do
+
       ! Update coefficient matrix
       wrk = matmul(X%S(:rk,:rk), transpose(R))
       X%S(:rk,:rk) = matmul(R, wrk)
+
+      ssvd_v = svdvals(X%S(:rk,:rk))
+      !ssvd_v = svdvals(R)
+      !write(fmt,'(A,I0,A)') '("SVD_R   : ",', X%rk, '(F10.6,1X))'
+      !print fmt, ssvd_v
+      print *, ssvd_v(:4)
 
       return
    end subroutine M_forward_map_rdp
@@ -757,6 +794,9 @@ module LightROM_LyapunovSolvers
 
       class(abstract_vector_rdp),  allocatable   :: U1(:)
       class(abstract_vector_rdp),  allocatable   :: BBTU(:)
+
+      real(wp), allocatable :: ssvd_v(:)
+      character(len=128) :: fmt
     
       rk = X%rk
       rkmax = size(X%U)
@@ -770,6 +810,13 @@ module LightROM_LyapunovSolvers
       
       ! Copy updated low-rank factors to output
       call copy_basis(X%U(:rk), U1(:rk))
+
+      print *, 'G'
+      ssvd_v = svdvals(X%S(:X%rk,:X%rk))
+      !write(fmt,'(A,I0,A)') '("SVD_G   : ",', X%rk, '(F10.6,1X))'
+      !print fmt, ssvd_v
+      print *, ssvd_v(:4)
+      print *, ''
                
       return
    end subroutine G_forward_map_lyapunov_rdp
