@@ -71,21 +71,22 @@ program demo
 
    ! Counters
    integer                                   :: i, j, k, irep, nrep, istep
-   integer,                allocatable       :: perm(:)
    real(wp)                                  :: etime
 
    real(wp)                           :: U_svd(2*nx,2*nx)
    real(wp)                           :: S_svd(2*nx)
    real(wp)                           :: V_svd(2*nx,2*nx)
 
-   real(wp) :: wrk(2,1)
-
    logical        :: ifsave, ifload, iflogs
 
    ! Exact comparison
    type(dlra_opts)                              :: opts
-   type(LR_state),                allocatable   :: X_state
-   
+   type(LR_state),                allocatable   :: X
+   class(abstract_vector_rdp),             allocatable   :: exptAU(:)    ! scratch basis
+   real(wp),                               allocatable   :: R(:,:)    ! QR coefficient matrix
+   integer,                                allocatable   :: perm(:)   ! Permutation vector
+   real(wp),                               allocatable   :: wrk(:,:)   
+
    !call logger%configure(level=information_level, time_stamp=.false.)
    call logger%configure(level=error_level, time_stamp=.false.)
    
@@ -115,8 +116,8 @@ program demo
    
    call CALE(res_flat, reshape(Xref_BS, shape(res_flat)), BBTW_flat, .false.)
    print *, ''
-   print *, '  ||  X_BS  ||_2/N = ', norm2(Xref_BS)/N
-   print *, '  || res_BS ||_2/N = ', norm2(res_flat)/N
+   print '(A,F18.12)', '   ||  X_BS  ||_2/N = ', norm2(Xref_BS)/N
+   print '(A,F18.12)', '   || res_BS ||_2/N = ', norm2(res_flat)/N
    print *, ''
    
    ! Define initial condition of the form X0 = U0 @ S0 @ U0.T (SPD) or load from file
@@ -140,17 +141,17 @@ program demo
       call save_data(onameS, S0(:rk_X0,:rk_X0))
    end if
    X_out = matmul(matmul( U_out(:,:rk_X0), matmul( S0(:rk_X0,:rk_X0), transpose(U_out(:,:rk_X0)) ) ), weight_mat)
+   call CALE(res_flat, reshape(X_out, shape(res_flat)), BBTW_flat, .false.)
    print *, ''
    print *, 'Cross-check initial condition:'
    print *, ''
-   print *, '    ||  X_0  ||_2/N = ', norm2(X_out)/N
-   call CALE(res_flat, reshape(X_out, shape(res_flat)), BBTW_flat, .false.)
-   print *, '    || res_0 ||_2/N = ', norm2(res_flat)/N
+   print '(A,F18.12)', '    ||  X_0  ||_2/N = ', norm2(X_out)/N
+   print '(A,F18.12)', '    || res_0 ||_2/N = ', norm2(res_flat)/N
    ! compute svd
    call svd(X_out, S_svd, U_svd, V_svd)
    print *, 'SVD:'
-   print '(5(E18.13,1X))', ( S_svd(i), i = 1, 5)
-   print '(5(E18.13,1X))', ( S_svd(i), i = 6, 10)
+   print '(3X,*(F18.12,1X))', ( S_svd(i), i = 1, 5)
+   print '(3X,*(F18.12,1X))', ( S_svd(i), i = 6, 10)
    
    ! Run RK integrator for the Lyapunov equation
    T_RK   = 1.0_wp
@@ -161,8 +162,8 @@ program demo
 
    call CALE(res_flat, reshape(Xref_RK, shape(res_flat)), BBTW_flat, .false.)
    print *, ''
-   print *, '  ||  X_RK  ||_2/N = ', norm2(Xref_BS)/N
-   print *, '  || res_RK ||_2/N = ', norm2(res_flat)/N
+   print '(A,F18.12)', '   ||  X_RK  ||_2/N = ', norm2(Xref_BS)/N
+   print '(A,F18.12)', '   || res_RK ||_2/N = ', norm2(res_flat)/N
    print *, ''
    
    ! basic settings
@@ -172,13 +173,50 @@ program demo
    ! Testing
    rk = 4
    tau = 0.01_wp
-   opts = dlra_opts(chktime=1.0_wp, inc_tol=atol_dp, if_rank_adaptive=.false., mode=1)
-   X_state = LR_state()
+   opts = dlra_opts(chktime=1.0_wp, inc_tol=atol_dp, if_rank_adaptive=.false.)
+   X = LR_state()
 
    ! Initialize low-rank representation with rank rk
-   call X_state%initialize_LR_state(U0, S0, rk, rkmax, .false.)
+   call X%initialize_LR_state(U0, S0, rk, rkmax, .false.)
    nsteps = nint(Tend/tau)
 
+   ! first order
+   ! M Step
+   rk = X%rk
+   allocate(R(rk,rk));   R    = 0.0_wp 
+   allocate(perm(rk));   perm = 0
+   allocate(wrk(rk,rk)); wrk  = 0.0_wp
+   allocate(exptAU(rk), source=X%U(1))
+   ! Apply propagator to initial basis using k_exptA
+   call zero_basis(exptAU)
+   do i = 1, rk
+      call k_exptA_rdp(exptAU(i), A, X%U(i), tau, info, .false.)
+   end do
+   call get_state(U_out(:,:rk), exptAU(:rk))
+   call save_data(trim(basepath)//'TEST/exptA_kexpm.npy', U_out(:,:rk))
+   ! Apply propagator to initial basis using RKlib
+   call zero_basis(exptAU)
+   do i = 1, rk
+      call exptA(exptAU(i), A, X%U(i), tau, info, .false.)
+      call X%U(i)%axpby(0.0_wp, exptAU, 1.0_wp) ! overwrite old solution
+   end do
+   call get_state(U_out(:,:rk), exptAU(:rk))
+   call save_data(trim(basepath)//'TEST/exptA_RK.npy', U_out(:,:rk))
+   ! Reorthonormalize in-place without pivoting
+   call qr(X%U(:rk), R, info)
+   call get_state(U_out(:,:rk), X%U(:rk))
+   call save_data(trim(basepath)//'TEST/qr_Q.npy', U_out(:,:rk))
+   call save_data(trim(basepath)//'TEST/qr_R.npy', R)
+   ! reset data
+   do i = 1, rk
+      call X%U(i)%axpby(0.0_wp, exptAU, 1.0_wp) ! overwrite old solution
+   end do
+   ! Reorthonormalize in-place with pivoting
+   call qr(X%U(:rk), R, perm, info)
+   call apply_inverse_permutation_matrix(R, perm)
+   call get_state(U_out(:,:rk), X%U(:rk))
+   call save_data(trim(basepath)//'TEST/qrp_Q.npy', U_out(:,:rk))
+   call save_data(trim(basepath)//'TEST/qrp_R.npy', R)
 
    STOP 6
    ! DLRA with fixed rank

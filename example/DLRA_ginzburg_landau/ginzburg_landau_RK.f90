@@ -115,7 +115,7 @@ contains
       call get_state(U0_mat(:,:rk_X0), U0)
       X_out = matmul(matmul( U0_mat(:,:rk_X0), matmul( S0, transpose(U0_mat(:,:rk_X0)) ) ), weight_mat)
       call CALE(res_flat, reshape(X_out, shape(res_flat)), BBTW_flat, .false.)
-      write(*,'(I7,F10.2,3(E19.12),F10.2," s",A)') 0, 0.0, norm2(X_out)/N, &
+      write(*,'(I7,F10.2,3(1X,F18.12),F10.2," s",A)') 0, 0.0, norm2(X_out)/N, &
                         & norm2(X_out - Xref_BS)/N, norm2(res_flat)/N, 0.0, ''
       do irep = 1, nsteps
          write(oname,'("local/RK/data_GL_lyapconv_X_RK_n",I4.4,"_r",I3.3,".npy")') nx, irep
@@ -146,7 +146,7 @@ contains
                write(note,*) ''
             end if
             call CALE(res_flat, reshape(X_RKlib(:,:,irep), shape(res_flat)), BBTW_flat, .false.)
-            write(*,'(I7,F10.2,3(E19.12),F10.2," s",A)') irep, irep*Tstep, norm2(X_RKlib(:,:,irep))/N, &
+            write(*,'(I7,F10.2,3(1X,F18.12),F10.2," s",A)') irep, irep*Tstep, norm2(X_RKlib(:,:,irep))/N, &
                         & norm2(X_RKlib(:,:,irep)-Xref_BS)/N, norm2(res_flat)/N, etime, trim(note) 
          end if
       enddo

@@ -294,7 +294,8 @@ program demo
    print *, ''
    print *, 'III. Compute approximate solution of the differential Lyapunov equation using DLRA:'
    print *, ''
-   write(*,'(A10,A4,A4,A10,A8,A26,A26,A20)') 'DLRA:','  rk',' TO','dt','Tend','|| X_DLRA - X_RK ||_2/N','|| X_DLRA - Xref ||_2/N', 'Elapsed time'
+   write(*,'(A10,A4,A4,A10,A8,A26,A26,A20)') 'DLRA:','  rk',' TO','dt','Tend','|| X_DLRA - X_RK ||_2/N', &
+               & '|| X_DLRA - Xref ||_2/N', 'Elapsed time'
    print *, '         ------------------------------------------------------------------------'
 
    ! Choose relevant reference case from RKlib
