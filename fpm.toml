@@ -21,6 +21,9 @@ implicit-typing = false
 implicit-external = true
 source-form = "free"
 
+[preprocess]
+[preprocess.cpp]
+
 [dependencies]
 stdlib = "*"
 LightKrylov = { path = "../LightKrylov" }

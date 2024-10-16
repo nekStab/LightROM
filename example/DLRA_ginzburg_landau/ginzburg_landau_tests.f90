@@ -242,7 +242,7 @@ contains
                !print *, norm2(res_flat)/N
                !STOP 90
                deallocate(X_state%U); deallocate(X_state%S)
-               STOP 5
+               !STOP 5
             end do
             print *, ''
          end do

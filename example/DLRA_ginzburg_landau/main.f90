@@ -33,7 +33,7 @@ program demo
    character*128      :: onameU, onameS, oname
    ! rk_B & rk_C are set in ginzburg_landau_base.f90
 
-   integer  :: nrk, ntau, rk,  torder, nsteps, iref
+   integer  :: nrk, ntau, rk, torder, nsteps, iref
    real(wp) :: tau, Tend, T_RK
    ! vector of dt values
    real(wp), allocatable :: tauv(:), tolv(:)
@@ -46,7 +46,6 @@ program demo
 
    ! LTI system
    type(lti_system)                          :: LTI
-   type(dlra_opts)                           :: opts
 
    ! Initial condition
    type(state_vector),     allocatable       :: U0(:)
@@ -82,6 +81,10 @@ program demo
    real(wp) :: wrk(2,1)
 
    logical        :: ifsave, ifload, iflogs
+
+   ! Exact comparison
+   type(dlra_opts)                              :: opts
+   type(LR_state),                allocatable   :: X_state
    
    !call logger%configure(level=information_level, time_stamp=.false.)
    call logger%configure(level=error_level, time_stamp=.false.)
@@ -165,11 +168,23 @@ program demo
    ! basic settings
    Tend = T_RK/nsteps*iref
    ifsave = .false. ! save data to disk (LightROM/local)
-   
+
+   ! Testing
+   rk = 4
+   tau = 0.01_wp
+   opts = dlra_opts(chktime=1.0_wp, inc_tol=atol_dp, if_rank_adaptive=.false., mode=1)
+   X_state = LR_state()
+
+   ! Initialize low-rank representation with rank rk
+   call X_state%initialize_LR_state(U0, S0, rk, rkmax, .false.)
+   nsteps = nint(Tend/tau)
+
+
+   STOP 6
    ! DLRA with fixed rank
    rkv = (/ 4, 20 /)
-   tauv = logspace(-3.0, -1.0, 3, 10)
-   tauv = tauv(size(tauv):1:-1) ! reverse vector
+   tauv = logspace(-4.0, -1.0, 4, 10)
+   !tauv = tauv(size(tauv):1:-1) ! reverse vector
    TOv  = (/ 1, 2 /)
    call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, tauv, rkv, TOv, ifsave)
    

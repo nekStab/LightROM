@@ -15,6 +15,8 @@ module LightROM_LyapunovSolvers
    use LightROM_AbstractLTIsystems
    use LightROM_LyapunovUtils
    use LightROM_Utils
+
+!#define DEBUG
    
    implicit none
 
@@ -711,9 +713,11 @@ module LightROM_LyapunovSolvers
       real(wp),                               allocatable   :: wrk(:,:)
       integer                                               :: i, rk
 
+#ifdef DEBUG
       real(wp), allocatable :: ssvd_v(:)
       character(len=128) :: fmt
       integer :: j
+#endif
       
       ! Optional argument
       trans = optval(iftrans, .false.)
@@ -723,12 +727,14 @@ module LightROM_LyapunovSolvers
       allocate(perm(rk));     perm = 0
       allocate(wrk(rk,rk)); wrk = 0.0_wp
 
+#ifdef DEBUG
       print *, ''
       ssvd_v = svdvals(X%S(:rk,:rk))
       print *, 'M'
       !write(fmt,'(A,I0,A)') '("SVD_M0  : ",', X%rk, '(F10.6,1X))'
       !print fmt, ssvd_v
       print *, ssvd_v(:4)
+#endif
 
       ! Apply propagator to initial basis
       allocate(exptAU, source=X%U(1)); call exptAU%zero()
@@ -740,37 +746,52 @@ module LightROM_LyapunovSolvers
       call qr(X%U(:rk), R, perm, info)
       call check_info(info, 'qr_pivot', module=this_module, procedure='M_forward_map_rdp')
 
+#ifdef DEBUG
       call innerprod(wrk, X%U(:rk), X%U(:rk))
       wrk = wrk - eye(4)
       do i = 1, rk
-         print '(4(E19.12,1X))', (wrk(i,j), j = 1, rk)
+         print '(4(F15.12,1X))', (wrk(i,j), j = 1, rk)
       end do
+      print *,'QR --> R'
+      ssvd_v = svdvals(R)
+      print *, ssvd_v(:4)
+      do i = 1, rk
+         print '(4(F15.12,1X))', (R(i,j), j = 1, rk)
+      end do
+#endif
 
       ! Update low-rank fcators
       call apply_inverse_permutation_matrix(R, perm)
 
-      print *,'R'
+#ifdef DEBUG
+      print *,'Rperm'
       ssvd_v = svdvals(R)
       print *, ssvd_v(:4)
       do i = 1, rk
-         print '(4(E19.12,1X))', (R(i,j), j = 1, rk)
+         print '(4(F15.12,1X))', (R(i,j), j = 1, rk)
       end do
       print *,'S'
       ssvd_v = svdvals(X%S(:rk,:rk))
       print *, ssvd_v(:4)
       do i = 1, rk
-         print '(4(E19.12,1X))', (X%S(i,j), j = 1, rk)
+         print '(4(F15.12,1X))', (X%S(i,j), j = 1, rk)
       end do
+#endif
 
       ! Update coefficient matrix
       wrk = matmul(X%S(:rk,:rk), transpose(R))
       X%S(:rk,:rk) = matmul(R, wrk)
 
+#ifdef DEBUG
       ssvd_v = svdvals(X%S(:rk,:rk))
-      !ssvd_v = svdvals(R)
-      !write(fmt,'(A,I0,A)') '("SVD_R   : ",', X%rk, '(F10.6,1X))'
-      !print fmt, ssvd_v
+      ssvd_v = svdvals(R)
+      write(fmt,'(A,I0,A)') '("SVD_R   : ",', X%rk, '(F10.6,1X))'
+      print fmt, ssvd_v
       print *, ssvd_v(:4)
+      do i = 1, rk
+         print '(4(F15.12,1X))', (X%S(i,j), j = 1, rk)
+      end do
+#endif
 
       return
    end subroutine M_forward_map_rdp
@@ -795,28 +816,45 @@ module LightROM_LyapunovSolvers
       class(abstract_vector_rdp),  allocatable   :: U1(:)
       class(abstract_vector_rdp),  allocatable   :: BBTU(:)
 
+#ifdef DEBUG
       real(wp), allocatable :: ssvd_v(:)
       character(len=128) :: fmt
+      print *, 'G'
+#endif
     
       rk = X%rk
       rkmax = size(X%U)
-      if (.not. allocated(U1))   allocate(U1(  rkmax), source=X%U(1))
-      if (.not. allocated(BBTU)) allocate(BBTU(rkmax), source=X%U(1))
+      allocate(U1(  rkmax), source=X%U(1))
+      allocate(BBTU(rkmax), source=X%U(1))
       call zero_basis(U1); call zero_basis(BBTU)
 
       call K_step_lyapunov(X, U1(:rk), BBTU(:rk), B, tau, info)
+#ifdef DEBUG
+      print *, 'G - K'
+      ssvd_v = svdvals(X%S(:X%rk,:X%rk))
+      print *, ssvd_v(:4)
+#endif
       call S_step_lyapunov(X, U1(:rk), BBTU(:rk),    tau, info)
-      call L_step_lyapunov(X, U1(:rk),            B, tau, info)
-      
+#ifdef DEBUG
+      print *, 'G - S'
+      ssvd_v = svdvals(X%S(:X%rk,:X%rk))
+      print *, ssvd_v(:4)
+#endif
+      call L_step_lyapunov(X, U1(:rk),            B, tau, info)\
+            
       ! Copy updated low-rank factors to output
       call copy_basis(X%U(:rk), U1(:rk))
-
-      print *, 'G'
+#ifdef DEBUG
+      print *, 'G - L'
       ssvd_v = svdvals(X%S(:X%rk,:X%rk))
       !write(fmt,'(A,I0,A)') '("SVD_G   : ",', X%rk, '(F10.6,1X))'
       !print fmt, ssvd_v
       print *, ssvd_v(:4)
       print *, ''
+      STOP 8
+#endif
+
+      deallocate(U1, BBTU)   
                
       return
    end subroutine G_forward_map_lyapunov_rdp
@@ -844,21 +882,22 @@ module LightROM_LyapunovSolvers
 
       rk = X%rk
       rkmax = size(X%U)
-      if (.not. allocated(Swrk)) allocate(Swrk(rkmax,rkmax)); Swrk = 0.0_wp
+      allocate(Swrk(rk,rk)); Swrk = 0.0_wp
       allocate(perm(rk)); perm = 0
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, X%U(:rk), X%S(:rk,:rk))             ! K0
-         call copy_basis(U1, Xwrk)
+         call copy_basis(U1(:rk), Xwrk)
       end block
-      call apply_outerprod(BBTU, B, X%U(:rk))   ! Kdot
+      call apply_outerprod(BBTU(:rk), B, X%U(:rk))   ! Kdot
       ! Construct intermediate solution U1
-      call axpby_basis(U1, 1.0_wp, BBTU(:rk), tau)   ! K0 + tau*Kdot
+      call axpby_basis(U1(:rk), 1.0_wp, BBTU(:rk), tau)   ! K0 + tau*Kdot
       ! Orthonormalize in-place
       call qr(U1(:rk), Swrk(:rk,:rk), perm, info)
       call check_info(info, 'qr_pivot', module=this_module, procedure='K_step_Lyapunov_rdp')
       call apply_inverse_permutation_matrix(Swrk(:rk,:rk), perm)
       X%S(:rk,:rk) = Swrk(:rk,:rk)
+      deallocate(Swrk)
 
       return
    end subroutine K_step_lyapunov_rdp
@@ -883,10 +922,13 @@ module LightROM_LyapunovSolvers
 
       rk = X%rk
       rkmax = size(X%U)
-      if (.not. allocated(Swrk)) allocate(Swrk(rkmax,rkmax)); Swrk = 0.0_wp
+      allocate(Swrk(rkmax,rkmax)); Swrk = 0.0_wp
       call innerprod(Swrk(:rk,:rk), U1, BBTU)          ! - Sdot
       ! Construct intermediate coefficient matrix
+      
       X%S(:rk,:rk) = X%S(:rk,:rk) - tau*Swrk(:rk,:rk)
+
+      deallocate(Swrk)
 
       return
    end subroutine S_step_lyapunov_rdp
@@ -910,8 +952,7 @@ module LightROM_LyapunovSolvers
       info = 0
 
       rk = X%rk
-      if (.not. allocated(Uwrk)) allocate(Uwrk(rkmax), source=X%U(1)); call zero_basis(Uwrk)
-
+      allocate(Uwrk(X%rk), source=X%U(1)); call zero_basis(Uwrk)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, X%U(:rk), transpose(X%S(:rk,:rk)))  ! L0.T
@@ -922,6 +963,8 @@ module LightROM_LyapunovSolvers
       call axpby_basis(Uwrk(:rk), 1.0_wp, X%U(:rk), tau)
       ! Update coefficient matrix
       call innerprod(X%S(:rk,:rk), Uwrk(:rk), U1)
+
+      deallocate(Uwrk)
 
       return
    end subroutine L_step_lyapunov_rdp
