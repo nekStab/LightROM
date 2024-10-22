@@ -24,7 +24,7 @@ module laplacian2D_LTI_Lyapunov_Base
 
    ! --> Mesh related parameters.
    real(wp),      parameter :: L  = 1.0_wp  !> Domain length
-   integer,       parameter :: nx = 6      !> Number of grid points per direction
+   integer,       parameter :: nx = 4      !> Number of grid points per direction
    integer,       parameter :: N  = nx**2   !> total number of grid points
    real(wp),      parameter :: dx = L/nx    !> Grid size.
    real(wp),      parameter :: dx2= dx**2   !> Grid size.

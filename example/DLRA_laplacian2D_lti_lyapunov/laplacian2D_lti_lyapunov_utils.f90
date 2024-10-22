@@ -167,7 +167,7 @@ contains
 
    function CALE(X,A,Q) result(Y)
       real(wp), dimension(n,n) :: X, A, Q, Y
-      Y = matmul(transpose(A), X) + matmul(X, A) + Q
+      Y = matmul(A, X) + matmul(X, transpose(A)) + Q
    end function CALE
 
    subroutine build_operator(A)

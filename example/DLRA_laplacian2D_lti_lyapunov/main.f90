@@ -100,6 +100,7 @@ program demo
 
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
+   integer   :: is, ie, irow
 
    ! DLRA opts
    type(dlra_opts) :: opts
@@ -108,6 +109,8 @@ program demo
    call logger%configure(level=warning_level, time_stamp=.false.); print *, 'Logging set to error_level.'
 
    call system_clock(count_rate=clock_rate)
+
+   irow = 8
 
    print *, '---------------------------------------------'
    print *, '   DYNAMIC LOW-RANK APPROXIMATION  -  DLRA'
@@ -142,11 +145,8 @@ program demo
       call set_state(B, U_load(:,:rk_b), 'Load B')
       call get_state(Bdata(:,:rk_b), B, 'Get B')
    end if
-   BBTdata = -matmul(Bdata(:,:rk_b), transpose(Bdata(:,:rk_b)))
-   BBT(:N**2) = -reshape(BBTdata, shape(BBT))
-   !do i = 1, N
-   !   print '(16(E9.2,2X))', BBTdata(i,:)
-   !end do
+   BBTdata = matmul(Bdata(:,:rk_b), transpose(Bdata(:,:rk_b)))
+   BBT(:N**2) = reshape(BBTdata, shape(BBT))
 
    ! Define LTI system
    LTI = lti_system()
@@ -177,11 +177,12 @@ program demo
       X0 = U_load
    end if
    
+   print *, 'SVD X0'
    svals = svdvals(X0)
-   do i = 1, rk_X0+1
-      write(*,'(E9.2,1X)', ADVANCE='NO') svals(i)
+   do i = 1, ceiling(rkmax*1.0/irow)
+      is = (i-1)*irow+1; ie = min(i*irow, rkmax)
+      print '(2X,I2,A,I2,*(F16.12,1X))', is, '-', ie, svals(is:ie)
    end do
-   print *, ''
    print *, ''
    
    !------------------
@@ -229,15 +230,18 @@ program demo
       Xref = U_load
    end if
 
+   call build_operator(Adata)
    ! sanity check
-   X0 = CALE(Xref, Adata, BBTdata)
-   print *, '    Direct problem: ||X0||_2/N', norm2(X0)/N
+   X0 = CALE(Xref, Adata, -BBTdata)
+   print *, '    Direct problem: || res(X_ref) ||_2/N', norm2(X0)/N
    print *, ''
+   ! compute svd
+   print *, 'SVD Xref'
    svals = svdvals(Xref)
-   do i = 1, min(N,20)
-      write(*,'(E9.2,1X)', ADVANCE='NO') svals(i)
+   do i = 1, ceiling(N*1.0_wp/irow)
+      is = (i-1)*irow+1; ie = min(i*irow, N)
+      print '(2X,I2,A,I2,*(F16.12,1X))', is, '-', ie, svals(is:ie)
    end do
-   print *, ''
    print *, ''
 
    !------------------
@@ -248,7 +252,7 @@ program demo
    print *, ''
    ! initialize exponential propagator
    nrep = 10
-   Tend = 0.05_wp
+   Tend = 0.001_wp
    RK_propagator = rklib_lyapunov_mat(Tend)
 
    allocate(X_RKlib(N, N, nrep))
@@ -271,19 +275,20 @@ program demo
                      & real(clock_stop-clock_start)/real(clock_rate)
    end do
 
-   svals = svdvals(X0)
-   write(*,'(I2,A)', ADVANCE='NO') 0, ' SVD: '
-   do i = 1, min(N,16)
-      write(*,'(E9.2,1X)', ADVANCE='NO') svals(i)
-   end do
+   ! Choose relevant reference case from RKlib
+   X_RKlib_ref = X_RKlib(:,:,1)
+   if (save) call save_npy(trim(fldr)//'Xref_RK.npy', X_RKlib_ref)
+   if (read) then
+      call load_npy(trim(fldr)//'Xref_RK.npy', U_load)
+      X_RKlib_ref = U_load
+   end if
+
    print *, ''
-   do irep = 1, nrep
-      svals = svdvals(X_RKlib(:,:,irep))
-      write(*,'(I2,A)', ADVANCE='NO') irep, ' SVD: '
-      do i = 1, min(N,16)
-         write(*,'(E9.2,1X)', ADVANCE='NO') svals(i)
-      end do
-      print *, ''
+   print *, 'SVD Xrk'
+   svals = svdvals(X_RKlib_ref)
+   do i = 1, ceiling(N*1.0_wp/irow)
+      is = (i-1)*irow+1; ie = min(i*irow, N)
+      print '(2X,I2,A,I2,*(F16.12,1X))', is, '-', ie, svals(is:ie)
    end do
    print *, ''
    
@@ -297,33 +302,21 @@ program demo
    write(*,'(A10,A4,A4,A10,A8,A26,A26,A20)') 'DLRA:','  rk',' TO','dt','Tend','|| X_DLRA - X_RK ||_2/N','|| X_DLRA - Xref ||_2/N', 'Elapsed time'
    print *, '         ------------------------------------------------------------------------'
 
-   ! Choose relevant reference case from RKlib
-   X_RKlib_ref = X_RKlib(:,:,1)
-   if (save) call save_npy(trim(fldr)//'Xref_RK.npy', X_RKlib_ref)
-   if (read) then
-      call load_npy(trim(fldr)//'Xref_RK.npy', U_load)
-      X_RKlib_ref = U_load
-   end if
-
    ! Choose input ranks and integration steps
-   rkv = (/ 16 /) !(/ 2, 6, 10, 14 /)
-   dtv = 0.5*logspace(-4.0_wp, -1.0_wp, 4)
+   rkv = [ 2, 6, 10, 14, 16 ]
+   dtv = logspace(-6.0_wp, -3.0_wp, 4, 10)
    dtv = dtv(size(dtv):1:-1)
 
    allocate(X_DLRA(N, N, size(dtv)*size(rkv)*2))
 
    irep = 0
    X = LR_state()
-   do torder = 1, 2
-      do i = 1, size(rkv)
-         rk = rkv(i)
-
-         !write(*,'(A10,I1)') ' torder = ', torder
-
+   do i = 1, size(rkv)
+      rk = rkv(i)
+      do torder = 1, 2
          do j = 1, size(dtv)
             irep = irep + 1
             dt = dtv(j)
-            !if (verb) print *, '    dt = ', dt, 'Tend = ', Tend
 
             ! Reset input
             call X%initialize_LR_state(U0, S0, rk)
@@ -353,28 +346,22 @@ program demo
             deallocate(X%S)
             X_DLRA(:,:,irep) = X_out
          end do
-
-      end do
-   end do
-   nrep = irep
-
-   print *, 'nrep', nrep, 'X_DLRA', size(X_DLRA)
-
-   svals = svdvals(X0)
-   write(*,'(I2,A)', ADVANCE='NO') 0, ' SVD: '
-   do i = 1, min(N,16)
-      write(*,'(E9.2,1X)', ADVANCE='NO') svals(i)
-   end do
-   print *, ''
-   do irep = 1, nrep
-      svals = svdvals(X_DLRA(:,:,irep))
-      write(*,'(I2,A)', ADVANCE='NO') irep, ' SVD: '
-      do i = 1, min(N,16)
-         write(*,'(E9.2,1X)', ADVANCE='NO') svals(i)
+         print *, ''
       end do
       print *, ''
    end do
+   nrep = irep
+
    print *, ''
+   print *, 'SVD X_DLRA final'
+   svals = svdvals(X_out)
+   do i = 1, ceiling(N*1.0_wp/irow)
+      is = (i-1)*irow+1; ie = min(i*irow, N)
+      print '(2X,I2,A,I2,*(F16.12,1X))', is, '-', ie, svals(is:ie)
+   end do
+   print *, ''
+
+   print *, 'nrep', nrep, 'X_DLRA', size(X_DLRA)
 
    if (save) then
       call save_npy("example/DLRA_laplacian2D/data_A.npy", Adata)
