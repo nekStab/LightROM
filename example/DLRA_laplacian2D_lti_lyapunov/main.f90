@@ -302,6 +302,47 @@ program demo
    write(*,'(A10,A4,A4,A10,A8,A26,A26,A20)') 'DLRA:','  rk',' TO','dt','Tend','|| X_DLRA - X_RK ||_2/N','|| X_DLRA - Xref ||_2/N', 'Elapsed time'
    print *, '         ------------------------------------------------------------------------'
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
    ! Choose input ranks and integration steps
    rkv = [ 2, 6, 10, 14, 16 ]
    dtv = logspace(-6.0_wp, -3.0_wp, 4, 10)
@@ -352,7 +393,6 @@ program demo
    end do
    nrep = irep
 
-   print *, ''
    print *, 'SVD X_DLRA final'
    svals = svdvals(X_out)
    do i = 1, ceiling(N*1.0_wp/irow)

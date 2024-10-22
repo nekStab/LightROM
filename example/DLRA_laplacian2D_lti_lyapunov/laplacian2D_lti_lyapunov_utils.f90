@@ -58,13 +58,13 @@ contains
       select type (state_in)
       type is (state_vector)
          kdim = size(state_in)
-         call assert_shape(mat_out, (/ N, kdim /), 'mat_out', this_module, 'get_state -> state_vector')
+         call assert_shape(mat_out, [ N, kdim ], 'mat_out', this_module, 'get_state -> state_vector')
          do k = 1, kdim
             mat_out(:,k) = state_in(k)%state
          end do
       type is (state_matrix)
-         call assert_shape(mat_out, (/ N, N /), 'mat_out', this_module, 'get_state -> state_matrix')
-         mat_out = reshape(state_in(1)%state, (/ N, N /))
+         call assert_shape(mat_out, [ N, N ], 'mat_out', this_module, 'get_state -> state_matrix')
+         mat_out = reshape(state_in(1)%state, [ N, N ])
       end select
       return
    end subroutine get_state
@@ -79,13 +79,13 @@ contains
       select type (state_out)
       type is (state_vector)
          kdim = size(state_out)
-         call assert_shape(mat_in, (/ N, kdim /), 'mat_in', this_module, 'set_state -> state_vector')
+         call assert_shape(mat_in, [ N, kdim ], 'mat_in', this_module, 'set_state -> state_vector')
          call zero_basis(state_out)
          do k = 1, kdim
             state_out(k)%state = mat_in(:,k)
          end do
       type is (state_matrix)
-         call assert_shape(mat_in, (/ N, N /), 'mat_in', this_module, 'set_state -> state_matrix')
+         call assert_shape(mat_in, [ N, N ], 'mat_in', this_module, 'set_state -> state_matrix')
          call zero_basis(state_out)
          state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
       end select
@@ -141,7 +141,7 @@ contains
             call U(i)%rand(.false.)
          end do
       end if
-      call assert_shape(S, (/ rk,rk /), 'S', this_module, 'generate_random_initial_condition')
+      call assert_shape(S, [ rk,rk ], 'S', this_module, 'generate_random_initial_condition')
       S = 0.0_wp
 
       ! perform QR
@@ -165,9 +165,9 @@ contains
    !-----     MISC     -----
    !------------------------
 
-   function CALE(X,A,Q) result(Y)
-      real(wp), dimension(n,n) :: X, A, Q, Y
-      Y = matmul(A, X) + matmul(X, transpose(A)) + Q
+   function CALE(X,A,Q) result(res)
+      real(wp), dimension(n,n) :: X, A, Q, res
+      res = matmul(A, X) + matmul(X, transpose(A)) + Q
    end function CALE
 
    subroutine build_operator(A)

@@ -15,7 +15,7 @@ module Laplacian2D_LTI_Lyapunov_RKlib
 
    private :: this_module
 
-   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_RKLib'
+   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_RKLib'
 
    !-----------------------------------------------
    !-----     EXPONENTIAL PROPAGATOR RKLIB    -----

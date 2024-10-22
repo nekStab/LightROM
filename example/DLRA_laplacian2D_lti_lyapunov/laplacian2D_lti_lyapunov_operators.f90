@@ -12,7 +12,7 @@ module Laplacian2D_LTI_Lyapunov_Operators
    implicit none
 
    private :: this_module
-   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Operators'
+   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Operators'
    ! operator
    public  :: laplacian, laplacian_mat
 
@@ -207,7 +207,7 @@ contains
       ! Throughput
       allocate(self%D(rk_c,rk_b))
       if (present(D)) then
-         call assert_shape(D, (/ rk_c, rk_b /), 'D', this_module, 'initialize_lti_system')
+         call assert_shape(D, [ rk_c, rk_b ], 'D', this_module, 'initialize_lti_system')
          self%D = D
       else
          self%D = 0.0_wp
