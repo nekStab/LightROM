@@ -21,9 +21,9 @@ module Laplacian2D_LTI_Lyapunov_Utils
    ! initial conditions
    public :: generate_random_initial_condition
    ! misc
-   public :: CALE, build_operator, reconstruct_TQ, pmat, pvec
+   public :: CALE, build_operator, reconstruct_TQ
 
-   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Utils'
+   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Utils'
 
 contains
 
