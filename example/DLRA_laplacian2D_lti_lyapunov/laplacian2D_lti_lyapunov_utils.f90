@@ -21,7 +21,7 @@ module Laplacian2D_LTI_Lyapunov_Utils
    ! initial conditions
    public :: generate_random_initial_condition
    ! misc
-   public :: CALE, build_operator, reconstruct_TQ
+   public :: CALE, build_operator, reconstruct_TQ, pmat, pvec
 
    character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Utils'
 
@@ -225,5 +225,58 @@ contains
       end do
 
    end subroutine reconstruct_TQ
+
+   subroutine pmat(A, name, row, col, p, prefix)
+      real(wp), intent(in) :: A(:,:)
+      character(len=*), optional, intent(in) :: name
+      integer, optional, intent(in) :: row
+      integer, optional, intent(in) :: col
+      integer, optional, intent(in) :: p
+      character(len=*), optional, intent(in) :: prefix
+      ! internal
+      integer :: i, row_, col_, p_, w
+      character(len=128) :: name_, prefix_
+      character(len=128) :: fmt
+
+      row_ = optval(row, size(A,1))
+      col_ = optval(col, size(A,2))
+      p_   = optval(p, 5)
+      prefix_ = optval(prefix, '')
+      w = p_ + 3
+      write(fmt,'("(A,3X,*(F",I0,".",I0,",1X))")') w, p_
+      if (row_ .gt. size(A,1)) call logger%log_error('row > row(A)')
+      if (col_ .gt. size(A,2)) call logger%log_error('col > col(A)')
+      name_ = optval(name, 'mat')
+
+      print *, name_
+      do i = 1,row_
+         print fmt, trim(prefix_), A(i,:col_)
+      end do
+      return
+   end subroutine pmat
+
+   subroutine pvec(U, name, col, p, prefix)
+      class(abstract_vector_rdp), intent(in) :: U(:)
+      character(len=*), optional, intent(in) :: name
+      integer, optional, intent(in) :: col
+      integer, optional, intent(in) :: p
+      character(len=*), optional, intent(in) :: prefix
+      ! internal
+      real(wp), allocatable :: Umat(:,:)
+      integer :: i, col_, kdim
+      character(len=128) :: name_
+
+      select type (U)
+      type is (state_vector)
+         kdim = size(U)
+         col_ = optval(col, kdim)
+         if (col_ .gt. kdim) call logger%log_error('col > col(U)')
+         name_ = optval(name, 'mat')
+         allocate(Umat(N,col_))
+         call get_state(Umat, U(:col_), name)
+         call pmat(Umat, name=name_, row=N, col=col_, p=p, prefix=prefix)
+      end select
+      return     
+   end subroutine pvec
 
 end module Laplacian2D_LTI_Lyapunov_Utils

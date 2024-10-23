@@ -251,12 +251,12 @@ contains
          if (self%rk > m) then   ! copy the full IC into self%U
             call copy_basis(self%U(:m), U)
             self%S(:m,:m) = S
-            write(msg,'(A,I0,A)') '      Transfer the first ', self%rk, ' columns of U0 to X%U.'
+            write(msg,'(A,I0,A)') '      Transfer all columns of U0 to X%U.'
             call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
             call copy_basis(self%U(:self%rk), U(:self%rk))
             self%S(:self%rk,:self%rk) = S(:self%rk,:self%rk)
-            write(msg,'(A,I0,A)') '      Transfer all columns of U0 to X%U.'
+            write(msg,'(A,I0,A)') '      Transfer the first ', m, ' columns of U0 to X%U.'
             call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          end if
          ! top up basis (to rka for rank-adaptivity) with orthonormal columns if needed
@@ -266,10 +266,10 @@ contains
                call Utmp(i)%rand()
             end do
             allocate(R(rka-m,rka-m)); R = 0.0_wp
-            call qr(Utmp, R, info)
-            call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
             call orthogonalize_against_basis(Utmp, self%U, info)
             call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='initialize_LR_state')
+            call qr(Utmp, R, info)
+            call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
             call copy_basis(self%U(m+1:), Utmp)
             write(msg,'(A,I0,A)') '      Fill remaining columns with orthonormal noise orthonormal to U0.'
             call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')

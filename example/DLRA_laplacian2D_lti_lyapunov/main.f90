@@ -1,7 +1,7 @@
 program demo
    ! Standard Library
    use stdlib_optval, only : optval 
-   use stdlib_linalg, only : eye, svdvals
+   use stdlib_linalg, only : eye, svdvals, eye
    use stdlib_math, only : all_close, logspace
    use stdlib_io_npy, only : save_npy, load_npy
    use stdlib_logger, only : information_level, warning_level, debug_level, error_level, none_level
@@ -23,23 +23,24 @@ program demo
    use Laplacian2D_LTI_Lyapunov_Utils
    implicit none
 
-   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Main'
+   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Main'
 
    !----------------------------------------------------------
    !-----     LYAPUNOV EQUATION FOR LAPLACE OPERATOR     -----
    !----------------------------------------------------------
 
    ! DLRA
-   integer, parameter :: rkmax = 16
+   integer, parameter :: rkmax = 8
    integer, parameter :: rk_X0 = 2
    logical, parameter :: verb  = .false.!.true.
-   logical, parameter :: save  = .false.!.true.
+   logical, parameter :: save  = .false.
    logical, parameter :: read  = .false.
    character*128      :: oname, fldr
    ! rk_B is set in laplacian2D.f90
+   integer, parameter :: irow = 8 ! how many numbers to print per row
 
    integer  :: nrk, ndt, rk,  torder
-   real(wp) :: dt, Tend
+   real(wp) :: dt, Tend, Tstep
    ! vector of dt values
    real(wp), allocatable :: dtv(:)
    ! vector of rank values
@@ -100,17 +101,13 @@ program demo
 
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
-   integer   :: is, ie, irow
 
    ! DLRA opts
    type(dlra_opts) :: opts
 
-   !call logger%configure(level=error_level, time_stamp=.false.); print *, 'Logging set to error_level.'
-   call logger%configure(level=warning_level, time_stamp=.false.); print *, 'Logging set to error_level.'
-
+   call logger%configure(level=error_level, time_stamp=.false.); print *, 'Logging set to error_level.'
+   
    call system_clock(count_rate=clock_rate)
-
-   irow = 8
 
    print *, '---------------------------------------------'
    print *, '   DYNAMIC LOW-RANK APPROXIMATION  -  DLRA'
@@ -179,10 +176,7 @@ program demo
    
    print *, 'SVD X0'
    svals = svdvals(X0)
-   do i = 1, ceiling(rkmax*1.0/irow)
-      is = (i-1)*irow+1; ie = min(i*irow, rkmax)
-      print '(2X,I2,A,I2,*(F16.12,1X))', is, '-', ie, svals(is:ie)
-   end do
+   print '(1X,A16,2X*(F15.12,1X))', 'SVD(X0)[1-8]:', svals(:irow)
    print *, ''
    
    !------------------
@@ -210,8 +204,8 @@ program demo
    call dhseqr('S', 'I', N, 1, N, T, N, wr, wi, Z, N, work, N, info )
 
    ! Change RHS Basis: base --> Q --> Z
-   Vdata = matmul(transpose(Q), matmul(BBTdata, Q))
-   Wdata = matmul(transpose(Z), matmul(  Vdata, Z))
+   Vdata = matmul(transpose(Q), matmul(-BBTdata, Q))
+   Wdata = matmul(transpose(Z), matmul(   Vdata, Z))
    
    ! Compute solution of Lyapunov equation for Schur decomposition
    isgn = 1; scale = 0.1_wp
@@ -232,34 +226,31 @@ program demo
 
    call build_operator(Adata)
    ! sanity check
-   X0 = CALE(Xref, Adata, -BBTdata)
-   print *, '    Direct problem: || res(X_ref) ||_2/N', norm2(X0)/N
+   X0 = CALE(Xref, Adata, BBTdata)
+   print *, '    Direct problem: | res(X_ref) |/N', norm2(X0)/N
    print *, ''
    ! compute svd
-   print *, 'SVD Xref'
    svals = svdvals(Xref)
-   do i = 1, ceiling(N*1.0_wp/irow)
-      is = (i-1)*irow+1; ie = min(i*irow, N)
-      print '(2X,I2,A,I2,*(F16.12,1X))', is, '-', ie, svals(is:ie)
-   end do
-   print *, ''
+   print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
 
    !------------------
    ! COMPUTE SOLUTION WITH RK FOR DIFFERENT INTEGRATION TIMES AND COMPARE TO STUART-BARTELS
    !------------------
 
-   print *, 'II.  Compute solution of the differential Lyapunov equation (Runge-Kutta):'
+   print *, ''
+   print *, 'IIa.  Compute solution of the differential Lyapunov equation (Runge-Kutta) over a short time horizon:'
    print *, ''
    ! initialize exponential propagator
-   nrep = 10
-   Tend = 0.001_wp
-   RK_propagator = rklib_lyapunov_mat(Tend)
+   nrep  = 1
+   Tstep = 0.001_wp
+   RK_propagator = rklib_lyapunov_mat(Tstep)
+   Tend = nrep*Tstep
 
    allocate(X_RKlib(N, N, nrep))
    call get_state(U_out(:,:rk_X0), U0(:rk_X0), 'Get initial conditions')
    X0 = matmul( U_out(:,:rk_X0), matmul(S0(:rk_X0,:rk_X0), transpose(U_out(:,:rk_X0))))
    call set_state(X_mat_RKlib(1:1), X0, 'Set RK X0')
-   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','|| X_RK - X_ref ||_2/N', 'Elapsed time'
+   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','| X_RK - X_ref |/N', 'Elapsed time'
    print *, '         ------------------------------------------------------------------------'
    do irep = 1, nrep
       call system_clock(count=clock_start)     ! Start Timer
@@ -270,81 +261,32 @@ program demo
       ! replace input
       call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,irep), 'Reset RK X0')
       call system_clock(count=clock_stop)      ! Stop Timer
-      write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tend, &
+      write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tstep, &
                      & norm2(X_RKlib(:,:,irep) - Xref)/N, &
                      & real(clock_stop-clock_start)/real(clock_rate)
    end do
 
    ! Choose relevant reference case from RKlib
-   X_RKlib_ref = X_RKlib(:,:,1)
+   X_RKlib_ref = X_RKlib(:,:,nrep)
    if (save) call save_npy(trim(fldr)//'Xref_RK.npy', X_RKlib_ref)
    if (read) then
       call load_npy(trim(fldr)//'Xref_RK.npy', U_load)
       X_RKlib_ref = U_load
    end if
 
-   print *, ''
-   print *, 'SVD Xrk'
-   svals = svdvals(X_RKlib_ref)
-   do i = 1, ceiling(N*1.0_wp/irow)
-      is = (i-1)*irow+1; ie = min(i*irow, N)
-      print '(2X,I2,A,I2,*(F16.12,1X))', is, '-', ie, svals(is:ie)
-   end do
-   print *, ''
-   
    !------------------
    ! COMPUTE DLRA FOR SHORTEST INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
    !------------------
 
    print *, ''
-   print *, 'III. Compute approximate solution of the differential Lyapunov equation using DLRA:'
+   print *, 'IIb. Compute approximate solution of the differential Lyapunov equation using DLRA:'
    print *, ''
-   write(*,'(A10,A4,A4,A10,A8,A26,A26,A20)') 'DLRA:','  rk',' TO','dt','Tend','|| X_DLRA - X_RK ||_2/N','|| X_DLRA - Xref ||_2/N', 'Elapsed time'
-   print *, '         ------------------------------------------------------------------------'
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+   write(*,'(A10,A4,A4,A10,A8,3(A20),A20)') 'DLRA:','  rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
+      & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
+   print *, '         ----------------------------------------------------------------------------------------------------------'
    
    ! Choose input ranks and integration steps
-   rkv = [ 2, 6, 10, 14, 16 ]
+   rkv = [ 4, 8 ]
    dtv = logspace(-6.0_wp, -3.0_wp, 4, 10)
    dtv = dtv(size(dtv):1:-1)
 
@@ -377,11 +319,11 @@ program demo
                call load_npy(trim(fldr)//oname, U_load)
                X_out = U_load
             end if
-      
-            write(*,'(A10,I4," TO",I1,F10.6,F8.4,E26.8,E26.8,F18.4," s")') 'OUTPUT', &
+            X0 = CALE(X_out, Adata, BBTdata)
+            write(*,'(A10,I4," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")') 'OUTPUT', &
                               & rk, torder, dt, Tend, &
                               & norm2(X_RKlib_ref - X_out)/N, norm2(X_out - Xref)/N, &
-                              & real(clock_stop-clock_start)/real(clock_rate)
+                              & norm2(X0)/N, real(clock_stop-clock_start)/real(clock_rate)
 
             deallocate(X%U)
             deallocate(X%S)
@@ -393,15 +335,121 @@ program demo
    end do
    nrep = irep
 
-   print *, 'SVD X_DLRA final'
+   svals = svdvals(X_RKlib_ref)
+   print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_RK)[1-8]:', svals(:irow)
    svals = svdvals(X_out)
-   do i = 1, ceiling(N*1.0_wp/irow)
-      is = (i-1)*irow+1; ie = min(i*irow, N)
-      print '(2X,I2,A,I2,*(F16.12,1X))', is, '-', ie, svals(is:ie)
-   end do
+   print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_LR)[1-8]:', svals(:irow)
    print *, ''
 
-   print *, 'nrep', nrep, 'X_DLRA', size(X_DLRA)
+   deallocate(X_RKlib, X_DLRA)
+
+   !------------------
+   ! COMPUTE SOLUTION WITH RK FOR DIFFERENT INTEGRATION TIMES AND COMPARE TO STUART-BARTELS
+   !------------------
+
+   print *, ''
+   print *, 'IIIa.  Compute solution of the differential Lyapunov equation (Runge-Kutta) to convergence:'
+   print *, ''
+   ! initialize exponential propagator
+   nrep  = 10
+   Tstep = 0.1_wp
+   RK_propagator = rklib_lyapunov_mat(Tstep)
+   Tend = nrep*Tstep
+
+   allocate(X_RKlib(N, N, nrep))
+   call get_state(U_out(:,:rk_X0), U0(:rk_X0), 'Get initial conditions')
+   X0 = matmul( U_out(:,:rk_X0), matmul(S0(:rk_X0,:rk_X0), transpose(U_out(:,:rk_X0))))
+   call set_state(X_mat_RKlib(1:1), X0, 'Set RK X0')
+   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','| X_RK - X_ref |/N', 'Elapsed time'
+   print *, '         ------------------------------------------------------------------------'
+   do irep = 1, nrep
+      call system_clock(count=clock_start)     ! Start Timer
+      ! integrate
+      call RK_propagator%matvec(X_mat_RKlib(1), X_mat_RKlib(2))
+      ! recover output
+      call get_state(X_RKlib(:,:,irep), X_mat_RKlib(2:2), 'Get RK solution')
+      ! replace input
+      call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,irep), 'Reset RK X0')
+      call system_clock(count=clock_stop)      ! Stop Timer
+      write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tstep, &
+                     & norm2(X_RKlib(:,:,irep) - Xref)/N, &
+                     & real(clock_stop-clock_start)/real(clock_rate)
+   end do
+
+   ! Choose relevant reference case from RKlib
+   X_RKlib_ref = X_RKlib(:,:,nrep)
+   if (save) call save_npy(trim(fldr)//'Xref_RK.npy', X_RKlib_ref)
+   if (read) then
+      call load_npy(trim(fldr)//'Xref_RK.npy', U_load)
+      X_RKlib_ref = U_load
+   end if
+
+   !------------------
+   ! COMPUTE DLRA FOR SHORTEST INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
+   !------------------
+
+   print *, ''
+   print *, 'IIIb. Compute approximate solution of the differential Lyapunov equation using DLRA:'
+   print *, ''
+   write(*,'(A10,A4,A4,A10,A8,3(A20),A20)') 'DLRA:','  rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
+      & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
+   print *, '         ----------------------------------------------------------------------------------------------------------'
+   
+   ! Choose input ranks and integration steps
+   rkv = [ 4,  8 ]
+   dtv = logspace(-4.0_wp, -1.0_wp, 4, 10)
+   dtv = dtv(size(dtv):1:-1)
+
+   allocate(X_DLRA(N, N, size(dtv)*size(rkv)*2))
+
+   irep = 0
+   X = LR_state()
+   do i = 1, size(rkv)
+      rk = rkv(i)
+      do torder = 1, 2
+         do j = 1, size(dtv)
+            irep = irep + 1
+            dt = dtv(j)
+
+            ! Reset input
+            call X%initialize_LR_state(U0, S0, rk)
+
+            ! run step
+            opts = dlra_opts(mode=torder, if_rank_adaptive=.false.)
+            call system_clock(count=clock_start)     ! Start Timer
+            call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, info, exptA=exptA, options=opts)
+            call system_clock(count=clock_stop)      ! Stop Timer
+
+            ! Reconstruct solution
+            call get_state(U_out(:,:rk), X%U, 'Reconstruct solution')
+            X_out = matmul(U_out(:,:rk), matmul(X%S, transpose(U_out(:,:rk))))
+            write(oname,'("data_X_DRLA_TO",I1,"_rk",I2.2,"_",I3.3,".npy")') torder, rk, irep
+            if (save) call save_npy(trim(fldr)//oname, X_out)
+            if (read) then
+               call load_npy(trim(fldr)//oname, U_load)
+               X_out = U_load
+            end if
+            X0 = CALE(X_out, Adata, BBTdata)
+            write(*,'(A10,I4," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")') 'OUTPUT', &
+                              & rk, torder, dt, Tend, &
+                              & norm2(X_RKlib_ref - X_out)/N, norm2(X_out - Xref)/N, &
+                              & norm2(X0)/N, real(clock_stop-clock_start)/real(clock_rate)
+            deallocate(X%U)
+            deallocate(X%S)
+            X_DLRA(:,:,irep) = X_out
+         end do
+         print *, ''
+      end do
+      print *, ''
+   end do
+
+   svals = svdvals(Xref)
+   print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
+   svals = svdvals(X_RKlib_ref)
+   print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
+   svals = svdvals(X_out)
+   print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
+   print *, ''
 
    if (save) then
       call save_npy("example/DLRA_laplacian2D/data_A.npy", Adata)
