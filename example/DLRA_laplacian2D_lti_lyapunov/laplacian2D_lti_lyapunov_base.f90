@@ -233,34 +233,40 @@ contains
             if (ifrk) then
                if (rkmax==rk) then
                   call stop_error('rkmax must be larger than rk for rank-adaptive DLRA!', this_module, 'initialize_LR_state')
-               end if 
-               self%rk = self%rk - 1
+               end if
+               write(msg,'(A,I0,A)') 'Rank-adaptivity enabled. Computation will begin with X%rk = ', self%rk+1, '.'
+               call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
             end if
          else
             self%rk = rk
-            rka = rk + 1
-            if (.not.ifrk) rka = rka - 1
+            if (ifrk) then
+               rka = rk + 1
+            else
+               rka = rk
+            end if
          end if
 
          ! allocate & initialize
          allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
          allocate(self%S(rka,rka)); self%S = 0.0_wp
-         write(msg,'(3(A,I0),A)') 'size(X%U) = [ ',rka,' ], X%rk = ', self%rk, ', size(U0) = [ ',m,' ]'
+         write(msg,'(3(A,I0),A)') 'size(X%U) = [ ', rka,' ], X%rk = ', self%rk, ', size(U0) = [ ', m,' ]'
          call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          ! copy inputs
          if (self%rk > m) then   ! copy the full IC into self%U
             call copy_basis(self%U(:m), U)
             self%S(:m,:m) = S
-            write(msg,'(A,I0,A)') '      Transfer all columns of U0 to X%U.'
+            write(msg,'(4X,A,I0,A)') 'Transfer the first ', m, ' columns of U0 to X%U.'
             call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
             call copy_basis(self%U(:self%rk), U(:self%rk))
             self%S(:self%rk,:self%rk) = S(:self%rk,:self%rk)
-            write(msg,'(A,I0,A)') '      Transfer the first ', m, ' columns of U0 to X%U.'
+            write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
             call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          end if
          ! top up basis (to rka for rank-adaptivity) with orthonormal columns if needed
          if (rka > m) then
+            write(msg,'(4X,A,I0,A)') 'Fill remaining ', rka-m, ' columns with orthonormal noise orthonormal to U0.'
+            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
             allocate(Utmp(rka-m), source=U(1))
             do i = 1, rka-m
                call Utmp(i)%rand()
@@ -271,8 +277,6 @@ contains
             call qr(Utmp, R, info)
             call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
             call copy_basis(self%U(m+1:), Utmp)
-            write(msg,'(A,I0,A)') '      Fill remaining columns with orthonormal noise orthonormal to U0.'
-            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          end if
       end select
       return
