@@ -2,6 +2,8 @@ module Ginzburg_Landau_Base
    ! Standard Library.
    use stdlib_stats_distribution_normal, only: normal => rvs_normal
    use stdlib_optval, only : optval
+   use stdlib_math, only : linspace
+   use stdlib_linalg, only : eye
    ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only: wp => dp
@@ -21,7 +23,6 @@ module Ginzburg_Landau_Base
    public  :: B, CT, weight, weight_mat
    public  :: N, BBTW_flat, CTCWinv_flat
    public  :: Qc, Rinv, CTQcCWinv_mat, BRinvBTW_mat
-
    
    !-------------------------------
    !-----     PARAMETERS 1    -----

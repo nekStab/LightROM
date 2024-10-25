@@ -13,7 +13,7 @@ module Ginzburg_Landau_RK_Lyapunov
    implicit none
 
    private :: this_module
-   character*128, parameter :: this_module = 'Ginzburg_Landau_RK_Lyapunov'
+   character(len=128), parameter :: this_module = 'Ginzburg_Landau_RK_Lyapunov'
    
    public  :: GL_mat
 
@@ -107,54 +107,47 @@ contains
       return
    end subroutine matrix_rand
 
-   subroutine GL_mat(flat_mat_out, flat_mat_in, adjoint, transpose)
+   subroutine GL_mat(mat_out, mat_in, adjoint, transpose)
       
-      !> State vector.
-      real(wp), dimension(:), intent(in)  :: flat_mat_in
-      !> Time-derivative.
-      real(wp), dimension(:), intent(out) :: flat_mat_out
-      !> Adjoint
+      ! State vector.
+      real(wp), dimension(:,:), intent(in)  :: mat_in
+      ! Time-derivative.
+      real(wp), dimension(:,:), intent(out) :: mat_out
+      ! Adjoint
       logical, optional :: adjoint
       logical           :: adj
       logical, optional :: transpose
       logical           :: trans
       
-      !> Internal variables.
+      ! Internal variables.
       integer :: j
-      real(wp), dimension(N,N) :: mat, dmat
       
-      !> Deal with optional argument
-      adj   = optval(adjoint,.false.)
+      ! Deal with optional argument
+      adj   = optval(  adjoint,.false.)
       trans = optval(transpose,.false.)
-
-      !> Sets the internal variables.
-      mat  = reshape(flat_mat_in(1:N**2),(/N, N/))
-      dmat = 0.0_wp
       
+      mat_out = 0.0_wp
       if (adj) then
          if (trans) then
             do j = 1,N
-               call adjoint_GL(mat(:,j), dmat(j,:))
+               call adjoint_GL(mat_in(:,j), mat_out(j,:))
             end do
          else
             do j = 1,N
-               call adjoint_GL(mat(:,j), dmat(:,j))
+               call adjoint_GL(mat_in(:,j), mat_out(:,j))
             end do
          end if
       else
          if (trans) then
             do j = 1,N
-               call direct_GL(mat(:,j), dmat(j,:))
+               call direct_GL(mat_in(:,j), mat_out(j,:))
             end do
          else
             do j = 1,N
-               call direct_GL(mat(:,j), dmat(:,j))
+               call direct_GL(mat_in(:,j), mat_out(:,j))
             end do
          end if
       endif
-
-      !> Reshape for output
-      flat_mat_out = reshape(dmat, shape(flat_mat_in))
       
       return
    end subroutine GL_mat
@@ -174,17 +167,16 @@ contains
       real(wp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(wp),        dimension(N**2) :: x_tmp, AX_flat, XAH_flat
+      real(wp),        dimension(N,N)  :: AX, XAH
 
-      f_flat = 0.0_wp; AX_flat = 0.0_wp; XAH_flat = 0.0_wp; x_tmp = 0.0_wp
+      f_flat = 0.0_wp
+      AX = 0.0_wp; XAH = 0.0_wp;
       ! A @ X
-      call GL_mat( AX_flat, x_flat, adjoint = .false., transpose = .false.)
-      ! build X.T
-      x_tmp    = reshape(transpose(reshape(x_flat,   (/ N,N /))), shape(x_flat))
+      call GL_mat( AX, reshape(x_flat, [N,N]),             adjoint = .false., transpose = .false.)
       ! build ( A @ X.T ).T = X @ A.T
-      call GL_mat(XAH_flat, x_tmp,  adjoint = .false., transpose = .true.)
+      call GL_mat(XAH, transpose(reshape(x_flat, [N,N])),  adjoint = .false., transpose = .true.)
       ! construct Lyapunov equation
-      f_flat = AX_flat + XAH_flat + BBTW_flat
+      f_flat = reshape(AX + XAH + BBTW, [ N**2 ])
 
       return
    end subroutine rhs_lyap
@@ -200,17 +192,16 @@ contains
       real(wp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(wp),        dimension(N**2) :: x_tmp, AHX_flat, XA_flat
+      real(wp),        dimension(N,N) ::  AHX, XA
 
-      f_flat = 0.0_wp; AHX_flat = 0.0_wp; XA_flat = 0.0_wp; x_tmp = 0.0_wp
+      f_flat = 0.0_wp
+      AHX = 0.0_wp; XA = 0.0_wp;
       ! A.T @ X
-      call GL_mat(AHX_flat, x_flat, adjoint = .true., transpose = .false.)
-      ! build X.T
-      x_tmp   = reshape(transpose(reshape(x_flat,  (/ N,N /))), shape(x_flat))
+      call GL_mat(AHX, reshape(x_flat, [N,N]),            adjoint = .true., transpose = .false.)
       ! build ( A.T @ X.T ).T = X @ A
-      call GL_mat( XA_flat, x_tmp,  adjoint = .true., transpose = .true.)
+      call GL_mat( XA, transpose(reshape(x_flat, [N,N])), adjoint = .true., transpose = .true.)
       ! construct Lyapunov equation
-      f_flat = AHX_flat + XA_flat + CTCWinv_flat
+      f_flat = reshape(AHX + XA +  CTCWinv, [ N**2 ])
 
       return
    end subroutine adjoint_rhs_lyap

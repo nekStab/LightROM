@@ -14,7 +14,7 @@ module Ginzburg_Landau_Operators
    implicit none
 
    private :: this_module
-   character*128, parameter :: this_module = 'Ginzburg_Landau_Operators'
+   character(len=128), parameter :: this_module = 'Ginzburg_Landau_Operators'
    public  :: exptA, direct_GL, adjoint_GL
 
    !-----------------------------------------------
@@ -326,12 +326,10 @@ contains
       type is(state_vector)
          select type(vec_out)
          type is(state_vector)
-
             ! Initialize propagator.
             call prop%initialize(n=2*nx, f=adjoint_rhs)
             ! Integrate forward in time.
             call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
-
          end select
       end select
       return
@@ -416,7 +414,7 @@ contains
       ! Throughput
       allocate(self%D(rk_c,rk_b))
       if (present(D)) then
-         call assert_shape(D, (/ rk_c, rk_b /), 'D', this_module, 'initialize_lti_system')
+         call assert_shape(D, [ rk_c, rk_b ], 'D', this_module, 'initialize_lti_system')
          self%D = D
       else
          self%D = 0.0_wp

@@ -22,98 +22,123 @@ program demo
    use Ginzburg_Landau_Operators
    use Ginzburg_Landau_Utils
    use Ginzburg_Landau_Tests
-   use Ginzburg_Landau_RK
    implicit none
 
    character*128      :: onameU, onameS, oname
    ! rk_B & rk_C are set in ginzburg_landau_base.f90
 
-   integer, parameter :: irow = 8
-   integer  :: nrk, ntau, rk,  torder, nsteps, iref
+   integer  :: nrk, ntau, rk,  torder
    real(wp) :: tau, Tend, T_RK
    ! vector of dt values
-   real(wp), allocatable :: tauv(:), tolv(:)
+   real(wp), allocatable :: dtv(:)
+   ! vector of tolerances
+   real(wp), allocatable :: tolv(:)
    ! vector of rank values
-   integer, allocatable :: rkv(:), TOv(:)
+   integer, allocatable :: rkv(:)
+   ! vector of temporal order
+   integer, allocatable :: TOv(:)
 
    ! Exponential propagator (RKlib).
-   type(GL_operator),      allocatable       :: A
-   type(exponential_prop), allocatable       :: prop
+   type(GL_operator),            allocatable :: A
+   type(exponential_prop),       allocatable :: prop
 
    ! LTI system
    type(lti_system)                          :: LTI
    type(dlra_opts)                           :: opts
 
    ! Initial condition
-   type(state_vector),     allocatable       :: U0(:)
-   real(wp),               allocatable       :: S0(:,:)
-   ! matrix
-   real(wp)                                  :: U0_in(2*nx, rkmax)
+   type(state_vector),           allocatable :: U0(:)
+   real(wp),                     allocatable :: S0(:,:)
    
    ! OUTPUT
-   real(wp)                                  :: U_out(2*nx,rkmax)
-   real(wp)                                  :: X_out(2*nx,2*nx)
-   real(wp)                                  :: lagsvd(rkmax)
-   real(wp)                                  :: res_flat(N**2)
-   real(wp)                                  :: res(N,N)
+   real(wp)                                  :: X_out(N,N)
 
    ! Reference solutions (BS & RK)
    real(wp)                                  :: Xref_BS(N,N)
    real(wp)                                  :: Xref_RK(N,N)
 
    ! IO
-   real(wp),           allocatable           :: U_load(:,:)
-   real(wp),           allocatable           :: BBTW_load(:,:)
+   real(wp),                    allocatable :: U_load(:,:)
 
    ! Information flag.
    integer                                   :: info
 
-   ! Counters
-   integer                                   :: i, j, k, irep, nrep, istep, is, ie
-   integer,                allocatable       :: perm(:)
-   real(wp)                                  :: etime
+   ! Misc
+   integer                                   :: i, j, k, irep, nrep, iref, is, ie
+   ! SVD
+   real(wp), dimension(:),       allocatable :: svals
+   integer, parameter                        :: irow = 8
 
-   real(wp)                           :: U_svd(2*nx,2*nx)
-   real(wp)                           :: S_svd(2*nx)
-   real(wp)                           :: V_svd(2*nx,2*nx)
-   real(wp), dimension(:,:),                   allocatable :: svals(:)
+   !--------------------------------
+   ! Define which examples to run:
+   !
+   logical, parameter :: run_fixed_rank_short_integration_time_convergence_test   = .true.
+   !
+   ! Integrate the same initial condition for a short time with Runge-Kutta and DLRA.
+   !
+   ! The solution will be far from steady state (the residual will be large) for both methods.
+   ! This test shows the convergence of the method as a function of the step size, the rank
+   ! and the temporal order of DLRA.
+   ! Owing to the short integration time, this test is by far the fastest to run.
+   !
+   logical, parameter :: run_fixed_rank_long_integration_time_convergence_test    = .true.
+   !
+   ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA.
+   !
+   ! As the steady state is approached, the error/residual for Runge-Kutta goes to zero.
+   ! Similarly, the test shows the effect of step size, rank and temporal order on the solution
+   ! using DLRA
+   !
+   logical, parameter :: run_rank_adaptive_long_integration_time_convergence_test = .true.
+   !
+   ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA using an 
+   ! adaptive rank.
+   !
+   ! The DLRA algorthm automatically determines the rank necessary to integrate the equations
+   ! such that the error on the singular values does not exceed a chosen tolerance. This rank
+   ! depends on the tolerance but also the chosen time-step.
+   !
+   !--------------------------------
 
-   real(wp) :: wrk(2,1)
-
-   logical        :: ifsave, ifload, iflogs, ifW, ifchk
-   
-   ! Exact comparison
-   type(LR_state),                allocatable   :: X
-   class(abstract_vector_rdp),             allocatable   :: exptAU    ! scratch basis
-   real(wp),                               allocatable   :: R(:,:), S0ref(:,:)    ! QR coefficient matrix
-   class(abstract_vector_rdp),  allocatable   :: U0ref(:)
-   class(abstract_vector_rdp),  allocatable   :: BBTU(:)
-   real(wp), allocatable :: ssvd_v(:)
-   character(len=128) :: fmt
-   real(wp), allocatable :: xv(:)
-   real(wp), dimension(:,:),                   allocatable :: ssvd_r
-   integer, dimension(2) :: shape_out
-   integer :: istart, iend, ndt, iostat
-   character(len=128), allocatable :: iomsg
-
-   !call logger%configure(level=information_level, time_stamp=.false.)
    call logger%configure(level=error_level, time_stamp=.false.)
 
-   !----------------------------------
-   !-----     INITIALIZATION     -----
-   !----------------------------------
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#               DYNAMIC LOW-RANK APPROXIMATION  -  DLRA                 #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
+   print *, ' LYAPUNOV EQUATION FOR THE NON-PARALLEL LINEAR GINZBURG-LANDAU EQUATION:'
+   print *, ''
+   print *, '                 A = mu(x) * I + nu * D_x + gamma * D2_x'
+   print *, ''
+   print *, '                     with mu(x) = mu1 * x + mu2 * x^2'
+   print *, ''
+   print *, '                    Algebraic Lyapunov equation:'
+   print *, '                    0 = A @ X + X @ A.T + B @ B.T @ W'
+   print *, ''               
+   print *, '                  Differential Lyapunov equation:'
+   print *, '                 \dot{X} = A @ X + X @ A.T + B @ B.T @ W'
+   print *, ''
+   write(*,'(13X,A14,I4,"x",I4)') 'Problem size: ', N, N
+   print *, ''
+   print *, '            Initial condition: rank(X0) =', rk_X0
+   print *, '            Inhomogeneity:     rank(B)  =', rk_B
+   print *, ''
+   print *, '#########################################################################'
+   print *, ''
 
    ! Initialize mesh and system parameters A, B, CT
-   print *, 'Initialize parameters'
+   print '(4X,A)', 'Initialize parameters'
    call initialize_parameters()
 
    ! Initialize propagator
-   print *, 'Initialize exponential propagator'
+   print '(4X,A)', 'Initialize exponential propagator'
    prop = exponential_prop(1.0_wp)
 
    ! Initialize LTI system
    A = GL_operator()
-   print *, 'Initialize LTI system (A, prop, B, CT, _)'
+   print '(4X,A)', 'Initialize LTI system (A, prop, B, CT, _)'
    LTI = lti_system()
    call LTI%initialize_lti_system(A, prop, B, CT)
 
@@ -123,8 +148,8 @@ program demo
 
    print *, ''
    print *, 'Check residual computation with Bartels-Stuart solution:'
-   oname = trim(basepath)//"BS/CGL_Lyapunov_Controllability_Xref_BS_W.npy"
-   call load_data(oname, U_load)
+   oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Controllability_Xref_BS_W.npy'
+   call load_npy(oname, U_load)
    Xref_BS = U_load
    
    print *, ''
@@ -132,22 +157,20 @@ program demo
    print '(A,F16.12)', '  | res_BS |/N = ', norm2(CALE(Xref_BS, BBTW, .false.))/N
    print *, ''
    ! compute svd
-   !call svd(Xref_BS, S_svd, U_svd, V_svd)
    svals = svdvals(Xref_BS)
-   print *, 'SVD Xref:'
+   print *, 'SVD X_BS:'
    do i = 1, ceiling(60.0/irow)
       is = (i-1)*irow+1; ie = i*irow
       print '(2X,I2,A,I2,*(1X,F16.12))', is, '-', ie, ( svals(j), j = is, ie )
    end do
    print *, ''
    
-   ! Define initial condition of the form X0 = U0 @ S0 @ U0.T (SPD) or load from file
+   ! Define initial condition
    allocate(U0(rk_X0), source=B(1)); call zero_basis(U0)
    allocate(S0(rk_X0,rk_X0)); S0 = 0.0_wp
    print *, 'Define initial condition'
    call generate_random_initial_condition(U0, S0, rk_X0)
-   call get_state(U_out(:,:rk_X0), U0)
-   X_out = matmul(matmul( U_out(:,:rk_X0), matmul( S0(:rk_X0,:rk_X0), transpose(U_out(:,:rk_X0)) ) ), weight_mat)
+   call reconstruct_solution(X_out, U0, S0)
    print *, ''
    print '(A,F16.12)', '  |  X_0  |/N = ', norm2(X_out)/N
    print '(A,F16.12)', '  | res_0 |/N = ', norm2(CALE(X_out, BBTW, .false.))/N
@@ -158,36 +181,41 @@ program demo
       is = (i-1)*irow+1; ie = i*irow
       print '(2X,I2,A,I2,*(F16.12,1X))', is, '-', ie, ( svals(j), j = is, ie )
    end do
-   print *, ''
    
+   print *, ''
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#    Ia.  Solution using Runge-Kutta over a short time horizon         #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
    ! Run RK integrator for the Lyapunov equation
-   T_RK   = 0.01_wp
-   nsteps = 10
-   iref   = 1
-   call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nsteps, iref)
-
-   print *, ''
-   print '(A,F16.12)', '  |  X_RK  |/N = ', norm2(Xref_BS)/N
-   print '(A,F16.12)', '  | res_RK |/N = ', norm2(CALE(Xref_BS, BBTW, .false.))/N
-   print *, ''
+   T_RK  = 0.01_wp
+   nrep  = 10
+   iref  = 1
+   call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nrep, iref)
    
-   ! basic settings
-   Tend = T_RK/nsteps*iref
-   ifsave = .false. ! save data to disk (LightROM/local)
-
+   print *, ''
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#    Ib.  Solution using fixed-rank DLRA                               #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
    ! DLRA with fixed rank
+   Tend = T_RK/nrep*iref
    rkv = [ 4, 10, 20 ]
-   tauv = logspace(-5.0_wp, -3.0_wp, 3, 10)
-   tauv = tauv(size(tauv):1:-1) ! reverse vector
+   dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
+   dtv = dtv(size(dtv):1:-1) ! reverse vector
    TOv  = [ 1, 2 ] 
-   call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, tauv, rkv, TOv, ifsave)
+   call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv)
    
    ! DLRA with adaptive rank
-   !tauv = logspace(-5.0_wp, -2.0_wp, 4, 10)
-   !tauv = tauv(size(tauv):1:-1) ! reverse vector
+   !dtv = logspace(-5.0_wp, -2.0_wp, 4, 10)
+   !dtv = dtv(size(dtv):1:-1) ! reverse vector
    !TOv  = [ 2 ] ![ 1, 2 ]
    !tolv = [ 1e-10 ] ! [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
-   !call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, tauv, TOv, tolv, ifsave)
+   !call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv)
 
    return
 end program demo
