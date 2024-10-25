@@ -64,10 +64,11 @@ program demo
    integer                                   :: info
 
    ! Misc
-   integer                                   :: i, j, k, irep, nrep, iref, is, ie
-   ! SVD
+   integer                                   :: i, j, k, irep, nstep, iref, is, ie
+   ! SVD & printing
    real(wp), dimension(:),       allocatable :: svals
    integer, parameter                        :: irow = 8
+   integer                                   :: nprint
 
    !--------------------------------
    ! Define which examples to run:
@@ -112,7 +113,7 @@ program demo
    print *, ''
    print *, '                 A = mu(x) * I + nu * D_x + gamma * D2_x'
    print *, ''
-   print *, '                     with mu(x) = mu1 * x + mu2 * x^2'
+   print *, '                   with mu(x) = mu_0 * x + mu_2 * x^2'
    print *, ''
    print *, '                    Algebraic Lyapunov equation:'
    print *, '                    0 = A @ X + X @ A.T + B @ B.T @ W'
@@ -120,7 +121,8 @@ program demo
    print *, '                  Differential Lyapunov equation:'
    print *, '                 \dot{X} = A @ X + X @ A.T + B @ B.T @ W'
    print *, ''
-   write(*,'(13X,A14,I4,"x",I4)') 'Problem size: ', N, N
+   print '(13X,A,I4,"x",I4)', 'Complex problem size:         ', nx, nx
+   print '(13X,A,I4,"x",I4)', 'Equivalent real problem size: ', N, N
    print *, ''
    print *, '            Initial condition: rank(X0) =', rk_X0
    print *, '            Inhomogeneity:     rank(B)  =', rk_B
@@ -185,37 +187,110 @@ program demo
    print *, ''
    print *, '#########################################################################'
    print *, '#                                                                       #'
-   print *, '#    Ia.  Solution using Runge-Kutta over a short time horizon         #'
+   print *, '#    Ia.  Solution using Runge-Kutta over a short time horizon          #'
    print *, '#                                                                       #'
    print *, '#########################################################################'
    print *, ''
-   ! Run RK integrator for the Lyapunov equation
-   T_RK  = 0.01_wp
-   nrep  = 10
-   iref  = 1
-   call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nrep, iref)
+
+   if (run_fixed_rank_short_integration_time_convergence_test) then
+      ! Run RK integrator for the Lyapunov equation
+      T_RK  = 0.01_wp
+      nstep = 10
+      iref  = 5
+
+      call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref)
+   else
+      print *, 'Skip.'
+      print *, ''
+   end if
    
    print *, ''
    print *, '#########################################################################'
    print *, '#                                                                       #'
-   print *, '#    Ib.  Solution using fixed-rank DLRA                               #'
+   print *, '#    Ib.  Solution using fixed-rank DLRA                                #'
    print *, '#                                                                       #'
    print *, '#########################################################################'
    print *, ''
-   ! DLRA with fixed rank
-   Tend = T_RK/nrep*iref
-   rkv = [ 4, 10, 20 ]
-   dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
-   dtv = dtv(size(dtv):1:-1) ! reverse vector
-   TOv  = [ 1, 2 ] 
-   call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv)
+
+   if (run_fixed_rank_short_integration_time_convergence_test) then
+      ! DLRA with fixed rank
+      Tend = T_RK/nstep*iref
+      rkv = [ 10, 12, 16 ]
+      dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
+      dtv = dtv(size(dtv):1:-1) ! reverse vector
+      TOv  = [ 1, 2 ] 
+      nprint = 16
+
+      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint)
+   else
+      print *, 'Skip.'
+      print *, ''
+   end if
+
+   print *, ''
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#    IIa.  Solution using Runge-Kutta to steady state                   #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
    
-   ! DLRA with adaptive rank
-   !dtv = logspace(-5.0_wp, -2.0_wp, 4, 10)
-   !dtv = dtv(size(dtv):1:-1) ! reverse vector
-   !TOv  = [ 2 ] ![ 1, 2 ]
-   !tolv = [ 1e-10 ] ! [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
-   !call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv)
+   if (run_fixed_rank_long_integration_time_convergence_test .or. &
+     & run_rank_adaptive_long_integration_time_convergence_test) then
+      ! Run RK integrator for the Lyapunov equation
+      T_RK  = 30.0_wp
+      nstep = 20
+      iref  = 20
+
+      call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref)
+   else
+      print *, 'Skip.'
+      print *, ''
+   end if
+
+   print *, ''
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#    IIb.  Solution using fixed-rank DLRA                               #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
+
+   if (run_fixed_rank_long_integration_time_convergence_test) then
+      ! DLRA with fixed rank
+      Tend = T_RK/nstep*iref
+      rkv = [ 10, 20, 40 ]
+      dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+      dtv = dtv(size(dtv):1:-1) ! reverse vector
+      TOv  = [ 1, 2 ] 
+      nprint = 40
+
+      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint)
+   else
+      print *, 'Skip.'
+      print *, ''
+   end if
+
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#    IIc.  Solution using rank-adaptive DLRA                            #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
+
+   if (run_rank_adaptive_long_integration_time_convergence_test) then
+      ! DLRA with adaptive rank
+      dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+      dtv = dtv(size(dtv):1:-1) ! reverse vector
+      TOv  = [ 1, 2 ]
+      tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
+      nprint = 60
+
+      call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint)
+   else
+      print *, 'Skip.'
+      print *, ''
+   end if
 
    return
 end program demo

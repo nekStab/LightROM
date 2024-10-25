@@ -109,6 +109,25 @@ contains
       CTCWinv_flat(1:N**2)   = reshape(matmul(mat, transpose(matW)), shape(CTCWinv_flat))
       CTQcCWinv_mat(1:N,1:N) =  matmul(mat, matmul(Qc, transpose(matW)))
 
+      print '(A)', ' ----------------------------------------'
+      print '(A)', '    LINEAR GINZBURG LANDAU PARAMETERS'
+      print '(A)', ' ----------------------------------------'
+      print '(4X,A,F10.6," + ",F10.6," i")', 'nu    = ', nu
+      print '(4X,A,F10.6," + ",F10.6," i")', 'gamma = ', gamma
+      print '(4X,A,F10.6)', 'mu_0  = ', mu_0
+      print '(4X,A,F10.6)', 'c_mu  = ', c_mu
+      print '(4X,A,F10.6)', 'mu_2  = ', mu_2
+      print '(4X,A)', '-----------------------'
+      print '(4X,A)', ' Inhomogeneities'
+      print '(4X,A)', '-----------------------'
+      print '(4X,A,I10,A)',   'rk_b  = ', rk_b, '     ! forcing rank'
+      print '(4X,A,F10.6,A)', 'x_b   = ', x_b,  '     ! forcing location'
+      print '(4X,A,F10.6,A)', 's_b   = ', s_b,  '     ! std dev of gaussian distribution'
+      print '(4X,A,I10,A)',   'rk_c  = ', rk_c, '     ! sensor rank'
+      print '(4X,A,F10.6,A)', 'x_c   = ', x_c,  '     ! sensor location'
+      print '(4X,A,F10.6,A)', 's_c   = ', s_c,  '     ! std dev of gaussian distribution'
+      print '(A)', ' ----------------------------------------'
+
       return
    end subroutine initialize_parameters
 

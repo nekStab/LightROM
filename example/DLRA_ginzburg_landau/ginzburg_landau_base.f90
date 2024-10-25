@@ -15,7 +15,7 @@ module Ginzburg_Landau_Base
    implicit none
 
    private :: this_module
-   character*128, parameter :: this_module = 'Ginzburg_Landau_Base'
+   character(len=128), parameter :: this_module = 'Ginzburg_Landau_Base'
    
    public  :: L, nx, dx
    public  :: nu, gamma, mu_0, c_mu, mu_2, mu
