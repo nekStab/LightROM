@@ -65,7 +65,6 @@ contains
       ! Define integration weights
       weight          = dx
       weight_mat      = eye(N)*dx
-      inv_weight_mat  = eye(N)*1/dx
       weight_flat     = dx
 
       ! Construct B & C
@@ -96,18 +95,20 @@ contains
       ! RK lyap & riccati
       Qc   = eye(rk_c)
       Rinv = eye(rk_b)
+
       allocate(mat(N, rk_b), matW(N, rk_b))
       call get_state(mat(:,1:rk_b), B(1:rk_b), 'initialize_parameters')
       matW = matmul(mat, weight_mat(:rk_b,:rk_b)) ! incorporate weights
       BBTW = matmul(mat, transpose(matW))
-      BBTW_flat = reshape(BBTW, [N**2])
       BRinvBTW_mat  = matmul(mat, matmul(Rinv, transpose(matW)))
       deallocate(mat, matW)
+
       allocate(mat(N, rk_c), matW(N, rk_c))
       call get_state(mat(:,1:rk_c), CT(1:rk_c), 'initialize_parameters')
-      matW = matmul(mat, inv_weight_mat(:rk_c,:rk_c)) ! incorporate weights
-      CTCWinv_flat(1:N**2)   = reshape(matmul(mat, transpose(matW)), shape(CTCWinv_flat))
-      CTQcCWinv_mat(1:N,1:N) =  matmul(mat, matmul(Qc, transpose(matW)))
+      matW = matmul(mat, weight_mat(:rk_c,:rk_c)) ! incorporate weights
+      CTCW = matmul(mat, transpose(matW))
+      CTQcCW_mat =  matmul(mat, matmul(Qc, transpose(matW)))
+      deallocate(mat, matW)
 
       print '(A)', ' ----------------------------------------'
       print '(A)', '    LINEAR GINZBURG LANDAU PARAMETERS'
@@ -286,12 +287,10 @@ contains
    !-----      MISC     -----
    !-------------------------
 
-   function CALE(X, Q, adjoint) result(res)
+   function CALE(X, adjoint) result(res)
       
       ! solution
       real(wp)          :: X(N,N)
-      ! inhomogeneity
-      real(wp)          :: Q(N,N)
       ! adjoint
       logical, optional :: adjoint
       ! residual
@@ -305,7 +304,11 @@ contains
       call GL_mat(XAH, transpose(X),  adjoint = adjoint, transpose = .true. )
 
       ! construct Lyapunov equation
-      res = AX + XAH + Q
+      if (adjoint) then
+         res = AX + XAH + CTCW
+      else
+         res = AX + XAH + BBTW
+      end if
 
    end function CALE
 
@@ -321,8 +324,15 @@ contains
       ! residual
       real(wp)          :: res(N,N)
       
+      ! internals
+      real(wp), dimension(N,N) :: AX, XAH
+
+      AX = 0.0_wp; XAH = 0.0_wp
+      call GL_mat(AX,  X,             adjoint = adjoint, transpose = .false.)
+      call GL_mat(XAH, transpose(X),  adjoint = adjoint, transpose = .true. )
+
       ! construct Lyapunov equation
-      res = CALE(X, CTQcCW, adjoint) + matmul(X, matmul(BRinvBTW, X))
+      res = AX + XAH + CTCW + matmul(X, matmul(BRinvBTW, X))
 
    end function CARE
 

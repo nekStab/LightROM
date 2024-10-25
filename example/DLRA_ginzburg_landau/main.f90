@@ -73,6 +73,14 @@ program demo
    !--------------------------------
    ! Define which examples to run:
    !
+   logical, parameter :: adjoint = .true.
+   !
+   ! Adjoint = .true.:      Solve the adjoint Lyapunov equation:  0 = A.T X + X A + C.T @ C @ W
+   !     The solution to this equation is called the observability Gramian Y.
+   !
+   ! Adjoint = .false.:     Solve the direct Lyapunov equation:   0 = A X + X A.T + B @ B.T @ W
+   !     The solution to this equation is called the controllability Gramian X.
+   !
    logical, parameter :: run_fixed_rank_short_integration_time_convergence_test   = .true.
    !
    ! Integrate the same initial condition for a short time with Runge-Kutta and DLRA.
@@ -88,7 +96,7 @@ program demo
    !
    ! As the steady state is approached, the error/residual for Runge-Kutta goes to zero.
    ! Similarly, the test shows the effect of step size, rank and temporal order on the solution
-   ! using DLRA
+   ! using DLRA.
    !
    logical, parameter :: run_rank_adaptive_long_integration_time_convergence_test = .true.
    !
@@ -144,19 +152,28 @@ program demo
    LTI = lti_system()
    call LTI%initialize_lti_system(A, prop, B, CT)
 
-   svals = svdvals(BBTW)
    print *, ''
-   print '(1X,A,*(F16.12,X))', 'SVD(1:3) BBTW:   ', svals(1:3)
+   if (adjoint) then
+      svals = svdvals(CTCW)
+      print '(1X,A,*(F16.12,X))', 'SVD(1:3) CTCW:   ', svals(1:3)
+   else
+      svals = svdvals(BBTW)
+      print '(1X,A,*(F16.12,X))', 'SVD(1:3) BBTW:   ', svals(1:3)
+   end if
 
    print *, ''
    print *, 'Check residual computation with Bartels-Stuart solution:'
-   oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Controllability_Xref_BS_W.npy'
+   if (adjoint) then
+      oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Observability_Yref_BS_W.npy'
+   else
+      oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Controllability_Xref_BS_W.npy'
+   end if
    call load_npy(oname, U_load)
    Xref_BS = U_load
    
    print *, ''
    print '(A,F16.12)', '  |  X_BS  |/N = ', norm2(Xref_BS)/N
-   print '(A,F16.12)', '  | res_BS |/N = ', norm2(CALE(Xref_BS, BBTW, .false.))/N
+   print '(A,F16.12)', '  | res_BS |/N = ', norm2(CALE(Xref_BS, adjoint))/N
    print *, ''
    ! compute svd
    svals = svdvals(Xref_BS)
@@ -175,13 +192,13 @@ program demo
    call reconstruct_solution(X_out, U0, S0)
    print *, ''
    print '(A,F16.12)', '  |  X_0  |/N = ', norm2(X_out)/N
-   print '(A,F16.12)', '  | res_0 |/N = ', norm2(CALE(X_out, BBTW, .false.))/N
+   print '(A,F16.12)', '  | res_0 |/N = ', norm2(CALE(X_out, adjoint))/N
    print *, ''
    ! compute svd
    svals = svdvals(X_out)
    do i = 1, ceiling(rk_X0*1.0_wp/irow)
       is = (i-1)*irow+1; ie = i*irow
-      print '(2X,I2,A,I2,*(F16.12,1X))', is, '-', ie, ( svals(j), j = is, ie )
+      print '(2X,I2,A,I2,*(1X,F16.12))', is, '-', ie, ( svals(j), j = is, ie )
    end do
    
    print *, ''
@@ -198,7 +215,7 @@ program demo
       nstep = 10
       iref  = 5
 
-      call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref)
+      call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
    else
       print *, 'Skip.'
       print *, ''
@@ -221,7 +238,7 @@ program demo
       TOv  = [ 1, 2 ] 
       nprint = 16
 
-      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint)
+      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint)
    else
       print *, 'Skip.'
       print *, ''
@@ -230,7 +247,7 @@ program demo
    print *, ''
    print *, '#########################################################################'
    print *, '#                                                                       #'
-   print *, '#    IIa.  Solution using Runge-Kutta to steady state                   #'
+   print *, '#    IIa.  Solution using Runge-Kutta to (close to) steady state        #'
    print *, '#                                                                       #'
    print *, '#########################################################################'
    print *, ''
@@ -238,11 +255,11 @@ program demo
    if (run_fixed_rank_long_integration_time_convergence_test .or. &
      & run_rank_adaptive_long_integration_time_convergence_test) then
       ! Run RK integrator for the Lyapunov equation
-      T_RK  = 30.0_wp
+      T_RK  = 50.0_wp
       nstep = 20
       iref  = 20
 
-      call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref)
+      call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
    else
       print *, 'Skip.'
       print *, ''
@@ -265,12 +282,13 @@ program demo
       TOv  = [ 1, 2 ] 
       nprint = 40
 
-      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint)
+      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint)
    else
       print *, 'Skip.'
       print *, ''
    end if
 
+   print *, ''
    print *, '#########################################################################'
    print *, '#                                                                       #'
    print *, '#    IIc.  Solution using rank-adaptive DLRA                            #'
@@ -286,7 +304,7 @@ program demo
       tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
       nprint = 60
 
-      call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint)
+      call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint)
    else
       print *, 'Skip.'
       print *, ''

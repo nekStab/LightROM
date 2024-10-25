@@ -17,12 +17,12 @@ module Ginzburg_Landau_Base
    private :: this_module
    character(len=128), parameter :: this_module = 'Ginzburg_Landau_Base'
    
-   public  :: L, nx, dx
+   public  :: L, nx, N, dx
    public  :: nu, gamma, mu_0, c_mu, mu_2, mu
    public  :: rk_b, x_b, s_b, rk_c, x_c, s_c
    public  :: B, CT, weight, weight_mat
-   public  :: N, BBTW_flat, CTCWinv_flat
-   public  :: Qc, Rinv, CTQcCWinv_mat, BRinvBTW_mat
+   public  :: BBTW, CTCW
+   public  :: Qc, Rinv, CTQcCW_mat, BRinvBTW_mat
    
    !-------------------------------
    !-----     PARAMETERS 1    -----
@@ -87,14 +87,11 @@ module Ginzburg_Landau_Base
    ! Data matrices for RK lyap
    integer,  parameter    :: N = 2*nx           ! Number of grid points (excluding boundaries).
    real(wp)               :: weight_mat(N,N)    ! integration weights matrix
-   real(wp)               :: inv_weight_mat(N,N)    ! inverse weights matrix
    real(wp)               :: weight_flat(N**2)    ! integration weights flat
-   real(wp)               :: BBTW_flat(N**2)
-   real(wp)               :: CTCWinv_flat(N**2)
    real(wp)               :: BBTW(N,N)
-   real(wp)               :: CTCWinv(N,N)
+   real(wp)               :: CTCW(N,N)
    ! Data matrices for Riccati
-   real(wp)               :: CTQcCWinv_mat(N,N)
+   real(wp)               :: CTQcCW_mat(N,N)
    real(wp)               :: BRinvBTW_mat(N,N)
 
 contains

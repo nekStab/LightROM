@@ -201,7 +201,7 @@ contains
       ! build ( A.T @ X.T ).T = X @ A
       call GL_mat( XA, transpose(reshape(x_flat, [N,N])), adjoint = .true., transpose = .true.)
       ! construct Lyapunov equation
-      f_flat = reshape(AHX + XA +  CTCWinv, [ N**2 ])
+      f_flat = reshape(AHX + XA +  CTCW, [ N**2 ])
 
       return
    end subroutine adjoint_rhs_lyap
