@@ -48,7 +48,6 @@ program demo
 
    ! LTI system
    type(lti_system)                :: LTI
-   real(wp), allocatable           :: D(:,:)
 
    ! Laplacian
    type(laplace_operator), allocatable :: A
@@ -56,12 +55,11 @@ program demo
    ! LR representation
    type(LR_state)                  :: X
    type(state_vector), allocatable :: U(:)
-   real(wp) , allocatable          :: S(:,:)
+   real(wp),           allocatable :: S(:,:)
    
    ! STATE MATRIX (RKlib)
    type(state_matrix)              :: X_mat_RKlib(2)
-   real(wp), allocatable           :: X_RKlib(:,:,:)
-   real(wp), allocatable           :: X_DLRA(:,:,:)
+   real(wp),           allocatable :: X_RKlib(:,:,:)
    real(wp)                        :: X_RKlib_ref(N,N)
 
    ! Initial condition
@@ -137,7 +135,7 @@ program demo
    print *, '                 Differential Lyapunov equation:'
    print *, '                   \dot{X} = A @ X + X @ A.T + B @ B.T'
    print *, ''
-   write(*,'(13X,A14,I4,"x",I4)') 'Problem size: ', N, N
+   print '(13X,A14,I4,"x",I4)', 'Problem size: ', N, N
    print *, ''
    print *, '            Initial condition: rank(X0) =', rk_X0
    print *, '            Inhomogeneity:     rank(B)  =', rk_B
@@ -188,7 +186,7 @@ program demo
    call solve_lyapunov(Xref, Adata, BBTdata)
    call system_clock(count=clock_stop)      ! Stop Timer
 
-   write(*,'(A40,F10.4," s")') '--> X_ref.    Elapsed time:', real(clock_stop-clock_start)/real(clock_rate)
+   print '(A40,F10.4," s")', '--> X_ref.    Elapsed time:', real(clock_stop-clock_start)/real(clock_rate)
    print *, ''
 
    ! Explicit 2D laplacian
@@ -219,7 +217,7 @@ program demo
    call get_state(U_out(:,:rk_X0), U0(:rk_X0), 'Get initial condition')
    X0 = matmul( U_out(:,:rk_X0), matmul(S0(:rk_X0,:rk_X0), transpose(U_out(:,:rk_X0))))
    call set_state(X_mat_RKlib(1:1), X0, 'Set RK X0')
-   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','| X_RK - X_ref |/N', 'Elapsed time'
+   print '(A10,A26,A26,A20)', 'RKlib:','Tend','| X_RK - X_ref |/N', 'Elapsed time'
    print *, '         ------------------------------------------------------------------------'
    call system_clock(count=clock_start)     ! Start Timer
    ! integrate
@@ -229,7 +227,7 @@ program demo
    ! replace input
    call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,1), 'Reset RK X0')
    call system_clock(count=clock_stop)      ! Stop Timer
-   write(*,'(I10,F26.4,E26.8,F18.4," s")') 1, Tend, &
+   print '(I10,F26.4,E26.8,F18.4," s")', 1, Tend, &
                   & norm2(X_RKlib(:,:,1) - Xref)/N, &
                   & real(clock_stop-clock_start)/real(clock_rate)
 
@@ -264,8 +262,6 @@ program demo
       dtv = logspace(-6.0_wp, -3.0_wp, 4, 10)
       dtv = dtv(size(dtv):1:-1)
 
-      allocate(X_DLRA(N, N, size(dtv)*size(rkv)*2))
-
       irep = 0
       X = LR_state()
       do i = 1, size(rkv)
@@ -288,13 +284,11 @@ program demo
                call get_state(U_out(:,:rk), X%U, 'Reconstruct solution')
                X_out = matmul(U_out(:,:rk), matmul(X%S, transpose(U_out(:,:rk))))
                X0 = CALE(X_out, Adata, BBTdata)
-               write(*,'(A10,I8," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")') 'OUTPUT', &
-                                 & rk, torder, dt, Tend, &
+               print '(A10,I8," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")', &
+                                 & 'OUTPUT', rk, torder, dt, Tend, &
                                  & norm2(X_RKlib_ref - X_out)/N, norm2(X_out - Xref)/N, &
                                  & norm2(X0)/N, real(clock_stop-clock_start)/real(clock_rate)
-               deallocate(X%U)
-               deallocate(X%S)
-               X_DLRA(:,:,irep) = X_out
+               deallocate(X%U, X%S)
             end do
             print *, ''
          end do
@@ -307,7 +301,6 @@ program demo
       svals = svdvals(X_out)
       print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_LR)[1-8]:', svals(:irow)
 
-      deallocate(X_DLRA)
    else
       print *, 'Skip.'
    end if
@@ -332,7 +325,7 @@ program demo
    call get_state(U_out(:,:rk_X0), U0(:rk_X0), 'Get initial conditions')
    X0 = matmul( U_out(:,:rk_X0), matmul(S0(:rk_X0,:rk_X0), transpose(U_out(:,:rk_X0))))
    call set_state(X_mat_RKlib(1:1), X0, 'Set RK X0')
-   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','| X_RK - X_ref |/N', 'Elapsed time'
+   print '(A10,A26,A26,A20)', 'RKlib:','Tend','| X_RK - X_ref |/N', 'Elapsed time'
    print *, '         ------------------------------------------------------------------------'
    do irep = 1, nrep
       call system_clock(count=clock_start)     ! Start Timer
@@ -343,7 +336,7 @@ program demo
       ! replace input
       call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,irep), 'Reset RK X0')
       call system_clock(count=clock_stop)      ! Stop Timer
-      write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tstep, &
+      print '(I10,F26.4,E26.8,F18.4," s")', irep, irep*Tstep, &
                      & norm2(X_RKlib(:,:,irep) - Xref)/N, &
                      & real(clock_stop-clock_start)/real(clock_rate)
    end do
@@ -380,8 +373,6 @@ program demo
       dtv = logspace(-4.0_wp, -1.0_wp, 4, 10)
       dtv = dtv(size(dtv):1:-1)
 
-      allocate(X_DLRA(N, N, 2*size(dtv)*size(rkv)))
-
       irep = 0
       X = LR_state()
       do i = 1, size(rkv)
@@ -404,13 +395,11 @@ program demo
                call get_state(U_out(:,:rk), X%U, 'Reconstruct solution')
                X_out = matmul(U_out(:,:rk), matmul(X%S, transpose(U_out(:,:rk))))
                X0 = CALE(X_out, Adata, BBTdata)
-               write(*,'(A10,I8," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")') 'OUTPUT', &
-                                 & rk, torder, dt, Tend, &
+               print '(A10,I8," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")', &
+                                 & 'OUTPUT', rk, torder, dt, Tend, &
                                  & norm2(X_RKlib_ref - X_out)/N, norm2(X_out - Xref)/N, &
                                  & norm2(X0)/N, real(clock_stop-clock_start)/real(clock_rate)
-               deallocate(X%U)
-               deallocate(X%S)
-               X_DLRA(:,:,irep) = X_out
+               deallocate(X%U, X%S)
             end do
             print *, ''
          end do
@@ -425,7 +414,6 @@ program demo
       print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
       print *, ''
 
-      deallocate(X_DLRA)
    else
       print *, 'Skip.'
       print *, ''
@@ -444,8 +432,6 @@ program demo
       dtv = dtv(size(dtv):1:-1)
       tolv = logspace(-12.0_wp, -4.0_wp, 3, 10)
       tolv = tolv(size(tolv):1:-1)
-
-      allocate(X_DLRA(N, N, 2*size(dtv)*size(tolv)))
 
       irep = 0
       X = LR_state()
@@ -476,13 +462,11 @@ program demo
                call get_state(U_out(:,:rk), X%U(:rk), 'Reconstruct solution')
                X_out = matmul(U_out(:,:rk), matmul(X%S(:rk,:rk), transpose(U_out(:,:rk))))
                X0 = CALE(X_out, Adata, BBTdata)
-               write(*,'(A10,I8," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")') 'OUTPUT', &
-                                    & X%rk, torder, dt, Tend, &
+               print '(A10,I8," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")', &
+                                    & 'OUTPUT', X%rk, torder, dt, Tend, &
                                     & norm2(X_RKlib_ref - X_out)/N, norm2(X_out - Xref)/N, &
                                     & norm2(X0)/N, real(clock_stop-clock_start)/real(clock_rate)
-               deallocate(X%U)
-               deallocate(X%S)
-               X_DLRA(:,:,irep) = X_out
+               deallocate(X%U, X%S)
             end do
             print *, ''
          end do
