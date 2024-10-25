@@ -18,7 +18,7 @@ module LightROM_Utils
    character(len=*), parameter :: this_module = 'LightROM_Utils'
 
    public :: dlra_opts
-   public :: compute_norm
+   public :: compute_norm, compute_increment_norm
    public :: is_converged
    public :: project_onto_common_basis
    public :: Balancing_Transformation
@@ -262,6 +262,50 @@ contains
 
       return
    end subroutine project_onto_common_basis_rdp
+
+   subroutine compute_increment_norm(nrm, U, S, U_lag, S_lag, ifnorm)
+      !! This function computes the norm of the solution increment in a cheap way avoiding the
+      !! construction of the full low-rank solutions.
+      real(wp),                               intent(out)   :: nrm
+      !! Increment norm of current timestep
+      class(abstract_vector_rdp),             intent(in)    :: U(:)
+      !! Low-rank basis of current solution
+      real(wp),                               intent(in)    :: S(:,:)
+      !! Coefficients of current solution
+      class(abstract_vector_rdp),             intent(in)    :: U_lag(:)
+      !! Low-rank basis of lagged solution
+      real(wp),                               intent(in)    :: S_lag(:,:)
+      !! Coefficients of lagged solution
+      logical, optional, intent(in) :: ifnorm
+      logical                       :: ifnorm_
+      !! Normalize solution by vector size?
+
+      ! internals
+      real(wp), dimension(:,:),                 allocatable :: D, V1, V2
+      real(wp), dimension(:),                   allocatable :: svals       
+      integer :: r, rl
+
+      ifnorm_ = optval(ifnorm, .true.)
+
+      r  = size(U)
+      rl = size(U_lag)
+
+      ! compute common basis
+      call project_onto_common_basis_rdp(V1, V2, U_lag, U)
+
+      ! project second low-rank state onto common basis and construct difference
+      allocate(D(r+rl,r+rl)); D = 0.0_wp
+      D(    :rl  ,     :rl  ) = S_lag - matmul(V1, matmul(S, transpose(V1)))
+      D(rl+1:rl+r,     :rl  ) =       - matmul(V2, matmul(S, transpose(V1)))
+      D(    :rl  , rl+1:rl+r) =       - matmul(V1, matmul(S, transpose(V2)))
+      D(rl+1:rl+r, rl+1:rl+r) =       - matmul(V2, matmul(S, transpose(V2)))
+
+      ! compute Frobenius norm of difference
+      nrm = sqrt(sum(svdvals(D))**2)
+      if (ifnorm_) nrm = nrm/U(1)%get_size()
+
+      return
+   end subroutine compute_increment_norm
 
    real(dp) function compute_norm(X, ifnorm) result(nrm)
       !! This function computes the Frobenius norm of a low-rank approximation via an SVD of the (small) coefficient matrix
