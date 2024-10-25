@@ -2,6 +2,7 @@ module LightROM_AbstractLTIsystems
    !> Use the abstract linear operator types defined in LightKrylov.
    use LightKrylov, only : abstract_linop_rdp, abstract_vector_rdp, wp => dp
    implicit none
+   include "dtypes.h"
 
    private
 

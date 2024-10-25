@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 module LightROM_Utils
    ! stdlib
    use stdlib_linalg, only : eye, diag, svd, svdvals, is_symmetric
@@ -622,3 +623,13 @@ contains
    end subroutine random_low_rank_state_rdp
    
 end module LightROM_Utils
+=======
+module lightrom_utils
+  implicit none
+  include "dtypes.h"
+
+  private
+
+contains
+end module lightrom_utils
+>>>>>>> main
