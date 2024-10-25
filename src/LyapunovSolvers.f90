@@ -19,22 +19,16 @@ module LightROM_LyapunovSolvers
    implicit none
 
    ! global scratch arrays
-   !class(abstract_vector_rdp),  allocatable   :: U1(:)
-   !class(abstract_vector_rdp),  allocatable   :: Uwrk(:)
-   !class(abstract_vector_rdp),  allocatable   :: BBTU(:)
-   !real(wp),                    allocatable   :: Swrk(:,:)
+   real(wp),                    allocatable   :: ssvd(:)
+   real(wp),                    allocatable   :: Usvd(:,:), VTsvd(:,:)
 
    ! lagged solution for computation of increment norm
    class(abstract_vector_rdp),  allocatable   :: U_lag(:)
-   real(wp),                    allocatable   :: S_lag(:,:)
-
-   ! svd
-   !real(wp),                    allocatable   :: ssvd(:)
-   !real(wp),                    allocatable   :: Usvd(:,:), VTsvd(:,:)
+   real(wp),                    allocatable   :: S_lag(:,:)   
 
    ! module name
    private :: this_module
-   character*128, parameter :: this_module = 'LightROM_LyapunovSolvers'
+   character(len=128), parameter :: this_module = 'LightROM_LyapunovSolvers'
 
    public :: projector_splitting_DLRA_lyapunov_integrator
    public :: M_forward_map
@@ -173,7 +167,8 @@ module LightROM_LyapunovSolvers
       real(wp)                                               :: err_est             ! current error estimate
       real(wp)                                               :: tol                 ! current tolerance
       logical                                                :: converged
-      character*128                                          :: msg, fmt
+      character(len=128)                                     :: msg, fmt
+      integer                                                :: rkmax
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
 
       ! Optional arguments
@@ -187,7 +182,7 @@ module LightROM_LyapunovSolvers
       end if
 
       ! set tolerance
-      tol     = opts%tol
+      tol = opts%tol
 
       if (present(exptA)) then
          p_exptA => exptA
@@ -199,6 +194,10 @@ module LightROM_LyapunovSolvers
       T                 = 0.0_wp
       rk_reduction_lock = 10
       converged         = .false.
+
+      rkmax = size(X%U)
+      ! Allocate memory for SVD
+      allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
 
       ! Compute number of steps
       nsteps = nint(Tend/tau)
@@ -236,11 +235,13 @@ module LightROM_LyapunovSolvers
 
       dlra : do istep = 1, nsteps
 
+         write(msg,'(A,I0)') 'Step ', istep
+         call logger%log_information(msg, module=this_module, procedure='DLRA')
+
          ! save lag data defore the timestep
          if (mod(istep, chkstep) == 0 .or. istep == nsteps ) then
             ! allocate lag data (we do it here so we do not need to store the data size and can pass the whole array)
-            if (allocated(U_lag)) deallocate(U_lag)
-            if (allocated(S_lag)) deallocate(S_lag)
+            if (allocated(U_lag)) deallocate(U_lag); if (allocated(S_lag)) deallocate(S_lag)
             allocate(U_lag(X%rk), source=X%U(:X%rk)) ! U_lag = X%U
             allocate(S_lag(X%rk, X%rk)); S_lag = X%S(:X%rk, :X%rk)
             write(msg,'(A,I0,A)') 'Step ', istep, ': Solution saved before timestep for increment norm computation.'
@@ -250,7 +251,7 @@ module LightROM_LyapunovSolvers
          ! dynamical low-rank approximation solver
          if (opts%if_rank_adaptive) then
             call rank_adaptive_PS_DLRA_lyapunov_step_rdp(X, A, B, tau, opts%mode, info, rk_reduction_lock, & 
-                                                      & p_exptA, trans, tol)  
+                                                         & p_exptA, trans, tol)  
             if ( opts%use_err_est ) then
                if ( mod(istep, opts%err_est_step) == 0 ) then
                   call compute_splitting_error(err_est, X, A, B, tau, opts%mode, exptA, trans)
@@ -292,10 +293,7 @@ module LightROM_LyapunovSolvers
       enddo dlra
 
       ! Clean up scratch space
-      !if (allocated(Swrk)) deallocate(Swrk)
-      !if (allocated(  U1)) deallocate(  U1)
-      !if (allocated(Uwrk)) deallocate(Uwrk)
-      !if (allocated(BBTU)) deallocate(BBTU)
+      deallocate(Usvd, ssvd, VTsvd)
 
       return
    end subroutine projector_splitting_DLRA_lyapunov_integrator_rdp
@@ -327,7 +325,7 @@ module LightROM_LyapunovSolvers
       
       ! Internal variables
       integer                                               :: istep, nsteps
-      character*128                                         :: msg
+      character(len=128)                                    :: msg
 
       select case (mode)
       case (1)
@@ -378,17 +376,9 @@ module LightROM_LyapunovSolvers
       logical                                               :: accept_step, found
       real(wp),                               allocatable   :: coef(:)
       real(wp)                                              :: norm
-      character*128                                         :: msg
+      character(len=256)                                    :: msg
 
       integer, parameter                                    :: max_step = 5  ! might not be needed
-
-      real(wp),                    allocatable   :: ssvd(:)
-      real(wp),                    allocatable   :: Usvd(:,:), VTsvd(:,:)
-
-      ! Allocate memory for SVD
-      if (.not.allocated( Usvd)) allocate( Usvd(size(X%U),size(X%U)))
-      if (.not.allocated( ssvd)) allocate( ssvd(size(X%U)))
-      if (.not.allocated(VTsvd)) allocate(VTsvd(size(X%U),size(X%U)))
 
       ! ensure that we are integrating one more rank than we use for approximation
       X%rk = X%rk + 1
@@ -415,7 +405,8 @@ module LightROM_LyapunovSolvers
          if (.not. found) then ! none of the singular values is below tolerance
             ! increase rank and run another step
             if (rk == size(X%U)) then ! cannot increase rank without reallocating X%U and X%S
-               write(msg,'(A)') 'Cannot increase rank, rkmax is reached. Increase rkmax and restart!'
+               write(msg,'(A,I0,A,A)') 'Cannot increase rank, rkmax = ', size(X%U), ' is reached. ', &
+                        & 'Increase rkmax and restart!'
                call stop_error(msg, module=this_module, procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
             else
                write(msg,'(A,I0)') 'rk= ', rk + 1
@@ -460,8 +451,15 @@ module LightROM_LyapunovSolvers
          end if ! found
          istep = istep + 1
       end do ! while .not. accept_step
+
+      if (.not. accept_step .and. istep == max_step) then
+         write(msg,'(A,I0,A,2(A,E9.2))') 'Rank increased ', max_step, ' times in a single step without ', &
+               & 'reaching the desired tolerance on the singular values. s_{k+1} = ', ssvd(irk), ' > ', tol
+         call logger%log_warning(msg, module=this_module, procedure='RA-DLRA')
+      end if
+
       write(msg,'(A,I3,A,I2,A,E14.8,A,I2)') 'rk = ', X%rk-1, ':     s_', irk,' = ', &
-                                                   & ssvd(irk), ', rank_lock: ', rk_reduction_lock
+               & ssvd(irk), ', rank_lock: ', rk_reduction_lock
       call logger%log_information(msg, module=this_module, procedure='RA-DLRA')
 
       ! decrease rk_reduction_lock
@@ -472,6 +470,174 @@ module LightROM_LyapunovSolvers
 
       return
    end subroutine rank_adaptive_PS_DLRA_lyapunov_step_rdp
+
+   subroutine M_forward_map_rdp(X, A, tau, info, exptA, iftrans)
+      !! This subroutine computes the solution of the stiff linear part of the 
+      !! differential equation exactly using the matrix exponential.
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_linop_rdp),              intent(inout) :: A
+      !! Linear operator.
+      real(wp),                               intent(in)    :: tau
+      !! Time step.
+      integer,                                intent(out)   :: info
+      !! Information flag
+      procedure(abstract_exptA_rdp)                         :: exptA
+      !! Routine for computation of the exponential pabstract_vector),  ropagator (default: Krylov-based exponential operator).
+      logical, optional,                      intent(in)    :: iftrans
+      logical                                               :: trans
+      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+
+      ! Internal variables
+      class(abstract_vector_rdp),             allocatable   :: exptAU    ! scratch basis
+      real(wp),                               allocatable   :: R(:,:)    ! QR coefficient matrix
+      integer                                               :: i, rk
+      
+      ! Optional argument
+      trans = optval(iftrans, .false.)
+
+      rk = X%rk
+      allocate(R(rk,rk)); R = 0.0_wp
+
+      ! Apply propagator to initial basis
+      allocate(exptAU, source=X%U(1)); call exptAU%zero()
+      do i = 1, rk
+         call exptA(exptAU, A, X%U(i), tau, info, trans)
+         call X%U(i)%axpby(0.0_wp, exptAU, 1.0_wp) ! overwrite old solution
+      end do
+      ! Reorthonormalize in-place
+      call qr(X%U(:rk), R, info)
+      call check_info(info, 'qr', module=this_module, procedure='M_forward_map_rdp')
+   
+      ! Update coefficient matrix
+      X%S(:rk,:rk) = matmul(R, matmul(X%S(:rk,:rk), transpose(R)))
+
+      return
+   end subroutine M_forward_map_rdp
+
+   subroutine G_forward_map_lyapunov_rdp(X, B, tau, info)
+      !! This subroutine computes the solution of the non-stiff part of the 
+      !! differential equation numerically using first-order explicit Euler.
+      !! The update of the full low-rank factorization requires three separate
+      !! steps called K, S, L.
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
+      !! Low-Rank inhomogeneity.
+      real(wp),                               intent(in)    :: tau
+      !! Time step.
+      integer,                                intent(out)   :: info
+      !! Information flag.
+
+      ! Internal variables
+      class(abstract_vector_rdp),  allocatable              :: U1(:)
+      class(abstract_vector_rdp),  allocatable              :: BBTU(:)
+      integer                                               :: rk
+    
+      rk = X%rk
+      allocate(  U1(rk), source=X%U(1)); call zero_basis(U1)
+      allocate(BBTU(rk), source=X%U(1)); call zero_basis(BBTU)
+
+      call K_step_lyapunov(X, U1, BBTU, B, tau, info)
+      call S_step_lyapunov(X, U1, BBTU,    tau, info)
+      call L_step_lyapunov(X, U1,       B, tau, info)
+      
+      ! Copy updated low-rank factors to output
+      call copy_basis(X%U(:rk), U1)
+
+      deallocate(U1, BBTU)
+               
+      return
+   end subroutine G_forward_map_lyapunov_rdp
+
+   subroutine K_step_lyapunov_rdp(X, U1, BBTU, B, tau, info)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_vector_rdp),             intent(out)   :: U1(:)
+      !! Intermediate low-rank factor.
+      class(abstract_vector_rdp),             intent(out)   :: BBTU(:)
+      !! Precomputed application of the inhomogeneity.
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
+      !! Low-Rank inhomogeneity.
+      real(wp),                               intent(in)    :: tau
+      !! Time step.
+      integer,                                intent(out)   :: info
+      !! Information flag.
+
+      ! Internal variables
+      class(abstract_vector_rdp), allocatable :: Uwrk(:)
+      integer                                 :: rk
+
+      rk = X%rk
+      call linear_combination(Uwrk, X%U(:rk), X%S(:rk,:rk))  ! K0
+      call copy_basis(U1, Uwrk)
+      call apply_outerprod(BBTU, B, X%U(:rk))                ! Kdot
+      ! Construct intermediate solution U1
+      call axpby_basis(U1, 1.0_wp, BBTU, tau)                ! K0 + tau*Kdot
+      ! Orthonormalize in-place
+      call qr(U1, X%S(:rk,:rk), info)
+      call check_info(info, 'qr', module=this_module, procedure='K_step_Lyapunov_rdp')
+      
+      deallocate(Uwrk)
+
+      return
+   end subroutine K_step_lyapunov_rdp
+
+   subroutine S_step_lyapunov_rdp(X, U1, BBTU, tau, info)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_vector_rdp),             intent(in)    :: U1(:)
+      !! Intermediate low-rank factor.
+      class(abstract_vector_rdp),             intent(in)    :: BBTU(:)
+      !! Precomputed application of the inhomogeneity.
+      real(wp),                               intent(in)    :: tau
+      !! Time step.
+      integer,                                intent(out)   :: info
+      !! Information flag.
+
+      ! Internal variables
+      integer                                               :: rk
+      real(wp),                               allocatable   :: Swrk(:,:)
+
+      rk = X%rk
+      allocate(Swrk(rk,rk)); Swrk = 0.0_wp
+      call innerprod(Swrk, U1, BBTU)          ! - Sdot
+      ! Construct intermediate coefficient matrix
+      X%S(:rk,:rk) = X%S(:rk,:rk) - tau*Swrk
+      deallocate(Swrk)
+
+      return
+   end subroutine S_step_lyapunov_rdp
+
+   subroutine L_step_lyapunov_rdp(X, U1, B, tau, info)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_vector_rdp),             intent(in)    :: U1(:)
+      !! Intermediate low-rank factor (from K step).
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
+      !! Low-Rank inhomogeneity.
+      real(wp),                               intent(in)    :: tau
+      !! Time step.
+      integer,                                intent(out)   :: info
+      !! Information flag.
+
+      ! Internal variables
+      integer                                               :: rk
+      class(abstract_vector_rdp),             allocatable   :: Uwrk(:)
+
+      rk = X%rk
+      call linear_combination(Uwrk, X%U(:rk), transpose(X%S(:rk,:rk)))  ! L0.T
+      ! Construct derivative
+      call apply_outerprod(X%U(:rk), B, U1)       ! Ldot.T
+      ! Construct solution L1.T
+      call axpby_basis(Uwrk, 1.0_wp, X%U(:rk), tau)
+      ! Update coefficient matrix
+      call innerprod(X%S(:rk,:rk), Uwrk, U1)
+
+      deallocate(Uwrk)
+
+      return
+   end subroutine L_step_lyapunov_rdp
 
    subroutine set_initial_rank(X, A, B, tau, mode, exptA, trans, tol, rk_init, nsteps)
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
@@ -532,12 +698,12 @@ module LightROM_LyapunovSolvers
             end if
          end do tol_chk
          if (.not. found) irk = irk - 1
-         write(msg,'(A,I2,A,E8.2)') '   rk = ', X%rk, ' s_r =', svals(X%rk)
+         write(msg,'(4X,A,I2,A,E8.2)') 'rk = ', X%rk, ' s_r =', svals(X%rk)
          call logger%log_debug(msg, module=this_module, procedure='set_initial_rank')
          if (found) then
             accept_rank = .true.
             X%rk = irk
-            write(msg,'(A,I2,A,E10.4)') '   Accpeted rank: r = ', X%rk-1, ',     s_{r+1} = ', svals(X%rk)
+            write(msg,'(4X,A,I2,A,E10.4)') 'Accpeted rank: r = ', X%rk-1, ',     s_{r+1} = ', svals(X%rk)
             call logger%log_information(msg, module=this_module, procedure='set_initial_rank')
          else
             X%rk = 2*X%rk
@@ -596,9 +762,6 @@ module LightROM_LyapunovSolvers
       real(wp),                                 allocatable :: D(:,:)
       integer                                               :: rx, r, info
 
-      ! svd
-      real(wp), dimension(:),                   allocatable :: ssvd
-
       rx = X%rk
       r  = 2*rx
 
@@ -629,12 +792,9 @@ module LightROM_LyapunovSolvers
       D(rx+1:r ,     :rx) =    - matmul(V2, matmul(X%S(:rx,:rx), transpose(V1)))
       D(    :rx, rx+1:r ) =    - matmul(V1, matmul(X%S(:rx,:rx), transpose(V2)))
       D(rx+1:r , rx+1:r ) =    - matmul(V2, matmul(X%S(:rx,:rx), transpose(V2)))
-      
-      ! svd
-      ssvd = svdvals(D)
 
       ! compute local error based on frobenius norm of difference
-      err_est = 2**mode / (2**mode - 1) * sqrt( sum( ssvd ** 2 ) )
+      err_est = 2**mode / (2**mode - 1) * sqrt( sum( svdvals(D) ** 2 ) )
 
       ! reset curret state
       call copy_basis(X%U(:rx), Utmp)
@@ -642,241 +802,5 @@ module LightROM_LyapunovSolvers
 
       return
    end subroutine compute_splitting_error
-
-   subroutine compute_increment_norm(nrm, U, S, Ulag, Slag, ifnorm)
-      !! This function computes the norm of the solution increment in a cheap way avoiding the
-      !! construction of the full low-rank solutions.
-      real(wp),                               intent(out)   :: nrm
-      !! Increment norm of current timestep
-      class(abstract_vector_rdp),             intent(in)    :: U(:)
-      !! Low-rank basis of current solution
-      real(wp),                               intent(in)    :: S(:,:)
-      !! Coefficients of current solution
-      class(abstract_vector_rdp),             intent(in)    :: Ulag(:)
-      !! Low-rank basis of lagged solution
-      real(wp),                               intent(in)    :: Slag(:,:)
-      !! Coefficients of lagged solution
-      logical, optional, intent(in) :: ifnorm
-      logical                       :: ifnorm_
-      !! Normalize solution by vector size?
-
-      ! internals
-      real(wp), dimension(:,:),                 allocatable :: D, V1, V2
-      real(wp), dimension(:),                   allocatable :: svals       
-      integer :: r, rl
-
-      ifnorm_ = optval(ifnorm, .true.)
-
-      r  = size(U)
-      rl = size(U_lag)
-
-      ! compute common basis
-      call project_onto_common_basis(V1, V2, Ulag, U)
-
-      ! project second low-rank state onto common basis and construct difference
-      allocate(D(r+rl,r+rl)); D = 0.0_wp
-      D(    :rl  ,     :rl  ) = Slag - matmul(V1, matmul(S, transpose(V1)))
-      D(rl+1:rl+r,     :rl  ) =      - matmul(V2, matmul(S, transpose(V1)))
-      D(    :rl  , rl+1:rl+r) =      - matmul(V1, matmul(S, transpose(V2)))
-      D(rl+1:rl+r, rl+1:rl+r) =      - matmul(V2, matmul(S, transpose(V2)))
-
-      ! compute Frobenius norm of difference
-      nrm = sqrt(sum(svdvals(D))**2)
-      if (ifnorm_) nrm = nrm/U(1)%get_size()
-
-      return
-   end subroutine compute_increment_norm
-
-   subroutine M_forward_map_rdp(X, A, tau, info, exptA, iftrans)
-      !! This subroutine computes the solution of the stiff linear part of the 
-      !! differential equation exactly using the matrix exponential.
-      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-      !! Low-Rank factors of the solution.
-      class(abstract_linop_rdp),              intent(inout) :: A
-      !! Linear operator.
-      real(wp),                               intent(in)    :: tau
-      !! Time step.
-      integer,                                intent(out)   :: info
-      !! Information flag
-      procedure(abstract_exptA_rdp)                         :: exptA
-      !! Routine for computation of the exponential pabstract_vector),  ropagator (default: Krylov-based exponential operator).
-      logical, optional,                      intent(in)    :: iftrans
-      logical                                               :: trans
-      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
-
-      ! Internal variables
-      class(abstract_vector_rdp),             allocatable   :: exptAU    ! scratch basis
-      real(wp),                               allocatable   :: R(:,:)    ! QR coefficient matrix
-      integer,                                allocatable   :: perm(:)   ! Permutation vector
-      real(wp),                               allocatable   :: wrk(:,:)
-      integer                                               :: i, rk
-      
-      ! Optional argument
-      trans = optval(iftrans, .false.)
-
-      rk = X%rk
-      allocate(R(rk,rk));   R = 0.0_wp 
-      allocate(perm(rk));     perm = 0
-      allocate(wrk(rk,rk)); wrk = 0.0_wp
-
-      ! Apply propagator to initial basis
-      allocate(exptAU, source=X%U(1)); call exptAU%zero()
-      do i = 1, rk
-         call exptA(exptAU, A, X%U(i), tau, info, trans)
-         call X%U(i)%axpby(0.0_wp, exptAU, 1.0_wp) ! overwrite old solution
-      end do
-      ! Reorthonormalize in-place
-      call qr(X%U(:rk), R, perm, info)
-      call check_info(info, 'qr_pivot', module=this_module, procedure='M_forward_map_rdp')
-
-      ! Update low-rank fcators
-      call apply_inverse_permutation_matrix(R, perm)
-      ! Update coefficient matrix
-      wrk = matmul(X%S(:rk,:rk), transpose(R))
-      X%S(:rk,:rk) = matmul(R, wrk)
-
-      return
-   end subroutine M_forward_map_rdp
-
-   subroutine G_forward_map_lyapunov_rdp(X, B, tau, info)
-      !! This subroutine computes the solution of the non-stiff part of the 
-      !! differential equation numerically using first-order explicit Euler.
-      !! The update of the full low-rank factorization requires three separate
-      !! steps called K, S, L.
-      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-      !! Low-Rank factors of the solution.
-      class(abstract_vector_rdp),             intent(in)    :: B(:)
-      !! Low-Rank inhomogeneity.
-      real(wp),                               intent(in)    :: tau
-      !! Time step.
-      integer,                                intent(out)   :: info
-      !! Information flag.
-
-      ! Internal variables
-      integer                                               :: rk, rkmax
-
-      class(abstract_vector_rdp),  allocatable   :: U1(:)
-      class(abstract_vector_rdp),  allocatable   :: BBTU(:)
-    
-      rk = X%rk
-      rkmax = size(X%U)
-      if (.not. allocated(U1))   allocate(U1(  rkmax), source=X%U(1))
-      if (.not. allocated(BBTU)) allocate(BBTU(rkmax), source=X%U(1))
-      call zero_basis(U1); call zero_basis(BBTU)
-
-      call K_step_lyapunov(X, U1(:rk), BBTU(:rk), B, tau, info)
-      call S_step_lyapunov(X, U1(:rk), BBTU(:rk),    tau, info)
-      call L_step_lyapunov(X, U1(:rk),            B, tau, info)
-      
-      ! Copy updated low-rank factors to output
-      call copy_basis(X%U(:rk), U1(:rk))
-               
-      return
-   end subroutine G_forward_map_lyapunov_rdp
-
-   subroutine K_step_lyapunov_rdp(X, U1, BBTU, B, tau, info)
-      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-      !! Low-Rank factors of the solution.
-      class(abstract_vector_rdp),             intent(out)   :: U1(:)
-      !! Intermediate low-rank factor.
-      class(abstract_vector_rdp),             intent(out)   :: BBTU(:)
-      !! Precomputed application of the inhomogeneity.
-      class(abstract_vector_rdp),             intent(in)    :: B(:)
-      !! Low-Rank inhomogeneity.
-      real(wp),                               intent(in)    :: tau
-      !! Time step.
-      integer,                                intent(out)   :: info
-      !! Information flag.
-
-      ! Internal variables
-      integer,                                allocatable   :: perm(:)   ! Permutation vector
-      integer                                               :: rk, rkmax
-      real(wp),                    allocatable   :: Swrk(:,:)
-
-      info = 0
-
-      rk = X%rk
-      rkmax = size(X%U)
-      if (.not. allocated(Swrk)) allocate(Swrk(rkmax,rkmax)); Swrk = 0.0_wp
-      allocate(perm(rk)); perm = 0
-      block
-         class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, X%U(:rk), X%S(:rk,:rk))             ! K0
-         call copy_basis(U1, Xwrk)
-      end block
-      call apply_outerprod(BBTU, B, X%U(:rk))   ! Kdot
-      ! Construct intermediate solution U1
-      call axpby_basis(U1, 1.0_wp, BBTU(:rk), tau)   ! K0 + tau*Kdot
-      ! Orthonormalize in-place
-      call qr(U1(:rk), Swrk(:rk,:rk), perm, info)
-      call check_info(info, 'qr_pivot', module=this_module, procedure='K_step_Lyapunov_rdp')
-      call apply_inverse_permutation_matrix(Swrk(:rk,:rk), perm)
-      X%S(:rk,:rk) = Swrk(:rk,:rk)
-
-      return
-   end subroutine K_step_lyapunov_rdp
-
-   subroutine S_step_lyapunov_rdp(X, U1, BBTU, tau, info)
-      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-      !! Low-Rank factors of the solution.
-      class(abstract_vector_rdp),             intent(in)    :: U1(:)
-      !! Intermediate low-rank factor.
-      class(abstract_vector_rdp),             intent(in)    :: BBTU(:)
-      !! Precomputed application of the inhomogeneity.
-      real(wp),                               intent(in)    :: tau
-      !! Time step.
-      integer,                                intent(out)   :: info
-      !! Information flag.
-
-      ! Internal variables
-      integer                                               :: rk, rkmax
-      real(wp),                    allocatable   :: Swrk(:,:)
-
-      info = 0
-
-      rk = X%rk
-      rkmax = size(X%U)
-      if (.not. allocated(Swrk)) allocate(Swrk(rkmax,rkmax)); Swrk = 0.0_wp
-      call innerprod(Swrk(:rk,:rk), U1, BBTU)          ! - Sdot
-      ! Construct intermediate coefficient matrix
-      X%S(:rk,:rk) = X%S(:rk,:rk) - tau*Swrk(:rk,:rk)
-
-      return
-   end subroutine S_step_lyapunov_rdp
-
-   subroutine L_step_lyapunov_rdp(X, U1, B, tau, info)
-      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-      !! Low-Rank factors of the solution.
-      class(abstract_vector_rdp),             intent(in)    :: U1(:)
-      !! Intermediate low-rank factor (from K step).
-      class(abstract_vector_rdp),             intent(in)    :: B(:)
-      !! Low-Rank inhomogeneity.
-      real(wp),                               intent(in)    :: tau
-      !! Time step.
-      integer,                                intent(out)   :: info
-      !! Information flag.
-
-      ! Internal variables
-      integer                                               :: rk, rkmax
-      class(abstract_vector_rdp),  allocatable   :: Uwrk(:)
-
-      info = 0
-
-      rk = X%rk
-      if (.not. allocated(Uwrk)) allocate(Uwrk(rkmax), source=X%U(1)); call zero_basis(Uwrk)
-
-      block
-         class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, X%U(:rk), transpose(X%S(:rk,:rk)))  ! L0.T
-         call copy_basis(Uwrk(:rk), Xwrk)
-      end block
-      call apply_outerprod(X%U(:rk), B, U1)       ! Ldot.T
-      ! Construct solution L1.T
-      call axpby_basis(Uwrk(:rk), 1.0_wp, X%U(:rk), tau)
-      ! Update coefficient matrix
-      call innerprod(X%S(:rk,:rk), Uwrk(:rk), U1)
-
-      return
-   end subroutine L_step_lyapunov_rdp
 
 end module LightROM_LyapunovSolvers
