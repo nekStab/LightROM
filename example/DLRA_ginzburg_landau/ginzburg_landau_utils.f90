@@ -53,20 +53,21 @@ contains
       ! Mesh array.
       real(wp), allocatable :: x(:)
       real(wp)              :: x2(1:2*nx)
-      real(wp)              :: tmpv(N, 2)
+      real(wp), allocatable :: mat(:,:), matW(:,:)
       integer               :: i
 
       ! Construct mesh.
       x = linspace(-L/2, L/2, nx+2)
       dx = x(2)-x(1)
-
+      
       ! Construct mu(x)
       mu(:) = (mu_0 - c_mu**2) + (mu_2 / 2.0_wp) * x(2:nx+1)**2
 
       ! Define integration weights
-      weight     = dx
-      weight_mat = eye(N)*dx
-      weight_flat= dx
+      weight          = dx
+      weight_mat      = eye(N)*dx
+      inv_weight_mat  = eye(N)*1/dx
+      weight_flat     = dx
 
       ! Construct B & C
       ! B = [ [ Br, -Bi ], [ Bi, Br ] ]
@@ -96,13 +97,18 @@ contains
       ! RK lyap & riccati
       Qc   = eye(rk_c)
       Rinv = eye(rk_b)
-      tmpv = 0.0_wp
-      call get_state(tmpv(:,1:rk_b), B(1:rk_b))
-      BBTW_flat(1:N**2)      = reshape(matmul(tmpv, dx*transpose(tmpv)), shape(BBTW_flat))
-      BRinvBTW_mat(1:N,1:N)  = matmul(matmul(tmpv, dx*Rinv), transpose(tmpv))
-      call get_state(tmpv(:,1:rk_c), CT(1:rk_c))
-      CTCWinv_flat(1:N**2)   = reshape(matmul(tmpv, 1.0/dx*transpose(tmpv)), shape(CTCWinv_flat))
-      CTQcCWinv_mat(1:N,1:N) = matmul(matmul(tmpv, 1.0/dx*Qc), transpose(tmpv))
+      allocate(mat(N, rk_b), matW(N, rk_b))
+      call get_state(mat(:,1:rk_b), B(1:rk_b))
+      matW = matmul(mat, weight_mat(:rk_b,:rk_b)) ! incorporate weights
+      BBTW = matmul(mat, transpose(matW))
+      BBTW_flat = reshape(BBTW, [N**2])
+      BRinvBTW_mat  = matmul(mat, matmul(Rinv, transpose(matW)))
+      deallocate(mat, matW)
+      allocate(mat(N, rk_c), matW(N, rk_c))
+      call get_state(mat(:,1:rk_c), CT(1:rk_c))
+      matW = matmul(mat, inv_weight_mat(:rk_c,:rk_c)) ! incorporate weights
+      CTCWinv_flat(1:N**2)   = reshape(matmul(mat, transpose(matW)), shape(CTCWinv_flat))
+      CTQcCWinv_mat(1:N,1:N) =  matmul(mat, matmul(Qc, transpose(matW)))
 
       return
    end subroutine initialize_parameters
@@ -121,13 +127,13 @@ contains
       select type (state_in)
       type is (state_vector)
          kdim = size(state_in)
-         call assert_shape(mat_out, (/ N, kdim /), 'mat_out', this_module, 'get_state -> state_vector')
+         call assert_shape(mat_out, [ N, kdim ], 'mat_out', this_module, 'get_state -> state_vector')
          do k = 1, kdim
             mat_out(:,k) = state_in(k)%state
          end do
       type is (state_matrix)
-         call assert_shape(mat_out, (/ N, N /), 'mat_out', this_module, 'get_state -> state_matrix')
-         mat_out = reshape(state_in(1)%state, (/ N, N /))
+         call assert_shape(mat_out, [ N, N ], 'mat_out', this_module, 'get_state -> state_matrix')
+         mat_out = reshape(state_in(1)%state, [ N, N ])
       end select
       return
    end subroutine get_state
@@ -141,13 +147,13 @@ contains
       select type (state_out)
       type is (state_vector)
          kdim = size(state_out)
-         call assert_shape(mat_in, (/ N, kdim /), 'mat_in', this_module, 'set_state -> state_vector')
+         call assert_shape(mat_in, [ N, kdim ], 'mat_in', this_module, 'set_state -> state_vector')
          call zero_basis(state_out)
          do k = 1, kdim
             state_out(k)%state = mat_in(:,k)
          end do
       type is (state_matrix)
-         call assert_shape(mat_in, (/ N, N /), 'mat_in', this_module, 'set_state -> state_matrix')
+         call assert_shape(mat_in, [ N, N ], 'mat_in', this_module, 'set_state -> state_matrix')
          call zero_basis(state_out)
          state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
       end select
@@ -184,7 +190,7 @@ contains
       ! internals
       real(wp) :: wrk(N, LR_X%rk)
 
-      call assert_shape(X, (/ N, N /), 'X', this_module, 'reconstruct_solution')
+      call assert_shape(X, [ N, N ], 'X', this_module, 'reconstruct_solution')
 
       call get_state(wrk, LR_X%U(1:LR_X%rk))
       X = matmul(matmul(wrk, matmul(LR_X%S(1:LR_X%rk,1:LR_X%rk), transpose(wrk))), weight_mat)
@@ -219,7 +225,7 @@ contains
             call U(i)%rand(.false.)
          end do
       end if
-      call assert_shape(S, (/ rk,rk /), 'S', this_module, 'generate_random_initial_condition')
+      call assert_shape(S, [ rk,rk ], 'S', this_module, 'generate_random_initial_condition')
       S = 0.0_wp
       
       ! perform QR
@@ -285,62 +291,66 @@ contains
    !-----      MISC     -----
    !-------------------------
 
-   subroutine CALE(res_flat, x_flat, Q_flat, adjoint)
-      ! residual
-      real(wp),                 intent(out) :: res_flat(:)
+   function CALE(X, Q, adjoint) result(res)
+      
       ! solution
-      real(wp),                 intent(in)  :: x_flat(:)
+      real(wp)          :: X(N,N)
       ! inhomogeneity
-      real(wp),                 intent(in)  :: Q_flat(:)
-      !> Adjoint
+      real(wp)          :: Q(N,N)
+      ! adjoint
       logical, optional :: adjoint
       logical           :: adj
+      ! residual
+      real(wp)          :: res(N,N)
 
       ! internals
-      real(wp),   dimension(N**2) :: x_tmp, AX_flat, XAH_flat
+      real(wp), dimension(N**2) :: AX_flat, XAH_flat
 
       !> Deal with optional argument
       adj  = optval(adjoint,.false.)
 
-      res_flat = 0.0_wp; AX_flat = 0.0_wp; XAH_flat = 0.0_wp; x_tmp = 0.0_wp
-      call GL_mat( AX_flat, x_flat, adjoint = adj, transpose = .false.)
-      x_tmp    = reshape(transpose(reshape(x_flat,   (/ N,N /))), shape(x_flat))
-      call GL_mat(XAH_flat, x_tmp,  adjoint = adj, transpose = .true. )
+      AX_flat = 0.0_wp; XAH_flat = 0.0_wp
+      call GL_mat(AX_flat,  flat(X),             adjoint = adj, transpose = .false.)
+      call GL_mat(XAH_flat, flat(transpose(X)),  adjoint = adj, transpose = .true. )
+
       ! construct Lyapunov equation
-      res_flat = AX_flat + XAH_flat + Q_flat
+      res = reshape(AX_flat, [N,N]) + reshape(XAH_flat, [N,N]) + Q
 
-   end subroutine CALE
+   end function CALE
 
-   subroutine CARE(res_flat, x_flat, CTQcC_flat, BRinvBT_mat, adjoint)
-      ! residual
-      real(wp),                 intent(out) :: res_flat(:)
+   function CARE(X, CTQcCW, BRinvBTW, adjoint) result(res)
       ! solution
-      real(wp),                 intent(in)  :: x_flat(:)
+      real(wp)          :: X(N,N)
       ! inhomogeneity
-      real(wp),                 intent(in)  :: CTQcC_flat(:)
+      real(wp)          :: CTQcCW(N,N)
       ! inhomogeneity
-      real(wp),                 intent(in)  :: BRinvBT_mat(:,:)
-      !> Adjoint
+      real(wp)          :: BRinvBTW(N,N)
+      ! adjoint
       logical, optional :: adjoint
       logical           :: adj
+      ! residual
+      real(wp)          :: res(N,N)
 
       ! internals
-      real(wp),   dimension(N**2) :: x_tmp, AX_flat, XAH_flat, NL_flat
-      real(wp),   dimension(N,N)  :: x_mat
+      real(wp), dimension(N**2) :: AX_flat, XAH_flat
 
       !> Deal with optional argument
       adj  = optval(adjoint,.false.)
 
-      res_flat = 0.0_wp; AX_flat = 0.0_wp; XAH_flat = 0.0_wp; x_tmp = 0.0_wp
-      call GL_mat( AX_flat, x_flat, adjoint = adj, transpose = .false.)
-      x_mat = reshape(x_flat, (/ N,N /))
-      x_tmp = reshape(transpose(x_mat), shape(x_flat))
-      call GL_mat(XAH_flat, x_tmp,  adjoint = adj, transpose = .true. )
-      NL_flat = reshape(matmul(x_mat, matmul(BRinvBTW_mat, x_mat)), shape(NL_flat))
+      AX_flat = 0.0_wp; XAH_flat = 0.0_wp
+      call GL_mat(AX_flat,  flat(X),             adjoint = adj, transpose = .false.)
+      call GL_mat(XAH_flat, flat(transpose(X)),  adjoint = adj, transpose = .true. )
+      
       ! construct Lyapunov equation
-      res_flat = AX_flat + XAH_flat + CTQcC_flat + NL_flat
+      res = reshape(AX_flat, [N,N]) + reshape(XAH_flat, [N,N]) + CTQcCW + matmul(X, matmul(BRinvBTW, X))
 
-   end subroutine CARE
+   end function CARE
+
+   function flat(X) result(X_flat)
+      real(wp) :: X(N,N)
+      real(wp) :: X_flat(N**2)
+      X_flat = reshape(X, [ N**2 ] )
+   end function flat
 
    subroutine load_data(filename, U_load)
       character(len=*),      intent(in)  :: filename
@@ -356,7 +366,7 @@ contains
       else
          call stop_error('Cannot find file '//trim(filename), module=this_module, procedure='load_data')
       end if
-      call logger%log_information('Loaded data from '//trim(filename), module=this_module, procedure='load_data')
+      call logger%log_message('Loaded data from '//trim(filename), module=this_module, procedure='load_data')
       return
    end subroutine load_data
 
@@ -368,7 +378,7 @@ contains
 
       call save_npy(trim(filename), data, iostatus)
       if (iostatus /= 0) call stop_error('Error saving file '//trim(filename), module=this_module, procedure='save_data')
-      call logger%log_information('Data saved to '//trim(filename), module=this_module, procedure='save_data')
+      call logger%log_message('Data saved to '//trim(filename), module=this_module, procedure='save_data')
       return
    end subroutine save_data
 

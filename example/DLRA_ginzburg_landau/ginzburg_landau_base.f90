@@ -86,9 +86,12 @@ module Ginzburg_Landau_Base
    ! Data matrices for RK lyap
    integer,  parameter    :: N = 2*nx           ! Number of grid points (excluding boundaries).
    real(wp)               :: weight_mat(N,N)    ! integration weights matrix
+   real(wp)               :: inv_weight_mat(N,N)    ! inverse weights matrix
    real(wp)               :: weight_flat(N**2)    ! integration weights flat
    real(wp)               :: BBTW_flat(N**2)
    real(wp)               :: CTCWinv_flat(N**2)
+   real(wp)               :: BBTW(N,N)
+   real(wp)               :: CTCWinv(N,N)
    ! Data matrices for Riccati
    real(wp)               :: CTQcCWinv_mat(N,N)
    real(wp)               :: BRinvBTW_mat(N,N)
@@ -181,7 +184,7 @@ contains
 
       ! internals
       class(abstract_vector_rdp), allocatable   :: Utmp(:)
-      real(wp), allocatable :: R(:, :), IP(:,:)
+      real(wp), allocatable :: R(:, :)
       integer :: i, m, rka, info
       character(len=128) :: msg
 
@@ -201,10 +204,9 @@ contains
             if (ifrk) then
                if (rkmax==rk) then
                   call stop_error('rkmax must be larger than rk for rank-adaptive DLRA!', this_module, 'initialize_LR_state')
-               end if 
-               self%rk = self%rk - 1
-            else
-               rka = rk
+               end if
+               write(msg,'(A,I0,A)') 'Rank-adaptivity enabled. Computation will begin with X%rk = ', self%rk+1, '.'
+               call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
             end if
          else
             self%rk = rk
@@ -218,34 +220,34 @@ contains
          ! allocate & initialize
          allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
          allocate(self%S(rka,rka)); self%S = 0.0_wp
-         write(msg,'(3(A,I0),A)') 'size(X%U) = [ ',rka,' ], X%rk = ', self%rk, ', size(U0) = [ ',m,' ]'
+         write(msg,'(3(A,I0),A)') 'size(X%U) = [ ', rka,' ], X%rk = ', self%rk, ', size(U0) = [ ', m,' ]'
          call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          ! copy inputs
          if (self%rk > m) then   ! copy the full IC into self%U
             call copy_basis(self%U(:m), U)
             self%S(:m,:m) = S
-            write(msg,'(A,I0,A)') '      Transfer the first ', self%rk, ' columns of U0 to X%U.'
+            write(msg,'(4X,A,I0,A)') 'Transfer the first ', m, ' columns of U0 to X%U.'
             call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
             call copy_basis(self%U(:self%rk), U(:self%rk))
             self%S(:self%rk,:self%rk) = S(:self%rk,:self%rk)
-            write(msg,'(A,I0,A)') '      Transfer all columns of U0 to X%U.'
+            write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
             call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          end if
          ! top up basis (to rka for rank-adaptivity) with orthonormal columns if needed
          if (rka > m) then
+            write(msg,'(4X,A,I0,A)') 'Fill remaining ', rka-m, ' columns with orthonormal noise orthonormal to U0.'
+            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
             allocate(Utmp(rka-m), source=U(1))
             do i = 1, rka-m
                call Utmp(i)%rand()
             end do
             allocate(R(rka-m,rka-m)); R = 0.0_wp
-            call qr(Utmp, R, info)
-            call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
             call orthogonalize_against_basis(Utmp, self%U, info)
             call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='initialize_LR_state')
+            call qr(Utmp, R, info)
+            call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
             call copy_basis(self%U(m+1:), Utmp)
-            write(msg,'(A,I0,A)') '      Fill remaining columns with orthonormal noise orthonormal to U0.'
-            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          end if
       end select
       return
