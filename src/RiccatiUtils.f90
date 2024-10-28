@@ -49,7 +49,7 @@ contains
       block
          class(abstract_vector_rdp), allocatable :: xwrk
          call linear_combination(xwrk, B, matmul(W, wrk))
-         call z%zero(); call z%add(xwrk)
+         call copy(z, xwrk)
       end block
 
       return   
@@ -71,7 +71,7 @@ contains
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, B, matmul(W, wrk))
-         call copy_basis(Z, Xwrk)
+         call copy(Z, Xwrk)
       end block
    
       return   
@@ -139,7 +139,7 @@ contains
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, K, wrk)                  ! K @ (U.T @ B @ R^(-1) @ B.T @ K)
-         call copy_basis(N, Xwrk)
+         call copy(N, Xwrk)
       end block
 
       return

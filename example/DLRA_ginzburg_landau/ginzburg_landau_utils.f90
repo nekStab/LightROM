@@ -276,7 +276,7 @@ contains
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, Utmp, U_svd)
-         call copy_basis(U, Xwrk)
+         call copy(U, Xwrk)
       end block
       write(msg,'(A,I0,A,I0,A)') 'size(U) = [ ', size(U),' ]: filling the first ', rk, ' columns with noise.'
       call logger%log_information(msg, module=this_module, procedure='generate_random_initial_condition')

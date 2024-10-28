@@ -222,12 +222,12 @@ contains
          call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          ! copy inputs
          if (self%rk > m) then   ! copy the full IC into self%U
-            call copy_basis(self%U(:m), U)
+            call copy(self%U(:m), U)
             self%S(:m,:m) = S
             write(msg,'(4X,A,I0,A)') 'Transfer the first ', m, ' columns of U0 to X%U.'
             call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
-            call copy_basis(self%U(:self%rk), U(:self%rk))
+            call copy(self%U(:self%rk), U(:self%rk))
             self%S(:self%rk,:self%rk) = S(:self%rk,:self%rk)
             write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
             call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
@@ -245,7 +245,7 @@ contains
             call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='initialize_LR_state')
             call qr(Utmp, R, info)
             call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
-            call copy_basis(self%U(m+1:), Utmp)
+            call copy(self%U(m+1:), Utmp)
          end if
       end select
       return

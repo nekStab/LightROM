@@ -147,9 +147,9 @@ contains
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, Yo(1:rkmin), matmul(W(1:rkmin,1:rkmin), diag(Sigma)))
-         call copy_basis(T(1:rkmin), Xwrk)
+         call copy(T(1:rkmin), Xwrk)
          call linear_combination(Xwrk, Xc(1:rkmin), matmul(V(1:rkmin,1:rkmin), diag(Sigma)))
-         call copy_basis(Tinv(1:rkmin), Xwrk)
+         call copy(Tinv(1:rkmin), Xwrk)
       end block
          
       return

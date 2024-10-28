@@ -461,7 +461,7 @@ module LightROM_LyapunovSolvers
                block
                   class(abstract_vector_rdp), allocatable :: Xwrk(:)
                   call linear_combination(Xwrk, X%U(:rk), Usvd(:rk,:rk))
-                  call copy_basis(X%U(:rk), Xwrk)
+                  call copy(X%U(:rk), Xwrk)
                end block
                X%S(:rk,:rk) = diag(ssvd(:rk))
 
@@ -526,7 +526,7 @@ module LightROM_LyapunovSolvers
       allocate(exptAU, source=X%U(1)); call exptAU%zero()
       do i = 1, rk
          call exptA(exptAU, A, X%U(i), tau, info, trans)
-         call X%U(i)%axpby(0.0_wp, exptAU, 1.0_wp) ! overwrite old solution
+         call copy(X%U(i), exptAU) ! overwrite old solution
       end do
       ! Reorthonormalize in-place
       call qr(X%U(:rk), R, info)
@@ -566,7 +566,7 @@ module LightROM_LyapunovSolvers
       call L_step_lyapunov(X, U1,       B, tau, info)
       
       ! Copy updated low-rank factors to output
-      call copy_basis(X%U(:rk), U1)
+      call copy(X%U(:rk), U1)
 
       deallocate(U1, BBTU)
                
@@ -593,7 +593,7 @@ module LightROM_LyapunovSolvers
 
       rk = X%rk
       call linear_combination(Uwrk, X%U(:rk), X%S(:rk,:rk))  ! K0
-      call copy_basis(U1, Uwrk)
+      call copy(U1, Uwrk)
       call apply_outerprod(BBTU, B, X%U(:rk))                ! Kdot
       ! Construct intermediate solution U1
       call axpby_basis(U1, 1.0_wp, BBTU, tau)                ! K0 + tau*Kdot
@@ -733,7 +733,7 @@ module LightROM_LyapunovSolvers
          end if
          
          ! reset initial conditions
-         call copy_basis(X%U, Utmp)
+         call copy(X%U, Utmp)
          X%S = Stmp
       end do
 
@@ -799,7 +799,7 @@ module LightROM_LyapunovSolvers
       allocate(S1(rx,rx)); S1 = X%S(:rx,:rx)
 
       ! reset curret state
-      call copy_basis(X%U(:rx), Utmp)
+      call copy(X%U(:rx), Utmp)
       X%S(:rx,:rx) = Stmp
 
       ! tau/2 steps
@@ -820,7 +820,7 @@ module LightROM_LyapunovSolvers
       err_est = 2**mode / (2**mode - 1) * sqrt( sum( svdvals(D) ** 2 ) )
 
       ! reset curret state
-      call copy_basis(X%U(:rx), Utmp)
+      call copy(X%U(:rx), Utmp)
       X%S(:rx,:rx) = Stmp
 
       return
