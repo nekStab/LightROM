@@ -52,8 +52,11 @@ module LightROM_AbstractLTIsystems
    type, abstract, public :: abstract_low_rank_representation
    end type abstract_low_rank_representation
 
+   type, extends(abstract_low_rank_representation), abstract, public :: abstract_low_rank_representation_rdp
+   end type abstract_low_rank_representation_rdp
+
    !> Abstract symmetric low-rank representation.
-   type, extends(abstract_low_rank_representation), abstract, public :: abstract_sym_low_rank_state_rdp
+   type, extends(abstract_low_rank_representation_rdp), abstract, public :: abstract_sym_low_rank_state_rdp
       !> Low-Rank basis.
       class(abstract_vector_rdp), allocatable :: U(:)
       !> Coefficients

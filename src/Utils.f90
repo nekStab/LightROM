@@ -17,7 +17,7 @@ module LightROM_Utils
    private :: this_module
    character(len=*), parameter :: this_module = 'LightROM_Utils'
 
-   public :: dlra_opts
+   public :: dlra_opts, abstract_outpost_rdp
    public :: compute_norm, compute_increment_norm
    public :: is_converged
    public :: project_onto_common_basis
@@ -47,16 +47,30 @@ module LightROM_Utils
       integer :: mode = 1
       !! Time integration mode. Only 1st order (Lie splitting - mode 1) and 
       !! 2nd order (Strang splitting - mode 2) are implemented. (default: 1)
+      !
+      ! CONVERGENCE CHECK
+      !
       integer :: chkstep = 10
       !! Time step interval at which convergence is checked and runtime information is printed (default: 10)
       real(wp) :: chktime = 1.0_wp
       !! Simulation time interval at which convergence is checked and runtime information is printed (default: 1.0)
       logical :: chkctrl_time = .true.
-      !! IO control: use time instead of timestep control (default: .true.)
+      !! Use time instead of timestep control (default: .true.)
       real(wp) :: inc_tol = 1e-6_wp
       !! Tolerance on the increment norm for convergence (default: 1e-6)
       logical :: relative_norm = .true.
       !! Tolerance control: Check convergence for dX/X (true) or dX (false)? (default: .true.)
+      !
+      ! OUTPUT CALLBACK
+      !
+      logical :: ifIO = .false.
+      !! Oupost during simulation (default = .false.). The final result is always returned.
+      integer :: iostep = 100
+      !! Time step interval at which to outpost
+      real(wp) :: iotime = 1.0_wp
+      !! Simulation time interval at which convergence is checked and runtime information is printed (default: 1.0)
+      logical :: ioctrl_time = .true.
+      !! IO control: use time instead of timestep control (default: .true.)
       !
       ! RANK-ADPATIVE SPECIFICS
       !
@@ -69,6 +83,15 @@ module LightROM_Utils
       integer :: err_est_step = 10
       !! Time step interval for recomputing the splitting error estimate (only of use_err_est = .true.)
    end type
+
+   abstract interface
+      subroutine abstract_outpost_rdp(X, info)
+         import abstract_low_rank_representation_rdp
+         !! Abstract interface to define the matrix exponential-vector product.
+         class(abstract_low_rank_representation_rdp), intent(in)  :: X
+         integer,                                     intent(out) :: info
+      end subroutine abstract_outpost_rdp
+   end interface
 
 contains
 
@@ -352,37 +375,66 @@ contains
 
    end function is_converged
 
-   integer function get_chkstep(opts, tau) result(chkstep)
-   
+   subroutine get_step(chkstep, iostep, opts, tau)
+      integer,         intent(out)   :: chkstep 
+      integer,         intent(out)   :: iostep 
       type(dlra_opts), intent(inout) :: opts
       real(wp),        intent(in)    :: tau
 
       ! internal
       character(len=128) :: msg
       type(dlra_opts) :: opts_default
-
       opts_default = dlra_opts()
-   
+      !
+      ! CONVERGENCE CHECK
+      !
       if (opts%chkctrl_time) then
          if (opts%chktime <= 0.0_wp) then
             opts%chktime = opts_default%chktime
             write(msg,'(A,E12.5,A)') 'Invalid chktime. Reset to default (',  opts%chktime,')'
-            call logger%log_warning(msg, module=this_module, procedure='DLRA')
+            call logger%log_warning(msg, module=this_module, procedure='DLRA_get_step')
          end if
          chkstep = max(1, NINT(opts%chktime/tau))
-         write(msg,'(A,E12.5,A,I0,A)') 'Output every ', opts%chktime, ' time units (', chkstep, ' steps)'
-         call logger%log_information(msg, module=this_module, procedure='DLRA')
+         write(msg,'(A,E12.5,A,I0,A)') 'Convergence check every ', opts%chktime, ' time units (', chkstep, ' steps)'
+         call logger%log_information(msg, module=this_module, procedure='DLRA_get_step')
       else
          if (opts%chkstep <= 0) then
             opts%chkstep = opts_default%chkstep
             write(msg,'(A,I0,A)') "Invalid chktime. Reset to default (",  opts%chkstep,")"
-            call logger%log_warning(msg, module=this_module, procedure='DLRA')
+            call logger%log_warning(msg, module=this_module, procedure='DLRA_get_step')
          end if
          chkstep = opts%chkstep
-         write(msg,'(A,I0,A)') 'Output every ', chkstep, ' steps (based on steps).'
-         call logger%log_information(msg, module=this_module, procedure='DLRA')
+         write(msg,'(A,I0,A)') 'Convergence check every ', chkstep, ' steps (based on steps).'
+         call logger%log_information(msg, module=this_module, procedure='DLRA_get_step')
       end if
-
-   end function get_chkstep
+      !
+      ! OUTPUT CALLBACK
+      !
+      if (opts%ifIO) then ! callback activated
+         if (opts%ioctrl_time) then
+            if (opts%iotime <= 0.0_wp) then
+               opts%iotime = opts_default%iotime
+               write(msg,'(A,E12.5,A)') 'Invalid iotime. Reset to default (',  opts%iotime,')'
+               call logger%log_warning(msg, module=this_module, procedure='DLRA_get_step')
+            end if
+            iostep = max(1, NINT(opts%iotime/tau))
+            write(msg,'(A,E12.5,A,I0,A)') 'Output every ', opts%iotime, ' time units (', iostep, ' steps)'
+            call logger%log_information(msg, module=this_module, procedure='DLRA_get_step')
+         else
+            if (opts%iostep <= 0) then
+               opts%iostep = opts_default%iostep
+               write(msg,'(A,I0,A)') "Invalid iotime. Reset to default (",  opts%iostep,")"
+               call logger%log_warning(msg, module=this_module, procedure='DLRA_get_step')
+            end if
+            iostep = opts%iostep
+            write(msg,'(A,I0,A)') 'Output every ', iostep, ' steps (based on steps).'
+            call logger%log_information(msg, module=this_module, procedure='DLRA_get_step')
+         end if
+      else
+         iostep = 0
+         call logger%log_information('No runtime output.', module=this_module, procedure='DLRA_get_step')
+      end if
+      return
+   end subroutine get_step
 
 end module LightROM_Utils

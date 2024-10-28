@@ -63,7 +63,7 @@ module LightROM_LyapunovSolvers
 
    contains
 
-   subroutine projector_splitting_DLRA_lyapunov_integrator_rdp(X, A, B, Tend, tau, info, exptA, iftrans, options)
+   subroutine projector_splitting_DLRA_lyapunov_integrator_rdp(X, A, B, Tend, tau, info, exptA, outpost, iftrans, options)
       !! Main driver for the numerical integrator for the matrix-valued differential Lyapunov equation of the form
       !!
       !!    $$ \dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{B} \mathbf{B}^T $$
@@ -150,6 +150,7 @@ module LightROM_LyapunovSolvers
       integer,                                 intent(out)   :: info
       !! Information flag
       procedure(abstract_exptA_rdp), optional                :: exptA
+      procedure(abstract_outpost_rdp), optional              :: outpost
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
       logical,                       optional, intent(in)    :: iftrans
       logical                                                :: trans
@@ -159,14 +160,14 @@ module LightROM_LyapunovSolvers
       !! Options for solver configuration
 
       ! Internal variables
-      integer                                                :: istep, nsteps, chkstep
+      integer                                                :: istep, nsteps, chkstep, iostep
       integer                                                :: rk_reduction_lock   ! 'timer' to disable rank reduction
       real(wp)                                               :: T                   ! simulation time
       real(wp)                                               :: nrm, nrmX           ! increment and solution norm
       real(wp)                                               :: El                  ! aggregate error estimate
       real(wp)                                               :: err_est             ! current error estimate
       real(wp)                                               :: tol                 ! current tolerance
-      logical                                                :: converged
+      logical                                                :: converged, ifoutpost
       character(len=128)                                     :: msg, fmt
       integer                                                :: rkmax
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
@@ -181,13 +182,29 @@ module LightROM_LyapunovSolvers
          opts = dlra_opts()
       end if
 
-      ! set tolerance
+      ! Set tolerance
       tol = opts%tol
 
+      ! Determine chk/IO step
+      call get_step(chkstep, iostep, opts, tau)
+
+      ! Exponential propagator
       if (present(exptA)) then
          p_exptA => exptA
       else
          p_exptA => k_exptA_rdp
+      end if
+      ! Callback
+      if (present(outpost)) then
+         if (iostep == 0) then ! no output requested
+            msg = 'Callback function specified but no output was requested. No output will be produced.'
+            call logger%log_warning(msg, module=this_module, procedure='DLRA initialzation')
+         end if
+      else
+         if (iostep /= 0) then ! output requested
+            msg = 'Runtime output was requested but no specific callback function was provided. No output will be produced.'
+            call logger%log_warning(msg, module=this_module, procedure='DLRA initialzation')
+         end if
       end if
 
       ! Initialize
@@ -205,9 +222,6 @@ module LightROM_LyapunovSolvers
       call logger%log_information(msg, module=this_module, procedure='DLRA')
       ! Pretty output
       write(fmt,'(A,I0,A)') '(A,I', max(5,int(log10(real(nsteps)))+1) , ',A,F10.4,3(A,E12.5))'
-     
-      ! Determine IO step
-      chkstep = get_chkstep(opts, tau)
 
       if ( opts%mode > 2 ) then
          write(msg,'(A)') "Time-integration order for the operator splitting of d > 2 &
@@ -290,6 +304,15 @@ module LightROM_LyapunovSolvers
                end if
             end if
          endif
+
+         ! Output callback (if requested)
+         if (present(outpost)) then
+            if (iostep /= 0 .and. mod(istep, iostep) == 0) then
+               call outpost(X, info)
+               if (info /= 0) call stop_error('Error in outpost.', this_module, 'DLRA')
+            end if
+         end if
+
       enddo dlra
 
       ! Clean up scratch space
