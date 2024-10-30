@@ -265,23 +265,20 @@ contains
       return
    end subroutine solve_lyapunov
 
-   subroutine outpost_state(self, info, name)
+   subroutine outpost_state(self, info)
       !! Abstract interface to define the matrix exponential-vector product.
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
       integer,                                intent(out)   :: info
-      character(len=*), optional,             intent(in)    :: name
-      character(len=:), allocatable                         :: name_
       ! internal
       integer :: rk, iostatus
       character(len=128) :: filename, msg
       logical :: exist_file
       real(wp), dimension(:,:), allocatable :: U
-      name_ = optval(name, '')
       select type(self)
       type is(LR_state)
          rk = self%rk
          ! remove extension if it is there already
-         write(filename, '(A,A,I5.5,A)') trim(replace_all(name_, ".npy", "")), '_s', self%step,'_S.npy'
+         write(filename, '(A,A,I5.5,A,I5.5,A)') trim(self%casename), '_s', self%step, '_', self%iout, '_S.npy'
          inquire(file=filename, exist=exist_file)
          if (.not. exist_file) then
             call save_npy(filename, self%S(:rk,:rk), iostatus)
@@ -294,7 +291,7 @@ contains
          msg = 'Saved file '//trim(filename)
          print *, msg
          call logger%log_message(msg, module=this_module, procedure='outpost_state')
-         write(filename, '(A,A,I5.5,A)') trim(replace_all(name_, ".npy", "")), '_s', self%step,'_U.npy'
+         write(filename, '(A,A,I5.5,A,I5.5,A)') trim(self%casename), '_s', self%step, '_', self%iout, '_U.npy'
          inquire(file=filename, exist=exist_file)
          if (.not. exist_file) then
             

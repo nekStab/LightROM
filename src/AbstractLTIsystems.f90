@@ -77,16 +77,17 @@ module LightROM_AbstractLTIsystems
       character(len=128)                       :: casename = ''
       ! Pointer to the outposting routine
       procedure(abstract_outpost_rdp), pointer :: outpost => null() ! user defined function
+      ! Outposting counter
+      integer                                  :: iout = 0
    contains
    end type abstract_sym_low_rank_state_rdp
 
    abstract interface
-      subroutine abstract_outpost_rdp(self, info, name)
+      subroutine abstract_outpost_rdp(self, info)
          import abstract_sym_low_rank_state_rdp
          implicit none
          class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
          integer,                                intent(out)   :: info
-         character(len=*), optional,             intent(in)    :: name ! can be used e.g. as a filename
       end subroutine abstract_outpost_rdp
    end interface
 
