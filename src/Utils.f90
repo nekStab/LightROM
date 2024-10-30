@@ -8,7 +8,7 @@ module LightROM_Utils
    use LightKrylov_Logger
    use LightKrylov_AbstractVectors
    use LightKrylov_BaseKrylov, only : orthogonalize_against_basis
-   use LightKrylov_Utils, only : abstract_opts
+   use LightKrylov_Utils, only : abstract_opts, sqrtm
    ! LightROM
    use LightROM_AbstractLTIsystems
    
@@ -17,8 +17,8 @@ module LightROM_Utils
    private :: this_module
    character(len=*), parameter :: this_module = 'LightROM_Utils'
 
-   public :: dlra_opts, abstract_outpost_rdp
-   public :: compute_norm, compute_increment_norm
+   public :: dlra_opts
+   public :: coefficient_matrix_norm, increment_norm, low_rank_CALE_residual_norm
    public :: is_converged
    public :: project_onto_common_basis
    public :: Balancing_Transformation
@@ -56,10 +56,12 @@ module LightROM_Utils
       !! Simulation time interval at which convergence is checked and runtime information is printed (default: 1.0)
       logical :: chkctrl_time = .true.
       !! Use time instead of timestep control (default: .true.)
+      logical :: chksvd = .true.
+      !! Which norm is decisive for convergence? (singular value increment - .true. - or increment norm - .false.; default = .true.)
       real(wp) :: inc_tol = 1e-6_wp
-      !! Tolerance on the increment norm for convergence (default: 1e-6)
-      logical :: relative_norm = .true.
-      !! Tolerance control: Check convergence for dX/X (true) or dX (false)? (default: .true.)
+      !! Tolerance on the increment for convergence (default: 1e-6)
+      logical :: relative_inc = .true.
+      !! Tolerance control: Use relative values for convergence (default = .true.)
       !
       ! OUTPUT CALLBACK
       !
@@ -71,6 +73,8 @@ module LightROM_Utils
       !! Simulation time interval at which convergence is checked and runtime information is printed (default: 1.0)
       logical :: ioctrl_time = .true.
       !! IO control: use time instead of timestep control (default: .true.)
+      logical :: ifsvd = .true.
+      !! Compute the SVD and project low-rank data prior to callback
       !
       ! RANK-ADPATIVE SPECIFICS
       !
@@ -83,15 +87,6 @@ module LightROM_Utils
       integer :: err_est_step = 10
       !! Time step interval for recomputing the splitting error estimate (only of use_err_est = .true.)
    end type
-
-   abstract interface
-      subroutine abstract_outpost_rdp(X, info)
-         import abstract_low_rank_representation_rdp
-         !! Abstract interface to define the matrix exponential-vector product.
-         class(abstract_low_rank_representation_rdp), intent(in)  :: X
-         integer,                                     intent(out) :: info
-      end subroutine abstract_outpost_rdp
-   end interface
 
 contains
 
@@ -286,18 +281,14 @@ contains
       return
    end subroutine project_onto_common_basis_rdp
 
-   subroutine compute_increment_norm(nrm, U, S, U_lag, S_lag, ifnorm)
+   real(dp) function increment_norm(X, U_lag, S_lag, ifnorm) result(inc_norm)
       !! This function computes the norm of the solution increment in a cheap way avoiding the
       !! construction of the full low-rank solutions.
-      real(wp),                               intent(out)   :: nrm
-      !! Increment norm of current timestep
-      class(abstract_vector_rdp),             intent(in)    :: U(:)
-      !! Low-rank basis of current solution
-      real(wp),                               intent(in)    :: S(:,:)
-      !! Coefficients of current solution
-      class(abstract_vector_rdp),             intent(in)    :: U_lag(:)
+      class(abstract_sym_low_rank_state_rdp)  :: X
+      !! Low rank solution of current solution
+      class(abstract_vector_rdp)              :: U_lag(:)
       !! Low-rank basis of lagged solution
-      real(wp),                               intent(in)    :: S_lag(:,:)
+      real(wp)                                :: S_lag(:,:)
       !! Coefficients of lagged solution
       logical, optional, intent(in) :: ifnorm
       logical                       :: ifnorm_
@@ -306,31 +297,81 @@ contains
       ! internals
       real(wp), dimension(:,:),                 allocatable :: D, V1, V2
       real(wp), dimension(:),                   allocatable :: svals       
-      integer :: r, rl
+      integer :: rk, rl
 
       ifnorm_ = optval(ifnorm, .true.)
 
-      r  = size(U)
+      rk  = X%rk
       rl = size(U_lag)
 
       ! compute common basis
-      call project_onto_common_basis_rdp(V1, V2, U_lag, U)
+      call project_onto_common_basis_rdp(V1, V2, U_lag, X%U(:rk))
 
       ! project second low-rank state onto common basis and construct difference
-      allocate(D(r+rl,r+rl)); D = 0.0_wp
-      D(    :rl  ,     :rl  ) = S_lag - matmul(V1, matmul(S, transpose(V1)))
-      D(rl+1:rl+r,     :rl  ) =       - matmul(V2, matmul(S, transpose(V1)))
-      D(    :rl  , rl+1:rl+r) =       - matmul(V1, matmul(S, transpose(V2)))
-      D(rl+1:rl+r, rl+1:rl+r) =       - matmul(V2, matmul(S, transpose(V2)))
+      allocate(D(rk+rl,rk+rl)); D = 0.0_wp
+      D(    :rl   ,      :rl   ) = S_lag - matmul(V1, matmul(X%S(:rk,:rk), transpose(V1)))
+      D(rl+1:rl+rk,      :rl   ) =       - matmul(V2, matmul(X%S(:rk,:rk), transpose(V1)))
+      D(    :rl   ,  rl+1:rl+rk) =       - matmul(V1, matmul(X%S(:rk,:rk), transpose(V2)))
+      D(rl+1:rl+rk,  rl+1:rl+rk) =       - matmul(V2, matmul(X%S(:rk,:rk), transpose(V2)))
 
       ! compute Frobenius norm of difference
-      nrm = sqrt(sum(svdvals(D))**2)
-      if (ifnorm_) nrm = nrm/U(1)%get_size()
+      inc_norm = sqrt(sum(svdvals(D))**2)
+      if (ifnorm_) inc_norm = inc_norm/X%U(1)%get_size()
 
       return
-   end subroutine compute_increment_norm
+   end function increment_norm
 
-   real(dp) function compute_norm(X, ifnorm) result(nrm)
+   real(dp) function low_rank_CALE_residual_norm(X, A, B, ifnorm) result(residual_norm)
+      class(abstract_sym_low_rank_state_rdp) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_linop_rdp)              :: A
+      !! Linear operator
+      class(abstract_vector_rdp)             :: B(:)
+      !! Low-Rank inhomogeneity.
+      logical, optional                      :: ifnorm
+      logical                                :: ifnorm_
+      !! Normalize the norm by the vector size?
+      ! internals
+      integer :: i, rk, rkb, n, info
+      class(abstract_vector_rdp), allocatable :: Q(:)
+      real(dp), dimension(:,:), allocatable :: R, R_shuffle, sqrt_S
+      ! optional arguments
+      ifnorm_ = optval(ifnorm, .true.)
+
+      rk  = X%rk
+      rkb = size(B)
+      n   = 2*rk + rkb
+      allocate(Q(n), source=B(1)); call zero_basis(Q)
+      allocate(R(n,n), R_shuffle(n,n)); R = 0.0_dp; R_shuffle = 0.0_dp
+
+      ! fill the basis
+      allocate(sqrt_S(rk,rk)); sqrt_S = 0.0_dp
+      call sqrtm(X%S(:rk,:rk), sqrt_S, info)
+      call check_info(info, 'sqrtm', module=this_module, procedure='low_rank_CALE_residual_norm')
+      block
+         class(abstract_vector_rdp), allocatable :: Xwrk(:)
+         call linear_combination(Xwrk, X%U(:rk), sqrt_S)
+         call copy(Q(rk+1:2*rk), Xwrk)
+      end block
+      do i = 1, rk
+         call A%matvec(Q(rk+i), Q(i))
+      end do
+      call copy(Q(2*rk+1:), B(:))
+
+      call qr(Q, R, info)
+      call check_info(info, 'qr', module=this_module, procedure='low_rank_CALE_residual_norm')
+
+      R_shuffle(:,      :  rk) = R(:,  rk+1:2*rk)
+      R_shuffle(:,  rk+1:2*rk) = R(:,      :  rk)
+      R_shuffle(:,2*rk+1:    ) = R(:,2*rk+1:    )
+
+      residual_norm = norm2(matmul(R_shuffle, transpose(R)))
+      if (ifnorm_) residual_norm = residual_norm/B(1)%get_size()
+      
+      return
+   end function low_rank_CALE_residual_norm
+
+   real(dp) function coefficient_matrix_norm(X, ifnorm) result(norm)
       !! This function computes the Frobenius norm of a low-rank approximation via an SVD of the (small) coefficient matrix
       class(abstract_sym_low_rank_state_rdp), intent(in) :: X
       !! Low rank solution of which to compute the norm
@@ -338,48 +379,49 @@ contains
       logical                       :: ifnorm_
       !! Normalize the norm by the vector size?
       ifnorm_ = optval(ifnorm, .true.)
-      nrm = sqrt(sum(svdvals(X%S(:X%rk,:X%rk))**2))
-      if (ifnorm_) nrm = nrm/X%U(1)%get_size()
-   end function compute_norm
+      norm = sqrt(sum(svdvals(X%S(:X%rk,:X%rk))**2))
+      if (ifnorm_) norm = norm/X%U(1)%get_size()
+      return
+   end function coefficient_matrix_norm
 
-   logical function is_converged(nrm, nrmX, opts) result(converged)
-      !! This function checks the convergence of the solution based on the (relative) increment norm
-      real(wp),                   intent(in) :: nrm
-      real(wp),         optional, intent(in) :: nrmX
-      real(wp)                               :: nrmX_
-      type(dlra_opts),  optional, intent(in) :: opts
-      type(dlra_opts)                        :: opts_
-
+   logical function is_converged(svals, svals_lag, opts) result(converged)
+      !! This function checks the convergence of the solution based on the (relative) increment in the singular values
+      real(wp)                   :: svals(:)
+      real(wp)                   :: svals_lag(:)
+      real(wp),      allocatable :: dsvals(:)
+      type(dlra_opts)            :: opts
       ! internals
+      integer :: i
+      real(wp) :: norm, norm_lag, dnorm
       character*128 :: msg
 
-      if (present(opts)) then
-         opts_ = opts
-      else
-         opts_ = dlra_opts()
-      end if
+      norm     = sqrt(sum(svals**2))
+      norm_lag = sqrt(sum(svals_lag**2))
 
-      if (present(nrmX)) then
-         nrmX_ = nrmX
-      else
-         nrmX_ = 1.0_wp
-      end if
+      allocate(dsvals(size(svals)))
+      do i = 1, size(svals)
+         dsvals(i) = abs(svals(i) - svals_lag(i))
+      end do
+
+      dnorm    = sqrt(sum(dsvals**2))
+
+      if (opts%relative_inc) dnorm = dnorm/norm
 
       converged = .false.
 
-      if (opts%relative_norm) then
-         if (nrm/nrmX_ < opts%inc_tol) converged = .true.
-      else
-         if (nrm < opts%inc_tol) converged = .true.
-      end if
+      write(msg,'(A,3(E15.7,1X))') 'svals lag inc_norm: ', norm, norm_lag, dnorm
+      call logger%log_message(msg, module=this_module, procedure='DLRA convergence check')
+      if (dnorm < opts%inc_tol) converged = .true.
 
+      return
    end function is_converged
 
-   subroutine get_step(chkstep, iostep, opts, tau)
-      integer,         intent(out)   :: chkstep 
-      integer,         intent(out)   :: iostep 
-      type(dlra_opts), intent(inout) :: opts
-      real(wp),        intent(in)    :: tau
+   subroutine check_options(chkstep, iostep, tau, X, opts)
+      integer,                                 intent(out)   :: chkstep 
+      integer,                                 intent(out)   :: iostep 
+      real(wp),                                intent(in)    :: tau
+      class(abstract_sym_low_rank_state_rdp),  intent(inout) :: X
+      type(dlra_opts),                         intent(inout) :: opts
 
       ! internal
       character(len=128) :: msg
@@ -392,49 +434,54 @@ contains
          if (opts%chktime <= 0.0_wp) then
             opts%chktime = opts_default%chktime
             write(msg,'(A,E12.5,A)') 'Invalid chktime. Reset to default (',  opts%chktime,')'
-            call logger%log_warning(msg, module=this_module, procedure='DLRA_get_step')
+            call logger%log_warning(msg, module=this_module, procedure='DLRA_check_options')
          end if
          chkstep = max(1, NINT(opts%chktime/tau))
          write(msg,'(A,E12.5,A,I0,A)') 'Convergence check every ', opts%chktime, ' time units (', chkstep, ' steps)'
-         call logger%log_information(msg, module=this_module, procedure='DLRA_get_step')
+         call logger%log_information(msg, module=this_module, procedure='DLRA_check_options')
       else
          if (opts%chkstep <= 0) then
             opts%chkstep = opts_default%chkstep
             write(msg,'(A,I0,A)') "Invalid chktime. Reset to default (",  opts%chkstep,")"
-            call logger%log_warning(msg, module=this_module, procedure='DLRA_get_step')
+            call logger%log_warning(msg, module=this_module, procedure='DLRA_check_options')
          end if
          chkstep = opts%chkstep
          write(msg,'(A,I0,A)') 'Convergence check every ', chkstep, ' steps (based on steps).'
-         call logger%log_information(msg, module=this_module, procedure='DLRA_get_step')
+         call logger%log_information(msg, module=this_module, procedure='DLRA_check_options')
       end if
       !
-      ! OUTPUT CALLBACK
+      ! RUNTIME OUTPUT CALLBACK
       !
       if (opts%ifIO) then ! callback activated
+         if (.not. associated(X%outpost)) then
+            opts%ifIO = .false.
+            write(msg,'(A,E12.5,A)') 'No outposting routine provided. Runtime output will be deactivated.'
+            call logger%log_warning(msg, module=this_module, procedure='DLRA_check_options')
+         end if
          if (opts%ioctrl_time) then
             if (opts%iotime <= 0.0_wp) then
                opts%iotime = opts_default%iotime
                write(msg,'(A,E12.5,A)') 'Invalid iotime. Reset to default (',  opts%iotime,')'
-               call logger%log_warning(msg, module=this_module, procedure='DLRA_get_step')
+               call logger%log_warning(msg, module=this_module, procedure='DLRA_check_options')
             end if
             iostep = max(1, NINT(opts%iotime/tau))
             write(msg,'(A,E12.5,A,I0,A)') 'Output every ', opts%iotime, ' time units (', iostep, ' steps)'
-            call logger%log_information(msg, module=this_module, procedure='DLRA_get_step')
+            call logger%log_information(msg, module=this_module, procedure='DLRA_check_options')
          else
             if (opts%iostep <= 0) then
                opts%iostep = opts_default%iostep
                write(msg,'(A,I0,A)') "Invalid iotime. Reset to default (",  opts%iostep,")"
-               call logger%log_warning(msg, module=this_module, procedure='DLRA_get_step')
+               call logger%log_warning(msg, module=this_module, procedure='DLRA_check_options')
             end if
             iostep = opts%iostep
             write(msg,'(A,I0,A)') 'Output every ', iostep, ' steps (based on steps).'
-            call logger%log_information(msg, module=this_module, procedure='DLRA_get_step')
+            call logger%log_information(msg, module=this_module, procedure='DLRA_check_options')
          end if
       else
          iostep = 0
-         call logger%log_information('No runtime output.', module=this_module, procedure='DLRA_get_step')
+         call logger%log_information('No runtime output.', module=this_module, procedure='DLRA_check_options')
       end if
       return
-   end subroutine get_step
+   end subroutine check_options
 
 end module LightROM_Utils

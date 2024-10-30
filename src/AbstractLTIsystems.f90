@@ -5,6 +5,8 @@ module LightROM_AbstractLTIsystems
 
    private
 
+   public :: abstract_outpost_rdp
+
    !-------------------------------------------------------
    !-----     ABSTRACT LTI SYSTEM TYPE DEFINITION     -----
    !-------------------------------------------------------
@@ -49,25 +51,44 @@ module LightROM_AbstractLTIsystems
    !--------------------------------------------------------------------
 
    ! General abstract type for general system.
-   type, abstract, public :: abstract_low_rank_representation
-   end type abstract_low_rank_representation
+   type, abstract, public :: abstract_low_rank_state
+   end type abstract_low_rank_state
 
-   type, extends(abstract_low_rank_representation), abstract, public :: abstract_low_rank_representation_rdp
-   end type abstract_low_rank_representation_rdp
+   type, extends(abstract_low_rank_state), abstract, public :: abstract_low_rank_state_rdp
+   end type abstract_low_rank_state_rdp
 
    ! Abstract symmetric low-rank representation.
-   type, extends(abstract_low_rank_representation_rdp), abstract, public :: abstract_sym_low_rank_state_rdp
+   type, extends(abstract_low_rank_state_rdp), abstract, public :: abstract_sym_low_rank_state_rdp
       ! Low-Rank basis.
-      class(abstract_vector_rdp), allocatable :: U(:)
+      class(abstract_vector_rdp),  allocatable :: U(:)
       ! Coefficients
-      real(wp),                   allocatable :: S(:, :)
+      real(wp),                    allocatable :: S(:, :)
       ! Current approximation rank
-      integer                                 :: rk = 1
+      integer                                  :: rk = 1
+      ! Simulation time
+      real(wp)                                 :: time = 0.0_wp
+      ! Simulation step
+      integer                                  :: step = 0
+      ! Converged?
+      logical                                  :: is_converged = .false.
       ! Has rank been initialized? (for rank-adaptive DLRA)
-      logical                                 :: rank_is_initialised = .false.
-      
+      logical                                  :: rank_is_initialised = .false.
+      ! Casename
+      character(len=128)                       :: casename = ''
+      ! Pointer to the outposting routine
+      procedure(abstract_outpost_rdp), pointer :: outpost => null() ! user defined function
    contains
    end type abstract_sym_low_rank_state_rdp
+
+   abstract interface
+      subroutine abstract_outpost_rdp(self, info, name)
+         import abstract_sym_low_rank_state_rdp
+         implicit none
+         class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
+         integer,                                intent(out)   :: info
+         character(len=*), optional,             intent(in)    :: name ! can be used e.g. as a filename
+      end subroutine abstract_outpost_rdp
+   end interface
 
 contains
 
