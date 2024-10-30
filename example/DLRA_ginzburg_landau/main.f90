@@ -24,6 +24,9 @@ program demo
    use Ginzburg_Landau_Tests
    implicit none
 
+   character(len=128), parameter :: this_module = 'Ginzburg_Landau_Main'
+   character(len=128), parameter :: home = 'example/DLRA_ginzburg_landau/local/'
+
    character*128      :: onameU, onameS, oname
    ! rk_B & rk_C are set in ginzburg_landau_base.f90
 
@@ -81,7 +84,7 @@ program demo
    ! Adjoint = .false.:     Solve the direct Lyapunov equation:   0 = A X + X A.T + B @ B.T @ W
    !     The solution to this equation is called the controllability Gramian X.
    !
-   logical, parameter :: run_fixed_rank_short_integration_time_convergence_test   = .true.
+   logical, parameter :: run_fixed_rank_short_integration_time_test   = .true.
    !
    ! Integrate the same initial condition for a short time with Runge-Kutta and DLRA.
    !
@@ -90,7 +93,7 @@ program demo
    ! and the temporal order of DLRA.
    ! Owing to the short integration time, this test is by far the fastest to run.
    !
-   logical, parameter :: run_fixed_rank_long_integration_time_convergence_test    = .true.
+   logical, parameter :: run_fixed_rank_long_integration_time_test    = .true.
    !
    ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA.
    !
@@ -98,7 +101,7 @@ program demo
    ! Similarly, the test shows the effect of step size, rank and temporal order on the solution
    ! using DLRA.
    !
-   logical, parameter :: run_rank_adaptive_long_integration_time_convergence_test = .true.
+   logical, parameter :: run_rank_adaptive_long_integration_time_test = .true.
    !
    ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA using an 
    ! adaptive rank.
@@ -209,7 +212,7 @@ program demo
    print *, '#########################################################################'
    print *, ''
 
-   if (run_fixed_rank_short_integration_time_convergence_test) then
+   if (run_fixed_rank_short_integration_time_test) then
       ! Run RK integrator for the Lyapunov equation
       T_RK  = 0.01_wp
       nstep = 10
@@ -229,7 +232,7 @@ program demo
    print *, '#########################################################################'
    print *, ''
 
-   if (run_fixed_rank_short_integration_time_convergence_test) then
+   if (run_fixed_rank_short_integration_time_test) then
       ! DLRA with fixed rank
       Tend = T_RK/nstep*iref
       rkv = [ 10, 12, 16 ]
@@ -238,7 +241,7 @@ program demo
       TOv  = [ 1, 2 ] 
       nprint = 16
 
-      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint)
+      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home)
    else
       print *, 'Skip.'
       print *, ''
@@ -252,8 +255,8 @@ program demo
    print *, '#########################################################################'
    print *, ''
    
-   if (run_fixed_rank_long_integration_time_convergence_test .or. &
-     & run_rank_adaptive_long_integration_time_convergence_test) then
+   if (run_fixed_rank_long_integration_time_test .or. &
+     & run_rank_adaptive_long_integration_time_test) then
       ! Run RK integrator for the Lyapunov equation
       T_RK  = 50.0_wp
       nstep = 20
@@ -273,7 +276,7 @@ program demo
    print *, '#########################################################################'
    print *, ''
 
-   if (run_fixed_rank_long_integration_time_convergence_test) then
+   if (run_fixed_rank_long_integration_time_test) then
       ! DLRA with fixed rank
       Tend = T_RK/nstep*iref
       rkv = [ 10, 20, 40 ]
@@ -282,7 +285,7 @@ program demo
       TOv  = [ 1, 2 ] 
       nprint = 40
 
-      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint)
+      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home)
    else
       print *, 'Skip.'
       print *, ''
@@ -296,7 +299,7 @@ program demo
    print *, '#########################################################################'
    print *, ''
 
-   if (run_rank_adaptive_long_integration_time_convergence_test) then
+   if (run_rank_adaptive_long_integration_time_test) then
       ! DLRA with adaptive rank
       dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
       dtv = dtv(size(dtv):1:-1) ! reverse vector
@@ -304,7 +307,7 @@ program demo
       tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
       nprint = 60
 
-      call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint)
+      call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home)
    else
       print *, 'Skip.'
       print *, ''

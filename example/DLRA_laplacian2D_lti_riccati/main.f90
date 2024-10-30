@@ -24,6 +24,9 @@ program demo
    use Laplacian2D_LTI_Riccati_Utils
    implicit none
 
+   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Riccati_Main'
+   character(len=128), parameter :: home = 'example/DLRA_laplacian2D_lti_riccati/local/'
+
    ! DLRA
    integer, parameter :: rkmax = 11
    integer, parameter :: rk_X0 = 2
@@ -45,10 +48,10 @@ program demo
    type(rklib_riccati_mat), allocatable  :: RK_prop_ricc
 
    ! LTI system
-   type(lti_system)                :: LTI
+   type(lti_system)                      :: LTI
 
    ! Laplacian
-   type(laplace_operator), allocatable :: A
+   type(laplace_operator), allocatable   :: A
 
    ! LR representation
    type(LR_state)                  :: X
@@ -83,11 +86,12 @@ program demo
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
    integer, parameter :: irow = 8 ! how many numbers to print per row
+   character(len=128) :: casename
 
    !--------------------------------
    ! Define which examples to run:
    !
-   logical, parameter :: run_fixed_rank_short_integration_time_convergence_test   = .true.
+   logical, parameter :: run_fixed_rank_short_integration_time_test   = .true.
    !
    ! Integrate the same initial condition for a short time with Runge-Kutta and DLRA.
    !
@@ -95,7 +99,7 @@ program demo
    ! This test shows the convergence of the method as a function of the step size, the rank
    ! and the temporal order of DLRA.
    !
-   logical, parameter :: run_fixed_rank_long_integration_time_convergence_test    = .true.
+   logical, parameter :: run_fixed_rank_long_integration_time_test    = .true.
    !
    ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA.
    !
@@ -103,7 +107,7 @@ program demo
    ! Similarly, the test shows the effect of step size, rank and temporal order on the solution
    ! using DLRA
    !
-   !logical, parameter :: run_rank_adaptive_long_integration_time_convergence_test = .true.
+   !logical, parameter :: run_rank_adaptive_long_integration_time_test = .true.
    !
    ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA using an 
    ! adaptive rank.
@@ -239,7 +243,7 @@ program demo
    print *, '#                                                                       #'
    print *, '#########################################################################'
    print *, ''
-   if (run_fixed_rank_short_integration_time_convergence_test) then
+   if (run_fixed_rank_short_integration_time_test) then
       print '(A10,A8,A4,A10,A8,3(A20),A20)', 'DLRA:','rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
          & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
       write(*,'(A)', ADVANCE='NO') '         ------------------------------------------------'
@@ -261,8 +265,11 @@ program demo
                irep = irep + 1
                dt = dtv(k)
 
+               ! define casename
+               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_IIb_rk', rk, '_TO', torder, '_dt', dt  
+
                ! Reset input
-               call X%initialize_LR_state(U0, S0, rk)
+               call X%init(U0, S0, rk, casename=casename)
 
                ! run step
                opts = dlra_opts(mode=torder)
@@ -353,7 +360,7 @@ program demo
    print *, '#                                                                       #'
    print *, '#########################################################################'
    print *, ''
-   if (run_fixed_rank_long_integration_time_convergence_test) then
+   if (run_fixed_rank_long_integration_time_test) then
       print '(A10,A8,A4,A10,A8,3(A20),A20)', 'DLRA:','rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
          & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
       write(*,'(A)', ADVANCE='NO') '         ------------------------------------------------'
@@ -375,8 +382,11 @@ program demo
                irep = irep + 1
                dt = dtv(k)
 
+               ! define casename
+               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_IIIb_rk', rk, '_TO', torder, '_dt', dt  
+
                ! Reset input
-               call X%initialize_LR_state(U0, S0, rk)
+               call X%init(U0, S0, rk, casename=casename)
 
                ! run step
                opts = dlra_opts(mode=torder)

@@ -41,7 +41,7 @@ module Laplacian2D_LTI_Riccati_Base
    type, extends(abstract_sym_low_rank_state_rdp), public :: LR_state
    contains
       private
-      procedure, pass(self), public :: initialize_LR_state
+      procedure, pass(self), public :: init => initialize_LR_state
    end type LR_state
 
 
@@ -211,7 +211,7 @@ contains
    !-----     TYPE BOUND PROCEDURE FOR SYM LOW RANK REPRESENTATION    -----
    !-----------------------------------------------------------------------
 
-   subroutine initialize_LR_state(self, U, S, rk, rkmax, if_rank_adaptive)
+   subroutine initialize_LR_state(self, U, S, rk, rkmax, if_rank_adaptive, casename, outpost)
       class(LR_state),            intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: U(:)
       real(wp),                   intent(in)    :: S(:,:)
@@ -219,6 +219,8 @@ contains
       integer, optional,          intent(in)    :: rkmax
       logical, optional,          intent(in)    :: if_rank_adaptive
       logical                                   :: ifrk
+      character(len=128), optional, intent(in)  :: casename
+      procedure(abstract_outpost_rdp), optional :: outpost
 
       ! internals
       class(abstract_vector_rdp), allocatable   :: Utmp(:)
@@ -230,6 +232,11 @@ contains
 
       select type (U)
       type is (state_vector)
+         ! set time and optional args
+         self%time = 0.0_wp
+         if (present(outpost)) self%outpost => outpost
+         self%casename = optval(casename, '')
+         
          m = size(U)
          call assert_shape(S, [m,m], 'S', this_module, 'initialize_LR_state')
          ! optional size argument

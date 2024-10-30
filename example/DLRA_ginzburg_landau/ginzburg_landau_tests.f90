@@ -104,7 +104,7 @@ contains
       return
    end subroutine run_lyap_reference_RK
 
-   subroutine run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint)
+   subroutine run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Reference solution (BS)
@@ -124,6 +124,7 @@ contains
       ! number of singular values to print
       integer,                       intent(in)    :: nprint
       logical,                       intent(in)    :: adjoint
+      character(len=128),            intent(in)    :: home
 
       ! Internals
       type(LR_state),                allocatable   :: X
@@ -137,7 +138,7 @@ contains
       integer                                      :: is, ie
       integer,                         parameter   :: irow = 8
       real(wp),                        allocatable :: svals(:)
-      character(len=128)                           :: note
+      character(len=128)                           :: note, casename
       ! DLRA options
       type(dlra_opts)                              :: opts
       ! timer
@@ -169,8 +170,13 @@ contains
                
                ! set solver options
                opts%mode = torder
+
+               ! define casename
+               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_II_rk', rk, '_TO', torder, '_dt', tau  
+
                ! Initialize low-rank representation with rank rk
-               call X%initialize_LR_state(U0, S0, rk, rkmax, .false.)
+               call X%initialize_LR_state(U0, S0, rk, rkmax, .false., casename=casename)
+
                ! run integrator
                call system_clock(count=clock_start)     ! Start Timer
                if (adjoint) then
@@ -215,7 +221,7 @@ contains
 
    end subroutine run_lyap_DLRA_test
 
-   subroutine run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint)
+   subroutine run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Reference solution (BS)
@@ -235,6 +241,7 @@ contains
       ! number of singular values to print
       integer,                       intent(in)    :: nprint
       logical,                       intent(in)    :: adjoint
+      character(len=128),            intent(in)    :: home
 
       ! Internals
       type(LR_state),                allocatable   :: X
@@ -247,7 +254,7 @@ contains
       integer                                      :: is, ie
       integer,                         parameter   :: irow = 8
       real(wp),                        allocatable :: svals(:)
-      character(len=128)                           :: note
+      character(len=128)                           :: note, casename
       ! DLRA options
       type(dlra_opts)                              :: opts
       ! timer
@@ -280,8 +287,13 @@ contains
                
                ! set solver options
                opts%mode = torder
+
+               ! define casename
+               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_III_rk', rk, '_TO', torder, '_dt', tau  
+
                ! Initialize low-rank representation with rank rk
-               call X%initialize_LR_state(U0, S0, rk, rkmax, opts%if_rank_adaptive)
+               call X%initialize_LR_state(U0, S0, rk, rkmax, opts%if_rank_adaptive, casename=casename)
+
                ! run integrator
                call system_clock(count=clock_start)     ! Start Timer
                if (adjoint) then

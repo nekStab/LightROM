@@ -23,6 +23,7 @@ program demo
    implicit none
 
    character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Main'
+   character(len=128), parameter :: home = 'example/DLRA_laplacian2D_lti_lyapunov/local/'
 
    !----------------------------------------------------------
    !-----     LYAPUNOV EQUATION FOR LAPLACE OPERATOR     -----
@@ -47,10 +48,10 @@ program demo
    type(rklib_lyapunov_mat), allocatable :: RK_propagator
 
    ! LTI system
-   type(lti_system)                :: LTI
+   type(lti_system)                      :: LTI
 
    ! Laplacian
-   type(laplace_operator), allocatable :: A
+   type(laplace_operator),   allocatable :: A
 
    ! LR representation
    type(LR_state)                  :: X
@@ -86,11 +87,12 @@ program demo
    ! Misc
    integer   :: clock_rate, clock_start, clock_stop
    integer, parameter :: irow = 8 ! how many numbers to print per row
+   character(len=128) :: casename
 
    !--------------------------------
    ! Define which examples to run:
    !
-   logical, parameter :: run_fixed_rank_short_integration_time_convergence_test   = .true.
+   logical, parameter :: run_fixed_rank_short_integration_time_test   = .false.
    !
    ! Integrate the same initial condition for a short time with Runge-Kutta and DLRA.
    !
@@ -98,7 +100,7 @@ program demo
    ! This test shows the convergence of the method as a function of the step size, the rank
    ! and the temporal order of DLRA.
    !
-   logical, parameter :: run_fixed_rank_long_integration_time_convergence_test    = .true.
+   logical, parameter :: run_fixed_rank_long_integration_time_test    = .false.
    !
    ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA.
    !
@@ -106,7 +108,7 @@ program demo
    ! Similarly, the test shows the effect of step size, rank and temporal order on the solution
    ! using DLRA
    !
-   logical, parameter :: run_rank_adaptive_long_integration_time_convergence_test = .true.
+   logical, parameter :: run_rank_adaptive_long_integration_time_test = .false.
    !
    ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA using an 
    ! adaptive rank.
@@ -114,6 +116,14 @@ program demo
    ! The DLRA algorthm automatically determines the rank necessary to integrate the equations
    ! such that the error on the singular values does not exceed a chosen tolerance. This rank
    ! depends on the tolerance but also the chosen time-step.
+   !
+   logical, parameter :: run_steady_state_convergence_test = .true.
+   !
+   ! Integrate the same initial condition to steady state with DLRA using the optimal rank.
+   !
+   ! Convergence is determined using the change in the resolved singular values, in particular
+   ! the Frobenius norm of the low-rank solution. As expected, the minimum error scales with 
+   ! the timestep and the temporal order of the scheme
    !
    !--------------------------------
 
@@ -251,7 +261,7 @@ program demo
    print *, '#########################################################################'
    print *, ''
 
-   if (run_fixed_rank_short_integration_time_convergence_test) then
+   if (run_fixed_rank_short_integration_time_test) then
       print '(A10,A8,A4,A10,A8,3(A20),A20)', 'DLRA:','rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
          & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
       write(*,'(A)', ADVANCE='NO') '         ------------------------------------------------'
@@ -271,8 +281,11 @@ program demo
                irep = irep + 1
                dt = dtv(j)
 
+               ! define casename
+               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_IIb_rk', rk, '_TO', torder, '_dt', dt  
+
                ! Reset input
-               call X%initialize_LR_state(U0, S0, rk)
+               call X%init(U0, S0, rk, casename=casename)
 
                ! run step
                opts = dlra_opts(mode=torder, if_rank_adaptive=.false.)
@@ -316,8 +329,8 @@ program demo
    print *, '#########################################################################'
    print *, ''
    ! initialize exponential propagator
-   nrep  = 10
-   Tstep = 0.1_wp
+   nrep  = 20
+   Tstep = 0.05_wp
    RK_propagator = rklib_lyapunov_mat(Tstep)
    Tend = nrep*Tstep
 
@@ -353,7 +366,7 @@ program demo
    print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
 
    !------------------
-   ! COMPUTE DLRA FOR SHORTEST INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
+   ! COMPUTE DLRA FOR LONGER INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
    !------------------
    print *, ''
    print *, '#########################################################################'
@@ -362,7 +375,7 @@ program demo
    print *, '#                                                                       #'
    print *, '#########################################################################'
    print *, ''
-   if (run_fixed_rank_long_integration_time_convergence_test) then
+   if (run_fixed_rank_long_integration_time_test) then
       print '(A10,A8,A4,A10,A8,3(A20),A20)', 'DLRA:','rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
          & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
       write(*,'(A)', ADVANCE='NO') '         ------------------------------------------------'
@@ -382,8 +395,11 @@ program demo
                irep = irep + 1
                dt = dtv(j)
 
+               ! define casename
+               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_IIIb_rk', rk, '_TO', torder, '_dt', dt
+
                ! Reset input
-               call X%initialize_LR_state(U0, S0, rk)
+               call X%init(U0, S0, rk, casename=casename)
 
                ! run step
                opts = dlra_opts(mode=torder, if_rank_adaptive=.false.)
@@ -425,7 +441,7 @@ program demo
    print *, '#                                                                       #'
    print *, '#########################################################################'
    print *, ''
-   if (run_rank_adaptive_long_integration_time_convergence_test) then
+   if (run_rank_adaptive_long_integration_time_test) then
       ! Choose input ranks and integration step
       rk = 8 ! This is for initialisation, but the algorithm will choose the appropriate rank automatically
       dtv = logspace(-4.0_wp, -1.0_wp, 4, 10)
@@ -448,8 +464,11 @@ program demo
                irep = irep + 1
                dt = dtv(j)
 
+               ! define casename
+               write(casename,'(A,A,I2.2,A,I0,A,F8.6,A,E8.2)') trim(home), 'DATA_IIc_TO', torder, '_dt', dt, '_tol', tol
+
                ! Reset input
-               call X%initialize_LR_state(U0, S0, rk, rkmax, if_rank_adaptive=.true.)
+               call X%init(U0, S0, rk, rkmax, if_rank_adaptive=.true., casename=casename)
 
                ! run step
                opts = dlra_opts(mode=torder, if_rank_adaptive=.true., tol=tol)
@@ -480,6 +499,86 @@ program demo
          print *, '#########################################################################'
          print *, ''
       end do
+   else
+      print *, 'Skip.'
+      print *, ''
+   end if
+
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#    IVa.  DLRA with optimal fixed rank to steady state                 #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
+   if (run_steady_state_convergence_test) then
+      call logger_setup(logfile='lightkrylov.log', log_level=warning_level, log_stdout=.false., log_timestamp=.false.)
+      ! Choose input ranks and integration steps
+      rk = 7
+      dt = 1e-4_wp
+      !torder = 2
+      tolv = logspace(-8.0_wp, -4.0_wp, 3, 10)
+      tolv = tolv(size(tolv):1:-1)
+      Tend = 1.0_dp
+
+      do k = 1, size(tolv)
+         tol = tolv(k)
+         print '(A,E9.2)', ' Increment tol = ', tol
+         print '(A10,A8,A4,A10,A8,3(A20),A20)', 'DLRA:','rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
+                        & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
+         write(*,'(A)', ADVANCE='NO') '         ------------------------------------------------'
+         print '(A)', '--------------------------------------------------------------'
+         do torder = 1, 2
+            ! set options
+            opts = dlra_opts( mode             = torder, &
+                              ! convergence check
+                           &  chkctrl_time     = .true., &
+                           &  chktime          = 0.01_dp, &
+                           &  chksvd           = .true., &
+                           &  inc_tol          = tol, &
+                              ! output callback
+                           &  ifIO             = .true., &
+                           &  iostep           = 1000, &
+                           &  ioctrl_time      = .false., &
+                              ! rank-adaptive settings     
+                           &  if_rank_adaptive = .false., &
+                           &  tol              = 1e-6_dp)
+
+            ! define casename
+            write(casename,'(A,A,I2.2,A,I0,A,F8.6,A,E8.2)') trim(home), 'DATA_IVa_rk', rk, '_TO', torder, '_dt', dt,  '_inctol', tol
+
+            ! Reset input
+            call X%init(U0, S0, rk, outpost=outpost_state, casename=casename)
+
+            ! run step
+            call system_clock(count=clock_start)     ! Start Timer
+            call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, info, exptA=exptA, options=opts)
+            call system_clock(count=clock_stop)      ! Stop Timer
+
+            ! Reconstruct solution
+            call get_state(U_out(:,:rk), X%U, 'Reconstruct solution')
+            X_out = matmul(U_out(:,:rk), matmul(X%S, transpose(U_out(:,:rk))))
+            X0 = CALE(X_out, Adata, BBTdata)
+            print '(A10,I8," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")', &
+                              & 'OUTPUT', rk, torder, dt, Tend, &
+                              & norm2(X_RKlib_ref - X_out)/N, norm2(X_out - Xref)/N, &
+                              & norm2(X0)/N, real(clock_stop-clock_start)/real(clock_rate)
+            deallocate(X%U, X%S)
+         end do
+         print *, ''
+         if (X%is_converged) then
+            print '(A,F6.2,A,I0,A)', 'Solution converged at t= ', X%time, ' after ', X%step, ' steps.'
+         else
+            print '(A,F6.2,A,I0,A)', 'Solution not converged at t= ', X%time, 'after ', X%step, ' steps.'
+         end if
+         print *, ''
+         svals = svdvals(Xref)
+         print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
+         svals = svdvals(X_RKlib_ref)
+         print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
+         svals = svdvals(X_out)
+         print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
+         print *, ''
+      end do   
    else
       print *, 'Skip.'
       print *, ''

@@ -1,6 +1,9 @@
 module laplacian2D_LTI_Lyapunov_Base
    ! Standard Library.
    use stdlib_stats_distribution_normal, only: normal => rvs_normal
+   use stdlib_io_npy, only: save_npy
+   use stdlib_strings, only: replace_all
+   use stdlib_linalg, only: svdvals
    use stdlib_optval, only : optval
    ! LightKrylov for linear algebra.
    use LightKrylov
@@ -38,7 +41,7 @@ module laplacian2D_LTI_Lyapunov_Base
    type, extends(abstract_sym_low_rank_state_rdp), public :: LR_state
    contains
       private
-      procedure, pass(self), public :: initialize_LR_state
+      procedure, pass(self), public :: init => initialize_LR_state
    end type LR_state
 
    !-------------------------------------------
@@ -46,7 +49,7 @@ module laplacian2D_LTI_Lyapunov_Base
    !-------------------------------------------
 
    type, extends(abstract_vector_rdp), public :: state_vector
-      real(wp)      :: state(N) = 0.0_wp
+      real(wp) :: state(N) = 0.0_wp
       contains
       private
       procedure, pass(self), public :: zero => vector_zero
@@ -119,7 +122,7 @@ contains
       end select
       return
    end subroutine vector_axpby
-
+   
    subroutine vector_rand(self, ifnorm)
       class(state_vector), intent(inout) :: self
       logical, optional,   intent(in)    :: ifnorm
@@ -202,7 +205,7 @@ contains
    !-----     TYPE BOUND PROCEDURE FOR SYM LOW RANK REPRESENTATION    -----
    !-----------------------------------------------------------------------
 
-   subroutine initialize_LR_state(self, U, S, rk, rkmax, if_rank_adaptive)
+   subroutine initialize_LR_state(self, U, S, rk, rkmax, if_rank_adaptive, casename, outpost)
       class(LR_state),            intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: U(:)
       real(wp),                   intent(in)    :: S(:,:)
@@ -210,6 +213,8 @@ contains
       integer, optional,          intent(in)    :: rkmax
       logical, optional,          intent(in)    :: if_rank_adaptive
       logical                                   :: ifrk
+      character(len=128), optional, intent(in)  :: casename
+      procedure(abstract_outpost_rdp), optional :: outpost
 
       ! internals
       class(abstract_vector_rdp), allocatable   :: Utmp(:)
@@ -221,6 +226,11 @@ contains
 
       select type (U)
       type is (state_vector)
+         ! set time and optional args
+         self%time = 0.0_wp
+         if (present(outpost)) self%outpost => outpost
+         self%casename = optval(casename, '')
+
          m = size(U)
          call assert_shape(S, [m,m], 'S', this_module, 'initialize_LR_state')
          ! optional size argument
