@@ -45,6 +45,8 @@ local/
 
 # data files
 *.npy
+*.txt
+lightkrylov.log
 
 # swap & tmp files
 *~
