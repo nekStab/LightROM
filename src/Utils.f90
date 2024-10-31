@@ -15,7 +15,7 @@ module LightROM_Utils
    implicit none 
 
    private :: this_module
-   character(len=*), parameter :: this_module = 'LightROM_Utils'
+   character(len=*), parameter :: this_module = 'LR_Utils'
 
    public :: dlra_opts
    public :: coefficient_matrix_norm, increment_norm, low_rank_CALE_residual_norm

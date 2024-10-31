@@ -37,7 +37,7 @@ module LightROM_RiccatiSolvers
    private 
    ! module name
    private :: this_module
-   character*128, parameter :: this_module = 'LightROM_RiccatiSolvers'
+   character(len=*), parameter :: this_module = 'LR_RiccSolvers'
    public :: projector_splitting_DLRA_riccati_integrator
    public :: G_forward_map_riccati
    public :: K_step_riccati

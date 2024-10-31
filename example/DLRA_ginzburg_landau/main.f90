@@ -183,7 +183,7 @@ program demo
    print *, 'SVD X_BS:'
    do i = 1, ceiling(60.0/irow)
       is = (i-1)*irow+1; ie = i*irow
-      print '(2X,I2,A,I2,*(1X,F16.12))', is, '-', ie, ( svals(j), j = is, ie )
+      print '(2X,I2,"-",I2,*(1X,F16.12))', is, ie, ( svals(j), j = is, ie )
    end do
    print *, ''
    
@@ -201,7 +201,7 @@ program demo
    svals = svdvals(X_out)
    do i = 1, ceiling(rk_X0*1.0_wp/irow)
       is = (i-1)*irow+1; ie = i*irow
-      print '(2X,I2,A,I2,*(1X,F16.12))', is, '-', ie, ( svals(j), j = is, ie )
+      print '(2X,I2,"-",I2,*(1X,F16.12))', is, ie, ( svals(j), j = is, ie )
    end do
    
    print *, ''

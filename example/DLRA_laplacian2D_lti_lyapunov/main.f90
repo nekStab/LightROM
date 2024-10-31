@@ -177,7 +177,7 @@ program demo
    
    print *, 'SVD X0'
    svals = svdvals(X0)
-   print '(1X,A16,2X*(F15.12,1X))', 'SVD(X0)[1-8]:', svals(:irow)
+   print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X0)[1-8]:', svals(:irow)
 
    !------------------
    ! COMPUTE EXACT SOLUTION OF THE LYAPUNOV EQUATION WITH LAPACK
@@ -207,7 +207,7 @@ program demo
    print *, ''
    ! compute svd
    svals = svdvals(Xref)
-   print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
+   print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
 
    !------------------
    ! COMPUTE SOLUTION WITH RK FOR DIFFERENT INTEGRATION TIMES AND COMPARE TO STUART-BARTELS
@@ -248,7 +248,7 @@ program demo
 
    print *, ''
    svals = svdvals(X_RKlib_ref)
-   print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
+   print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
 
    !------------------
    ! COMPUTE DLRA FOR SHORTEST INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
@@ -310,9 +310,9 @@ program demo
       nrep = irep
 
       svals = svdvals(X_RKlib_ref)
-      print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_RK)[1-8]:', svals(:irow)
+      print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_RK)[1-8]:', svals(:irow)
       svals = svdvals(X_out)
-      print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_LR)[1-8]:', svals(:irow)
+      print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR)[1-8]:', svals(:irow)
 
    else
       print *, 'Skip.'
@@ -361,9 +361,9 @@ program demo
 
    print *, ''
    svals = svdvals(Xref)
-   print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
+   print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
    svals = svdvals(X_RKlib_ref)
-   print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
+   print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
 
    !------------------
    ! COMPUTE DLRA FOR LONGER INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
@@ -423,11 +423,11 @@ program demo
       end do
 
       svals = svdvals(Xref)
-      print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
+      print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
       svals = svdvals(X_RKlib_ref)
-      print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
+      print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
       svals = svdvals(X_out)
-      print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
+      print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
       print *, ''
 
    else
@@ -490,11 +490,11 @@ program demo
             print *, ''
          end do
          svals = svdvals(Xref)
-         print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
+         print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
          svals = svdvals(X_RKlib_ref)
-         print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
+         print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
          svals = svdvals(X_out)
-         print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
+         print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
          print *, ''
          print *, '#########################################################################'
          print *, ''
@@ -572,11 +572,11 @@ program demo
          end if
          print *, ''
          svals = svdvals(Xref)
-         print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
+         print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
          svals = svdvals(X_RKlib_ref)
-         print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
+         print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
          svals = svdvals(X_out)
-         print '(1X,A16,2X*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
+         print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
          print *, ''
       end do   
    else
