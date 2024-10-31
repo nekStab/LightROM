@@ -14,7 +14,7 @@ module LightROM_LyapunovUtils
 
    ! module name
    private :: this_module
-   character(len=128), parameter :: this_module = 'LightROM_LyapunovUtils'
+   character(len=*), parameter :: this_module = 'LR_LyapUtils'
 
    ! Matrix operations for abstract vector types
    public :: apply_outerprod

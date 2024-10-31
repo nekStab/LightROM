@@ -9,7 +9,7 @@ module LightROM_RiccatiUtils
 
    ! module name
    private :: this_module
-   character(len=128), parameter :: this_module = 'LR_RiccUtils'
+   character(len=*), parameter :: this_module = 'LR_RiccUtils'
 
    public :: apply_outerprod_w
    public :: apply_premult_outerprod_w
