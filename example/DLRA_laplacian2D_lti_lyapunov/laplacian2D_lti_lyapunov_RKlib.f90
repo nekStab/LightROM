@@ -63,7 +63,7 @@ contains
 
    subroutine direct_solver_vec(self, vec_in, vec_out)
       !> Linear Operator.
-      class(rklib_exptA_laplacian), intent(in)  :: self
+      class(rklib_exptA_laplacian), intent(inout)  :: self
       !> Input vector.
       class(abstract_vector_rdp),   intent(in)  :: vec_in
       !> Output vector.
@@ -122,7 +122,7 @@ contains
 
    subroutine direct_solver_mat(self, vec_in, vec_out)
       !> Linear Operator.
-      class(rklib_lyapunov_mat),  intent(in)  :: self
+      class(rklib_lyapunov_mat),  intent(inout)  :: self
       !> Input vector.
       class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.

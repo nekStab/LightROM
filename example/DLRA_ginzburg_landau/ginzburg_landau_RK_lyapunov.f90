@@ -212,7 +212,7 @@ contains
 
    subroutine direct_solver_lyap(self, vec_in, vec_out)
       ! Linear Operator.
-      class(rk_lyapunov),          intent(in)  :: self
+      class(rk_lyapunov),          intent(inout)  :: self
       ! Input vector.
       class(abstract_vector_rdp),  intent(in)  :: vec_in
       ! Output vector.
@@ -237,7 +237,7 @@ contains
 
    subroutine adjoint_solver_lyap(self, vec_in, vec_out)
       ! Linear Operator.
-      class(rk_lyapunov),          intent(in)  :: self
+      class(rk_lyapunov),          intent(inout)  :: self
       ! Input vector.
       class(abstract_vector_rdp),  intent(in)  :: vec_in
       ! Output vector.

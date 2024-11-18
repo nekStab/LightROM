@@ -172,7 +172,7 @@ contains
       !! Reduced-order state-to-output matrix.
       real(wp),            allocatable, intent(out)    :: D(:, :)
       !! Feed-through matrix
-      class(abstract_lti_system_rdp),   intent(in)     :: LTI
+      class(abstract_lti_system_rdp),   intent(inout)  :: LTI
       !! Large-scale LTI to project
       class(abstract_vector_rdp),       intent(in)     :: T(:)
       !! Balancing transformation
@@ -225,7 +225,7 @@ contains
       !! Reduced-order state-to-output matrix.
       real(wp),            allocatable, intent(out)    :: D(:, :)
       !! Feed-through matrix
-      class(abstract_lti_system_rdp),   intent(in)     :: LTI
+      class(abstract_lti_system_rdp),   intent(inout)  :: LTI
       !! Large-scale LTI to project
       class(abstract_vector_rdp),       intent(inout)  :: T(:)
       !! Balancing transformation

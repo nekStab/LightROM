@@ -247,7 +247,7 @@ contains
 
    subroutine direct_matvec_GL(self, vec_in, vec_out)
       !> Linear Operator.
-      class(GL_operator),          intent(in)  :: self
+      class(GL_operator),          intent(inout)  :: self
       !> Input vector.
       class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
@@ -264,7 +264,7 @@ contains
 
    subroutine adjoint_matvec_GL(self, vec_in, vec_out)
       !> Linear Operator.
-      class(GL_operator),         intent(in)  :: self
+      class(GL_operator),         intent(inout)  :: self
       !> Input vector.
       class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
@@ -285,7 +285,7 @@ contains
 
    subroutine direct_solver(self, vec_in, vec_out)
       ! Linear Operator.
-      class(exponential_prop),     intent(in)  :: self
+      class(exponential_prop),     intent(inout)  :: self
       ! Input vector.
       class(abstract_vector_rdp),  intent(in)  :: vec_in
       ! Output vector.
@@ -312,7 +312,7 @@ contains
 
    subroutine adjoint_solver(self, vec_in, vec_out)
       ! Linear Operator.
-      class(exponential_prop),     intent(in)  :: self
+      class(exponential_prop),     intent(inout)  :: self
       ! Input vector.
       class(abstract_vector_rdp),  intent(in)  :: vec_in
       ! Output vector.

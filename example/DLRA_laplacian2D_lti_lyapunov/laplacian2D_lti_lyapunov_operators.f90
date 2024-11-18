@@ -44,7 +44,7 @@ contains
 
    subroutine direct_matvec_laplace(self, vec_in, vec_out)
       !> Linear Operator.
-      class(laplace_operator),     intent(in)  :: self
+      class(laplace_operator),     intent(inout)  :: self
       !> Input vector.
       class(abstract_vector_rdp),  intent(in)  :: vec_in
       !> Output vector.
