@@ -168,7 +168,7 @@ module LightROM_LyapunovSolvers
       real(wp)                                               :: tol                 ! current tolerance
       character(len=128)                                     :: msg, fmt_norm, fmt_sval
       integer                                                :: rkmax
-      real(wp), dimension(:),                  allocatable   :: svals, svals_lag
+      real(wp), dimension(:),                  allocatable   :: svals, dsvals, svals_lag
 
       ! Optional arguments
       trans = optval(iftrans, .false.)
@@ -203,6 +203,8 @@ module LightROM_LyapunovSolvers
       ifmt = max(5,int(log10(real(nsteps)))+1)
       write(fmt_norm,'(A,I0,A,I0,A)') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,": dX= ",E12.5," X= ",E12.5," dX/dt/X= ",E12.5)'
       write(fmt_sval,'(A,I0,A,I0,A)') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,": ",A,"[",I2,"-",I2,"]",*(E12.5, 1X))'
+      ! Prepare logfile
+      call write_logfile_headers(X%rk)
 
       if ( opts%mode > 2 ) then
          write(msg,'(A)') "Time-integration order for the operator splitting of d > 2 &
@@ -271,19 +273,25 @@ module LightROM_LyapunovSolvers
             inc_nrm = increment_norm(X, U_lag(:X%rk), S_lag(:X%rk,:X%rk), .true.)
             nrmX = coefficient_matrix_norm(X, .true.)
             write(msg,fmt_norm) istep, nsteps, X%time, inc_nrm, nrmX, inc_nrm/tau/nrmX
-            call logger%log_message(msg, module=this_module, procedure='DLRA_main')
+            call logger%log_information(msg, module=this_module, procedure='DLRA_main')
             svals = svdvals(X%S(:X%rk,:X%rk))
-            do i = 1, ceiling(float(X%rk)/iline)
-               is = (i-1)*iline+1; ie = i*iline
-               write(msg,fmt_sval) istep, nsteps, X%time, " SVD abs", ie, is, ( svals(j), j = is, ie )
-               call logger%log_message(msg, module=this_module, procedure='DLRA_main')
-            end do
             irk = min(size(svals), size(svals_lag))
-            do i = 1, ceiling(float(irk)/iline)
-               is = (i-1)*iline+1; ie = i*iline
-               write(msg,fmt_sval) istep, nsteps, X%time, "dSVD rel", ie, is, ( abs(svals(j)-svals_lag(j))/svals(j), j = 1, irk )
-               call logger%log_message(msg, module=this_module, procedure='DLRA_main')
+            allocate(dsvals(irk)); dsvals = 0.0_dp
+            do i = 1, irk
+               dsvals(i) = abs(svals(i)-svals_lag(i))/svals(i)
             end do
+            call stamp_logfiles(X, tau, svals, dsvals)
+            do i = 1, ceiling(float(X%rk)/iline)
+               is = (i-1)*iline+1; ie = min(X%rk,i*iline)
+               write(msg,fmt_sval) istep, nsteps, X%time, " SVD abs", is, ie, ( svals(j), j = is, ie )
+               call logger%log_information(msg, module=this_module, procedure='DLRA_main')
+            end do
+            do i = 1, ceiling(float(irk)/iline)
+               is = (i-1)*iline+1; ie = min(irk,i*iline)
+               write(msg,fmt_sval) istep, nsteps, X%time, "dSVD rel", is, ie, ( dsvals(j) , j = is, ie )
+               call logger%log_information(msg, module=this_module, procedure='DLRA_main')
+            end do
+            deallocate(dsvals)
             ! Check convergence
             X%is_converged = is_converged(svals(:irk), svals_lag(:irk), opts)
             if (X%is_converged) then

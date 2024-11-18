@@ -35,17 +35,14 @@
 doc
 
 # auxiliary files
-example/DLRA_laplacian2D_lti_lyapunov/*.txt
-example/DLRA_laplacian2D_lti_lyapunov/*.gpp
-example/DLRA_ginzburg_landau/*.txt
-example/DLRA_ginzburg_landau/*.gpp
-
-# local data
-local/
+**.txt
+**.gpp
 
 # data files
-*.npy
-*.txt
+**.npy
+**.txt
+**.dat
+**/local
 lightkrylov.log
 
 # swap & tmp files

@@ -112,7 +112,8 @@ program demo
    !
    !--------------------------------
 
-   call logger%configure(level=error_level, time_stamp=.false.)
+   call logger_setup()
+   call logger%configure(level=error_level, time_stamp=.true.)
 
    print *, '#########################################################################'
    print *, '#                                                                       #'

@@ -29,7 +29,7 @@ module Ginzburg_Landau_Tests
    private :: this_module
    public  :: rkmax, rk_X0
 
-   character(len=128), parameter :: this_module = 'Ginzburg_Landau_Tests'
+   character(len=*), parameter :: this_module = 'Ginzburg_Landau_Tests'
 
 contains
 
@@ -57,7 +57,7 @@ contains
       real(wp)                                     :: etime, Tstep
       ! OUTPUT
       real(wp)                                     :: X_out(N,N)
-      character*128      :: note
+      character(len=128)      :: note
       ! timer
       integer            :: clock_rate, clock_start, clock_stop
 
@@ -139,6 +139,7 @@ contains
       integer,                         parameter   :: irow = 8
       real(wp),                        allocatable :: svals(:)
       character(len=128)                           :: note, casename
+      character(len=128)                           :: logfile_abs, logfile_rel
       ! DLRA options
       type(dlra_opts)                              :: opts
       ! timer
@@ -172,7 +173,9 @@ contains
                opts%mode = torder
 
                ! define casename
-               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_II_rk', rk, '_TO', torder, '_dt', tau  
+               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_II_rk', rk, '_TO', torder, '_dt', tau
+               write(logfile_abs,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDabs_II_rk', rk, '_TO', torder, '_dt', tau, '.dat'
+               write(logfile_rel,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDrel_II_rk', rk, '_TO', torder, '_dt', tau, '.dat'
 
                ! Initialize low-rank representation with rank rk
                call X%initialize_LR_state(U0, S0, rk, rkmax, .false., casename=casename)
@@ -195,6 +198,8 @@ contains
                                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
                                  & norm2(CALE(X_out, adjoint))/N, etime
                deallocate(X%U); deallocate(X%S)
+               call rename(logfile_SVD_abs, logfile_abs)
+               call rename(logfile_SVD_rel, logfile_rel)
             end do
             print *, ''
          end do
@@ -255,6 +260,7 @@ contains
       integer,                         parameter   :: irow = 8
       real(wp),                        allocatable :: svals(:)
       character(len=128)                           :: note, casename
+      character(len=128)                           :: logfile_abs, logfile_rel
       ! DLRA options
       type(dlra_opts)                              :: opts
       ! timer
@@ -289,7 +295,9 @@ contains
                opts%mode = torder
 
                ! define casename
-               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_III_rk', rk, '_TO', torder, '_dt', tau  
+               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_III_rk', rk, '_TO', torder, '_dt', tau
+               write(logfile_abs,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDabs_III_rk', rk, '_TO', torder, '_dt', tau, '.dat'
+               write(logfile_rel,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDrel_III_rk', rk, '_TO', torder, '_dt', tau, '.dat'
 
                ! Initialize low-rank representation with rank rk
                call X%initialize_LR_state(U0, S0, rk, rkmax, opts%if_rank_adaptive, casename=casename)
@@ -312,6 +320,8 @@ contains
                                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
                                  & norm2(CALE(X_out, adjoint))/N, etime
                deallocate(X%U); deallocate(X%S)
+               call rename(logfile_SVD_abs, logfile_abs)
+               call rename(logfile_SVD_rel, logfile_rel)
             end do
             print *, ''
          end do
