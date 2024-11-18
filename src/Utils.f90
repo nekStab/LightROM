@@ -494,16 +494,16 @@ contains
       integer :: i
       ! SVD absolute
       open (1234, file=logfile_SVD_abs, status='replace', action='write')
-      write (1234, '(A8,2(A16,1X),A4)', ADVANCE='NO') 'istep', 'time', 'lag', 'rk'
+      write (1234, '(A8,2(A15,1X),A4)', ADVANCE='NO') 'istep', 'time', 'lag', 'rk'
       do i = 1, n0
-         write (1234, '(A14,I2.2,1X)', ADVANCE='NO') 's', i
+         write (1234, '(A13,I2.2,1X)', ADVANCE='NO') 's', i
       end do
       write (1234, *) ''; close (1234)
       ! dSVD relative
       open (1234, file=logfile_SVD_rel, status='replace', action='write')
-      write (1234, '(A8,2(A16,1X),A4)', ADVANCE='NO') 'istep', 'time', 'lag', 'rk'
+      write (1234, '(A8,2(A15,1X),A4)', ADVANCE='NO') 'istep', 'time', 'lag', 'rk'
       do i = 1, n0
-         write (1234, '(A14,I2.2,1X)', ADVANCE='NO') 'ds', i
+         write (1234, '(A13,I2.2,1X)', ADVANCE='NO') 'ds', i
       end do
       write (1234, *) ''; close (1234)
       return
