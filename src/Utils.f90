@@ -1,5 +1,6 @@
 module LightROM_Utils
    ! stdlib
+   use stdlib_strings, only: padl
    use stdlib_linalg, only : eye, diag, svd, svdvals, is_symmetric
    use stdlib_optval, only : optval
    ! LightKrylov for Linear Algebra
@@ -22,8 +23,7 @@ module LightROM_Utils
    public :: dlra_opts
    public :: coefficient_matrix_norm, increment_norm, low_rank_CALE_residual_norm
    public :: is_converged
-   public :: write_logfile_headers
-   public :: stamp_logfiles
+   public :: write_logfile_headers, stamp_logfiles, log_settings
    public :: project_onto_common_basis
    public :: Balancing_Transformation
    public :: ROM_Petrov_Galerkin_Projection
@@ -60,25 +60,10 @@ module LightROM_Utils
       !! Simulation time interval at which convergence is checked and runtime information is printed (default: 1.0)
       logical :: chkctrl_time = .true.
       !! Use time instead of timestep control (default: .true.)
-      logical :: chksvd = .true.
-      !! Which norm is decisive for convergence? (singular value increment - .true. - or increment norm - .false.; default = .true.)
       real(wp) :: inc_tol = 1e-6_wp
       !! Tolerance on the increment for convergence (default: 1e-6)
       logical :: relative_inc = .true.
       !! Tolerance control: Use relative values for convergence (default = .true.)
-      !
-      ! OUTPUT CALLBACK
-      !
-      logical :: ifIO = .false.
-      !! Oupost during simulation (default = .false.). The final result is always returned.
-      integer :: iostep = 100
-      !! Time step interval at which to outpost
-      real(wp) :: iotime = 1.0_wp
-      !! Simulation time interval at which convergence is checked and runtime information is printed (default: 1.0)
-      logical :: ioctrl_time = .true.
-      !! IO control: use time instead of timestep control (default: .true.)
-      logical :: ifsvd = .true.
-      !! Compute the SVD and project low-rank data prior to callback
       !
       ! RANK-ADPATIVE SPECIFICS
       !
@@ -388,16 +373,18 @@ contains
       return
    end function coefficient_matrix_norm
 
-   logical function is_converged(svals, svals_lag, opts) result(converged)
+   logical function is_converged(X, svals, svals_lag, opts, if_lastep) result(converged)
       !! This function checks the convergence of the solution based on the (relative) increment in the singular values
+      class(abstract_sym_low_rank_state_rdp) :: X
       real(wp)                   :: svals(:)
       real(wp)                   :: svals_lag(:)
-      real(wp),      allocatable :: dsvals(:)
       type(dlra_opts)            :: opts
+      logical                    :: if_lastep
       ! internals
+      real(wp),      allocatable :: dsvals(:)
       integer :: i
       real(wp) :: norm, norm_lag, dnorm
-      character*128 :: msg
+      character(len=128) :: msg, prefix
 
       norm     = sqrt(sum(svals**2))
       norm_lag = sqrt(sum(svals_lag**2))
@@ -413,8 +400,14 @@ contains
 
       converged = .false.
 
-      write(msg,'(A,3(E15.7,1X))') 'svals lag inc_norm: ', norm, norm_lag, dnorm
-      call logger%log_message(msg, module=this_module, procedure='DLRA convergence check')
+      if (if_lastep) then
+         prefix = 'DLRA check (final time)'
+      else
+         prefix = 'DLRA check'
+      end if
+
+      write(msg,'(I8, F15.8, A,2(E15.7,1X),A,E15.7)') X%step, X%time, ' svals lag ', norm, norm_lag, ' inc_norm ', dnorm
+      call logger%log_message(msg, module=this_module, procedure=prefix)
       if (dnorm < opts%inc_tol) converged = .true.
 
       return
@@ -449,7 +442,7 @@ contains
             call logger%log_warning(msg, module=this_module, procedure='DLRA_check_options')
          end if
          chkstep = opts%chkstep
-         write(msg,'(A,I0,A)') 'Convergence check every ', chkstep, ' steps (based on steps).'
+         write(msg,'(A,I0,A)') 'Convergence check every ', opts%chkstep, ' steps (based on steps).'
          call logger%log_information(msg, module=this_module, procedure='DLRA_check_options')
       end if
       return
@@ -493,5 +486,56 @@ contains
       close (1234)
       return
    end subroutine stamp_logfiles
+
+   subroutine log_settings(X, Tend, tau, nsteps, opts)
+      class(abstract_sym_low_rank_state_rdp),  intent(in) :: X
+      real(dp), intent(in) :: Tend
+      real(dp), intent(in) :: tau
+      integer, intent(in) :: nsteps
+      type(dlra_opts), intent(in) :: opts
+      ! internals
+      character(len=128) :: msg, ctype
+      call logger%log_message('###### solver settings ######', module=this_module, procedure='DLRA')
+      write(msg,'(A15," : ", F15.8)') padl('t0',15), X%time
+      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      write(msg,'(A15," : ", F15.8)') padl('tf',15), Tend
+      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      write(msg,'(A15," : ", F15.8)') padl('dt',15), tau
+      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      write(msg,'(A15," : ", I0)')    padl('nsteps',15),  nsteps
+      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      write(msg,'(A15," : ", I0)')    padl('t-order',15), opts%mode
+      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      write(msg,'(A15," : ", L)')     padl('adaptive rank',15), opts%if_rank_adaptive
+      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      if (opts%if_rank_adaptive) then
+         write(msg,'(A15," : ", I0)') padl('rk_init',15), X%rk
+         call logger%log_message(msg, module=this_module, procedure='DLRA')
+         write(msg,'(A15," : ", I0)') padl('rk_max',15), size(X%U)
+         call logger%log_message(msg, module=this_module, procedure='DLRA')
+         write(msg,'(A15," : sigma_{r+1} < ", E15.8)') padl('adapt. tol.',15), opts%tol
+         call logger%log_message(msg, module=this_module, procedure='DLRA')
+      else
+         write(msg,'(A15," : ", I0)') padl('rk',15), X%rk
+         call logger%log_message(msg, module=this_module, procedure='DLRA')
+      end if
+      if (opts%relative_inc) then
+         ctype = 'relative'
+      else
+         ctype = 'absolute'
+      end if
+      write(msg,'(A15," : ",A,A)')    padl('convergence',15), trim(ctype), ' increment of the solution 2-norm'
+      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      write(msg,'(A15," : ", E15.8)') padl('tol',15), opts%inc_tol
+      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      if (opts%chkctrl_time) then
+         write(msg,'("  Output every ",F8.4," time units (",I0," steps)")') opts%chktime, int(opts%chktime/tau)
+         call logger%log_message(msg, module=this_module, procedure='DLRA')
+      else
+         write(msg,'("  Output every ",I0," steps (",F8.4," time units)")') opts%chkstep, opts%chkstep*tau
+         call logger%log_message(msg, module=this_module, procedure='DLRA')
+      end if
+      call logger%log_message('###### solver settings ######', module=this_module, procedure='DLRA')
+   end subroutine
 
 end module LightROM_Utils
