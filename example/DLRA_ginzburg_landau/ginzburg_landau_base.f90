@@ -1,7 +1,11 @@
 module Ginzburg_Landau_Base
    ! Standard Library.
-   use stdlib_optval, only : optval
    use stdlib_stats_distribution_normal, only: normal => rvs_normal
+   use stdlib_optval, only : optval
+   use stdlib_math, only : linspace
+   use stdlib_io_npy, only: save_npy
+   use stdlib_strings, only: replace_all
+   use stdlib_linalg, only: svdvals, eye
    ! LightKrylov for linear algebra.
    use LightKrylov
    use LightKrylov, only: wp => dp
@@ -14,15 +18,14 @@ module Ginzburg_Landau_Base
    implicit none
 
    private :: this_module
-   character*128, parameter :: this_module = 'Ginzburg_Landau_Base'
+   character(len=128), parameter :: this_module = 'Ginzburg_Landau_Base'
    
-   public  :: L, nx, dx
+   public  :: L, nx, N, dx
    public  :: nu, gamma, mu_0, c_mu, mu_2, mu
    public  :: rk_b, x_b, s_b, rk_c, x_c, s_c
    public  :: B, CT, weight, weight_mat
-   public  :: N, BBTW_flat, CTCW_flat
+   public  :: BBTW, CTCW
    public  :: Qc, Rinv, CTQcCW_mat, BRinvBTW_mat
-
    
    !-------------------------------
    !-----     PARAMETERS 1    -----
@@ -69,7 +72,7 @@ module Ginzburg_Landau_Base
    real(wp),    parameter :: mu_0  = 0.38_wp
    real(wp),    parameter :: c_mu  = 0.2_wp
    real(wp),    parameter :: mu_2  = -0.01_wp
-   real(wp)               :: mu(1:nx)
+   real(wp)               :: mu(nx)
 
    ! Input-Output system parameters
    real(wp)               :: weight(2*nx)       ! integration weights
@@ -86,10 +89,11 @@ module Ginzburg_Landau_Base
 
    ! Data matrices for RK lyap
    integer,  parameter    :: N = 2*nx           ! Number of grid points (excluding boundaries).
-   real(wp)               :: weight_mat(N**2)   ! integration weights
-   real(wp)               :: BBTW_flat(N**2)
-   real(wp)               :: CTCW_flat(N**2)
-   ! Data matrices for Riccatis
+   real(wp)               :: weight_mat(N,N)    ! integration weights matrix
+   real(wp)               :: weight_flat(N**2)    ! integration weights flat
+   real(wp)               :: BBTW(N,N)
+   real(wp)               :: CTCW(N,N)
+   ! Data matrices for Riccati
    real(wp)               :: CTQcCW_mat(N,N)
    real(wp)               :: BRinvBTW_mat(N,N)
 
@@ -153,12 +157,12 @@ contains
       logical, optional,   intent(in)    :: ifnorm
       ! internals
       logical :: normalize
-      real(wp) :: mu(2*nx), var(2*nx), alpha
-      mu = 0.0_sp
-      var = 1.0_sp
-      self%state = normal(mu, var)
-
+      real(wp) :: alpha
+      real(wp), dimension(2*nx) :: mean, std
       normalize = optval(ifnorm,.true.)
+      mean = 0.0_wp
+      std  = 1.0_wp
+      self%state = normal(mean,std)
       if (normalize) then
          alpha = self%norm()
          call self%scal(1.0/alpha)
@@ -170,48 +174,88 @@ contains
    !-----     TYPE BOUND PROCEDURES FOR LR STATES    -----
    !------------------------------------------------------
 
-   subroutine initialize_LR_state(self, U, S, rk, rkmax)
+   subroutine initialize_LR_state(self, U, S, rk, rkmax, if_rank_adaptive, casename, outpost)
       class(LR_state),            intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: U(:)
       real(wp),                   intent(in)    :: S(:,:)
       integer,                    intent(in)    :: rk
       integer, optional,          intent(in)    :: rkmax
+      logical, optional,          intent(in)    :: if_rank_adaptive
+      logical                                   :: ifrk
+      character(len=128), optional, intent(in)  :: casename
+      procedure(abstract_outpost_rdp), optional :: outpost
 
       ! internals
-      integer :: i, n, rka, info
+      class(abstract_vector_rdp), allocatable   :: Utmp(:)
+      real(wp), allocatable :: R(:, :)
+      integer :: i, m, rka, info
+      character(len=128) :: msg
 
-      n = size(U)
-      call assert_shape(S, [n,n], "initialize_LR_state", "S")
-
-      ! optional size argument
-      if (present(rkmax)) then
-         self%rk = rk - 1
-         rka = rkmax
-      else
-         self%rk = rk
-         rka = rk + 1
-      end if
+      ifrk = optval(if_rank_adaptive, .false.)
 
       select type (U)
       type is (state_vector)
+         ! set time and optional args
+         self%time = 0.0_wp
+         if (present(outpost)) self%outpost => outpost
+         self%casename = optval(casename, '')
+      
+         m = size(U)
+         call assert_shape(S, [m,m], 'S', this_module, 'initialize_LR_state')
+         ! optional size argument
+         if (present(rkmax)) then
+            if (rkmax < rk) then
+               call stop_error('rkmax < rk!', this_module, 'initialize_LR_state')
+            end if
+            self%rk = rk
+            rka = rkmax
+            if (ifrk) then
+               if (rkmax==rk) then
+                  call stop_error('rkmax must be larger than rk for rank-adaptive DLRA!', this_module, 'initialize_LR_state')
+               end if
+               write(msg,'(A,I0,A)') 'Rank-adaptivity enabled. Computation will begin with X%rk = ', self%rk+1, '.'
+               call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
+            end if
+         else
+            self%rk = rk
+            if (ifrk) then
+               rka = rk + 1
+            else
+               rka = rk
+            end if
+         end if
+
          ! allocate & initialize
          allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
          allocate(self%S(rka,rka)); self%S = 0.0_wp
+         write(msg,'(3(A,I0),A)') 'size(X%U) = [ ', rka,' ], X%rk = ', self%rk, ', size(U0) = [ ', m,' ]'
+         call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          ! copy inputs
-         if (self%rk > n) then   ! copy the full IC into self%U
-            call copy_basis(self%U(1:n), U)
-            self%S(1:n,1:n) = S
+         if (self%rk > m) then   ! copy the full IC into self%U
+            call copy(self%U(:m), U)
+            self%S(:m,:m) = S
+            write(msg,'(4X,A,I0,A)') 'Transfer the first ', m, ' columns of U0 to X%U.'
+            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
-            call copy_basis(self%U(1:self%rk), U(1:self%rk))
-            self%S(1:self%rk,1:self%rk) = S(1:self%rk,1:self%rk)
+            call copy(self%U(:self%rk), U(:self%rk))
+            self%S(:self%rk,:self%rk) = S(:self%rk,:self%rk)
+            write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
+            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          end if
          ! top up basis (to rka for rank-adaptivity) with orthonormal columns if needed
-         if (rka > n) then
-            do i = n+1, rka
-               call self%U(i)%rand()
+         if (rka > m) then
+            write(msg,'(4X,A,I0,A)') 'Fill remaining ', rka-m, ' columns with orthonormal noise orthonormal to U0.'
+            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
+            allocate(Utmp(rka-m), source=U(1))
+            do i = 1, rka-m
+               call Utmp(i)%rand()
             end do
-            call orthogonalize_against_basis(self%U(n+1:rka), self%U(:n), info, if_chk_orthonormal=.false.)
-            call orthonormalize_basis(self%U(n+1:rka))
+            allocate(R(rka-m,rka-m)); R = 0.0_wp
+            call orthogonalize_against_basis(Utmp, self%U, info)
+            call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='initialize_LR_state')
+            call qr(Utmp, R, info)
+            call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
+            call copy(self%U(m+1:), Utmp)
          end if
       end select
       return

@@ -14,7 +14,7 @@ module Ginzburg_Landau_Operators
    implicit none
 
    private :: this_module
-   character*128, parameter :: this_module = 'Ginzburg_Landau_Operators'
+   character(len=128), parameter :: this_module = 'Ginzburg_Landau_Operators'
    public  :: exptA, direct_GL, adjoint_GL
 
    !-----------------------------------------------
@@ -247,7 +247,7 @@ contains
 
    subroutine direct_matvec_GL(self, vec_in, vec_out)
       !> Linear Operator.
-      class(GL_operator),          intent(in)  :: self
+      class(GL_operator),          intent(inout)  :: self
       !> Input vector.
       class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
@@ -264,7 +264,7 @@ contains
 
    subroutine adjoint_matvec_GL(self, vec_in, vec_out)
       !> Linear Operator.
-      class(GL_operator),         intent(in)  :: self
+      class(GL_operator),         intent(inout)  :: self
       !> Input vector.
       class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
@@ -285,7 +285,7 @@ contains
 
    subroutine direct_solver(self, vec_in, vec_out)
       ! Linear Operator.
-      class(exponential_prop),     intent(in)  :: self
+      class(exponential_prop),     intent(inout)  :: self
       ! Input vector.
       class(abstract_vector_rdp),  intent(in)  :: vec_in
       ! Output vector.
@@ -312,7 +312,7 @@ contains
 
    subroutine adjoint_solver(self, vec_in, vec_out)
       ! Linear Operator.
-      class(exponential_prop),     intent(in)  :: self
+      class(exponential_prop),     intent(inout)  :: self
       ! Input vector.
       class(abstract_vector_rdp),  intent(in)  :: vec_in
       ! Output vector.
@@ -326,12 +326,10 @@ contains
       type is(state_vector)
          select type(vec_out)
          type is(state_vector)
-
             ! Initialize propagator.
             call prop%initialize(n=2*nx, f=adjoint_rhs)
             ! Integrate forward in time.
             call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
-
          end select
       end select
       return
@@ -385,16 +383,13 @@ contains
    !-----     TYPE BOUND PROCEDURES FOR LTI SYSTEMS    -----
    !--------------------------------------------------------
 
-   subroutine initialize_lti_system(self, A, prop, B, CT, D)
+   subroutine initialize_lti_system(self, A, prop, B_in, CT_in, D)
       class(lti_system),           intent(inout) :: self
       class(abstract_linop_rdp),   intent(in)    :: A
       class(abstract_linop_rdp),   intent(in)    :: prop
-      class(abstract_vector_rdp),  intent(in)    :: B(:)
-      class(abstract_vector_rdp),  intent(in)    :: CT(:)
+      class(abstract_vector_rdp),  intent(in)    :: B_in(:)
+      class(abstract_vector_rdp),  intent(in)    :: CT_in(:)
       real(wp),          optional, intent(in)    :: D(:,:)
-
-      ! internal variables
-      integer                                :: rk_b, rk_c
 
       ! Operator
       select type (A)
@@ -407,21 +402,19 @@ contains
          allocate(self%prop, source=prop)
       end select
       ! Input
-      select type (B)
+      select type (B_in)
       type is (state_vector)
-         rk_b = size(B)
-         allocate(self%B(1:rk_b), source=B(1:rk_b))
+         allocate(self%B(rk_b), source=B_in(:rk_b))
       end select
       ! Output
-      select type (CT)
+      select type (CT_in)
          type is (state_vector)
-         rk_c = size(CT)
-         allocate(self%CT(1:rk_c), source=CT(1:rk_c))
+         allocate(self%CT(rk_c), source=CT_in(:rk_c))
       end select
       ! Throughput
-      allocate(self%D(1:rk_c, 1:rk_b))
+      allocate(self%D(rk_c,rk_b))
       if (present(D)) then
-         call assert_shape(D, (/ rk_c, rk_b /), 'initialize_lti_system', 'D')
+         call assert_shape(D, [ rk_c, rk_b ], 'D', this_module, 'initialize_lti_system')
          self%D = D
       else
          self%D = 0.0_wp

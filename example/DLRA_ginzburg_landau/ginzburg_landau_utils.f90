@@ -1,10 +1,7 @@
 module Ginzburg_Landau_Utils
    ! Standard Library.
-   use stdlib_math, only : linspace
    use stdlib_optval, only : optval
    use stdlib_linalg, only : eye, diag, svd
-   use stdlib_io_npy, only : save_npy, load_npy
-   use stdlib_stats_distribution_normal, only: normal => rvs_normal
    !use fortime
    ! LightKrylov for linear algebra.
    use LightKrylov
@@ -28,18 +25,21 @@ module Ginzburg_Landau_Utils
    implicit none
 
    private :: this_module
-   ! mesh construction
+   ! initialize mesh
    public  :: initialize_parameters
    ! utilities for state_vectors
    public  :: set_state, get_state, init_rand, reconstruct_solution
    ! initial conditions
    public  :: generate_random_initial_condition
-   ! logfiles
-   public  :: stamp_logfile_header
    ! misc
-   public  :: CALE, CARE
+   public  :: CALE, CARE, outpost_state
 
-   character*128, parameter :: this_module = 'Ginzburg_Landau_Utils'
+   character(len=128), parameter :: this_module = 'Ginzburg_Landau_Utils'
+
+   interface reconstruct_solution
+      module procedure reconstruct_solution_X
+      module procedure reconstruct_solution_US
+   end interface
 
 contains
 
@@ -52,7 +52,7 @@ contains
       ! Mesh array.
       real(wp), allocatable :: x(:)
       real(wp)              :: x2(1:2*nx)
-      real(wp)              :: tmpv(N, 2)
+      real(wp), allocatable :: mat(:,:), matW(:,:)
       integer               :: i
 
       ! Construct mesh.
@@ -63,8 +63,9 @@ contains
       mu(:) = (mu_0 - c_mu**2) + (mu_2 / 2.0_wp) * x(2:nx+1)**2
 
       ! Define integration weights
-      weight     = dx
-      weight_mat = dx
+      weight          = dx
+      weight_mat      = eye(N)*dx
+      weight_flat     = dx
 
       ! Construct B & C
       ! B = [ [ Br, -Bi ], [ Bi, Br ] ]
@@ -75,34 +76,58 @@ contains
       ! column 1
       x2       = 0.0_wp
       x2(1:nx) = x(2:nx+1)
-      B(1)%state = 0.5*exp(-((x2 - x_b)/s_b)**2)*sqrt(weight)
+      B(1)%state = exp(-((x2 - x_b)/s_b)**2)!*sqrt(weight)
       ! column 2
       x2            = 0.0_wp
       x2(nx+1:2*nx) = x(2:nx+1)
-      B(2)%state = 0.5*exp(-((x2 - x_b)/s_b)**2)*sqrt(weight)
+      B(2)%state = exp(-((x2 - x_b)/s_b)**2)!*sqrt(weight)
 
       ! the sensor is a Gaussian centered at branch II
       ! column 1
       x2       = 0.0_wp
       x2(1:nx) = x(2:nx+1)
-      CT(1)%state = 0.5*exp(-((x2 - x_c)/s_c)**2)*sqrt(weight)
+      CT(1)%state = exp(-((x2 - x_c)/s_c)**2) !/sqrt(weight)
       ! column 2
       x2            = 0.0_wp
       x2(nx+1:2*nx) = x(2:nx+1)
-      CT(2)%state = 0.5*exp(-((x2 - x_c)/s_c)**2)*sqrt(weight)
-
-      ! Note that we have included the integration weights into the actuator/sensor definitions
+      CT(2)%state = exp(-((x2 - x_c)/s_c)**2) !/sqrt(weight)
 
       ! RK lyap & riccati
       Qc   = eye(rk_c)
       Rinv = eye(rk_b)
-      tmpv = 0.0_wp
-      call get_state(tmpv(:,1:rk_b), B(1:rk_b))
-      BBTW_flat(1:N**2)     = reshape(matmul(tmpv, transpose(tmpv)), shape(BBTW_flat))
-      BRinvBTW_mat(1:N,1:N) = matmul(matmul(tmpv, Rinv), transpose(tmpv))
-      call get_state(tmpv(:,1:rk_c), CT(1:rk_c))
-      CTCW_flat(1:N**2)     = reshape(matmul(tmpv, transpose(tmpv)), shape(CTCW_flat))
-      CTQcCW_mat(1:N,1:N)   = matmul(matmul(tmpv, Qc), transpose(tmpv))
+
+      allocate(mat(N, rk_b), matW(N, rk_b))
+      call get_state(mat(:,1:rk_b), B(1:rk_b), 'initialize_parameters')
+      matW = matmul(mat, weight_mat(:rk_b,:rk_b)) ! incorporate weights
+      BBTW = matmul(mat, transpose(matW))
+      BRinvBTW_mat  = matmul(mat, matmul(Rinv, transpose(matW)))
+      deallocate(mat, matW)
+
+      allocate(mat(N, rk_c), matW(N, rk_c))
+      call get_state(mat(:,1:rk_c), CT(1:rk_c), 'initialize_parameters')
+      matW = matmul(mat, weight_mat(:rk_c,:rk_c)) ! incorporate weights
+      CTCW = matmul(mat, transpose(matW))
+      CTQcCW_mat =  matmul(mat, matmul(Qc, transpose(matW)))
+      deallocate(mat, matW)
+
+      print '(A)', ' ----------------------------------------'
+      print '(A)', '    LINEAR GINZBURG LANDAU PARAMETERS'
+      print '(A)', ' ----------------------------------------'
+      print '(4X,A,F10.6," + ",F10.6," i")', 'nu    = ', nu
+      print '(4X,A,F10.6," + ",F10.6," i")', 'gamma = ', gamma
+      print '(4X,A,F10.6)', 'mu_0  = ', mu_0
+      print '(4X,A,F10.6)', 'c_mu  = ', c_mu
+      print '(4X,A,F10.6)', 'mu_2  = ', mu_2
+      print '(4X,A)', '-----------------------'
+      print '(4X,A)', ' Inhomogeneities'
+      print '(4X,A)', '-----------------------'
+      print '(4X,A,I10,A)',   'rk_b  = ', rk_b, '     ! forcing rank'
+      print '(4X,A,F10.6,A)', 'x_b   = ', x_b,  '     ! forcing location'
+      print '(4X,A,F10.6,A)', 's_b   = ', s_b,  '     ! std dev of gaussian distribution'
+      print '(4X,A,I10,A)',   'rk_c  = ', rk_c, '     ! sensor rank'
+      print '(4X,A,F10.6,A)', 'x_c   = ', x_c,  '     ! sensor location'
+      print '(4X,A,F10.6,A)', 's_c   = ', s_c,  '     ! std dev of gaussian distribution'
+      print '(A)', ' ----------------------------------------'
 
       return
    end subroutine initialize_parameters
@@ -111,43 +136,45 @@ contains
    !-----     UTILITIES FOR STATE_VECTOR AND STATE MATRIX TYPES    -----
    !--------------------------------------------------------------------
 
-   subroutine get_state(mat_out, state_in)
+   subroutine get_state(mat_out, state_in, procedure)
       !! Utility function to transfer data from a state vector to a real array
       real(wp),                   intent(out) :: mat_out(:,:)
       class(abstract_vector_rdp), intent(in)  :: state_in(:)
+      character(len=*),           intent(in)  :: procedure
       ! internal variables
       integer :: k, kdim
       mat_out = 0.0_wp
       select type (state_in)
       type is (state_vector)
          kdim = size(state_in)
-         call assert_shape(mat_out, (/ N, kdim /), 'get_state -> state_vector', 'mat_out')
+         call assert_shape(mat_out, [ N, kdim ], 'mat_out', this_module, 'get_state:'//trim(procedure))
          do k = 1, kdim
             mat_out(:,k) = state_in(k)%state
          end do
       type is (state_matrix)
-         call assert_shape(mat_out, (/ N, N /), 'get_state -> state_matrix', 'mat_out')
-         mat_out = reshape(state_in(1)%state, (/ N, N /))
+         call assert_shape(mat_out, [ N, N ], 'mat_out', this_module, 'get_state:'//trim(procedure))
+         mat_out = reshape(state_in(1)%state, [ N, N ])
       end select
       return
    end subroutine get_state
 
-   subroutine set_state(state_out, mat_in)
+   subroutine set_state(state_out, mat_in, procedure)
       !! Utility function to transfer data from a real array to a state vector
       class(abstract_vector_rdp), intent(out) :: state_out(:)
       real(wp),                   intent(in)  :: mat_in(:,:)
+      character(len=*),           intent(in)  :: procedure
       ! internal variables
       integer       :: k, kdim
       select type (state_out)
       type is (state_vector)
          kdim = size(state_out)
-         call assert_shape(mat_in, (/ N, kdim /), 'set_state -> state_vector', 'mat_in')
+         call assert_shape(mat_in, [ N, kdim ], 'mat_in', this_module, 'set_state:'//trim(procedure))
          call zero_basis(state_out)
          do k = 1, kdim
             state_out(k)%state = mat_in(:,k)
          end do
       type is (state_matrix)
-         call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
+         call assert_shape(mat_in, [ N, N ], 'mat_in', this_module, 'set_state:'//trim(procedure))
          call zero_basis(state_out)
          state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
       end select
@@ -177,20 +204,37 @@ contains
       return
    end subroutine init_rand
 
-   subroutine reconstruct_solution(X, LR_X)
+   subroutine reconstruct_solution_X(X, LR_X)
       real(wp),          intent(out) :: X(:,:)
       type(LR_state),    intent(in)  :: LR_X
       
       ! internals
-      real(wp) :: wrk(N, LR_X%rk)
+      real(wp) :: Uwrk(N, LR_X%rk)
 
-      call assert_shape(X, (/ N, N /), 'reconstruct_solution', 'X')
-
-      call get_state(wrk, LR_X%U(1:LR_X%rk))
-      X = matmul(wrk, matmul(LR_X%S(1:LR_X%rk,1:LR_X%rk), transpose(wrk)))
+      call assert_shape(X, [ N, N ], 'X', this_module, 'reconstruct_solution_X')
+      call get_state(Uwrk, LR_X%U(1:LR_X%rk), 'reconstruct_solution_X')
+      X = matmul(matmul(Uwrk, matmul(LR_X%S(1:LR_X%rk,1:LR_X%rk), transpose(Uwrk))), weight_mat)
 
       return
-   end subroutine reconstruct_solution
+   end subroutine reconstruct_solution_X
+
+   subroutine reconstruct_solution_US(X, U, S)
+      real(wp),           intent(out) :: X(:,:)
+      type(state_vector), intent(in)  :: U(:)
+      real(wp),           intent(in)  :: S(:,:)
+      
+      ! internals
+      integer  :: rk
+      real(wp) :: Uwrk(N, size(U))
+
+      rk = size(U)
+      call assert_shape(X, [ N, N ], 'X', this_module, 'reconstruct_solution_US')
+      call assert_shape(S, [ rk, rk ], 'S', this_module, 'reconstruct_solution_US')
+      call get_state(Uwrk, U, 'reconstruct_solution_US')
+      X = matmul(matmul(Uwrk, matmul(S, transpose(Uwrk))), weight_mat)
+
+      return
+   end subroutine reconstruct_solution_US
 
    !------------------------------------
    !-----     INITIAL CONDIIONS    -----
@@ -200,164 +244,136 @@ contains
       class(state_vector),   intent(out) :: U(:)
       real(wp),              intent(out) :: S(:,:)
       integer,               intent(in)  :: rk
-      ! internal
-      real(wp), dimension(rk, rk) :: mu, var, V
-      real(wp), dimension(rk)     :: lambda
-      integer :: i
+      ! internals
+      class(state_vector),   allocatable :: Utmp(:)
+      ! SVD
+      real(wp)                           :: U_svd(rk,rk)
+      real(wp)                           :: S_svd(rk)
+      real(wp)                           :: V_svd(rk,rk)
+      integer                            :: i, info
+      character(len=128) :: msg
 
       ! checks
       if (size(U) < rk) then
-         write(*,*) 'Input krylov basis size incompatible with requested rank', rk
+         write(msg,'(A,I0)') 'Input krylov basis size incompatible with requested rank ', rk
+         call stop_error(msg, module=this_module, procedure='generate_random_initial_condition')
          STOP 1
       end if
-      if (size(S,1) < rk) then
-         write(*,*) 'Input coefficient matrix size incompatible with requested rank', rk
-         STOP 1
-      else if (size(S,1) /= size(S,2)) then
-         write(*,*) 'Input coefficient matrix must be square.'
-         STOP 2
-      end if
-      ! get orthonormal basis
-      call zero_basis(U)
-      do i = 1, size(U)
-         call U(i)%rand(.false.)
-      end do
-      call orthonormalize_basis(U)
-      ! get symmetric coefficients
-      mu = 0.0_sp
-      var = 1.0_sp
+      call assert_shape(S, [ rk,rk ], 'S', this_module, 'generate_random_initial_condition')
       S = 0.0_wp
-      S(:rk,:rk) = normal(mu, var)
-      ! ensure symmetry
-      S = 0.5*(S + transpose(S))
-      ! ensure positive definiteness
-      call eigh(S, V, lambda)
-      S = matmul(V, matmul(diag(abs(lambda)), transpose(V)))
-      ! ensure symmetry that is not exactly preserved in matmul
-      S = 0.5*(S + transpose(S))
-
-      return      
-   end subroutine
-
-   !-----------------------------
-   !-----      LOGFILES     -----
-   !-----------------------------
-
-   subroutine stamp_logfile_header(iunit, problem, rk, tau, Tend, torder, opts)
-      integer,         intent(in) :: iunit
-      character(*),    intent(in) :: problem
-      integer,         intent(in) :: rk
-      real(wp),        intent(in) :: tau
-      real(wp),        intent(in) :: Tend
-      integer,         intent(in) :: torder
-      type(dlra_opts), optional, intent(in) :: opts
-
-      write(iunit,*) '-----------------------'
-      write(iunit,*) '    GINZBURG LANDAU'
-      write(iunit,*) '-----------------------'
-      write(iunit,*) 'nu    = ', nu
-      write(iunit,*) 'gamma = ', gamma
-      write(iunit,*) 'mu_0  = ', mu_0
-      write(iunit,*) 'c_mu  = ', c_mu
-      write(iunit,*) 'mu_2  = ', mu_2
-      write(iunit,*) '-----------------------'
-      write(iunit,*) problem
-      write(iunit,*) '-----------------------'
-      write(iunit,*) 'nx    = ', nx
-      write(iunit,*) 'rk_b  = ', rk_b
-      write(iunit,*) 'x_b   = ', x_b
-      write(iunit,*) 's_b   = ', s_b
-      write(iunit,*) 'rk_c  = ', rk_c
-      write(iunit,*) 'x_c   = ', x_c
-      write(iunit,*) 's_c   = ', s_c
-      write(iunit,*) '-----------------------'
-      write(iunit,*) 'Time Integration: DLRA'
-      write(iunit,*) '-----------------------'
-      write(iunit,*) 'Tend   = ', Tend
-      write(iunit,*) 'torder = ', torder
-      write(iunit,*) 'tau    = ', tau
-      write(iunit,*) 'rk0    = ', rk
-      write(iunit,*) '---------------------'
-      if (present(opts)) then
-        write(iunit,*) 'rank-adaptive: ', opts%if_rank_adaptive
-        if (opts%if_rank_adaptive) then
-            if (opts%initctrl_step) then
-                write(iunit,*), "init_ctrl = 'step'"
-                write(iunit,*), 'init_step = ', opts%ninit
-            else
-                write(iunit,*), "init_ctrl = 'time'"
-                write(iunit,*), 'init_tine = ', opts%tinit
-            end if
-            write(iunit,*), 'rk tol    = ', opts%tol
-            write(iunit,*), 'err_est   = ', opts%use_err_est
-            if (opts%use_err_est) then
-                write(iunit,*), 'est_step  = ', opts%err_est_step
-            end if
-        end if
-      end if
-      write(iunit,*) '---------------------'
+      
+      ! perform QR
+      allocate(Utmp(rk), source=U(:rk))
+      call qr(Utmp, S, info)
+      call check_info(info, 'qr', module=this_module, procedure='generate_random_initial_condition')
+      ! perform SVD
+      call svd(S(:rk,:rk), S_svd, U_svd, V_svd)
+      S(:rk,:rk) = diag(S_svd)
+      block
+         class(abstract_vector_rdp), allocatable :: Xwrk(:)
+         call linear_combination(Xwrk, Utmp, U_svd)
+         call copy(U, Xwrk)
+      end block
+      write(msg,'(A,I0,A,I0,A)') 'size(U) = [ ', size(U),' ]: filling the first ', rk, ' columns with noise.'
+      call logger%log_information(msg, module=this_module, procedure='generate_random_initial_condition')
       return
-   end subroutine stamp_logfile_header
+   end subroutine
 
    !-------------------------
    !-----      MISC     -----
    !-------------------------
 
-   subroutine CALE(res_flat, x_flat, Q_flat, adjoint)
-      ! residual
-      real(wp),                 intent(out) :: res_flat(:)
+   function CALE(X, adjoint) result(res)
+      
       ! solution
-      real(wp),                 intent(in)  :: x_flat(:)
-      ! inhomogeneity
-      real(wp),                 intent(in)  :: Q_flat(:)
-      !> Adjoint
+      real(wp)          :: X(N,N)
+      ! adjoint
       logical, optional :: adjoint
-      logical           :: adj
+      ! residual
+      real(wp)          :: res(N,N)
 
       ! internals
-      real(wp),   dimension(N**2) :: x_tmp, AX_flat, XAH_flat
+      real(wp), dimension(N,N) :: AX, XAH
 
-      !> Deal with optional argument
-      adj  = optval(adjoint,.false.)
+      AX = 0.0_wp; XAH = 0.0_wp
+      call GL_mat(AX,  X,             adjoint = adjoint, transpose = .false.)
+      call GL_mat(XAH, transpose(X),  adjoint = adjoint, transpose = .true. )
 
-      res_flat = 0.0_wp; AX_flat = 0.0_wp; XAH_flat = 0.0_wp; x_tmp = 0.0_wp
-      call GL_mat( AX_flat, x_flat, adjoint = adj, transpose = .false.)
-      x_tmp    = reshape(transpose(reshape(x_flat,   (/ N,N /))), shape(x_flat))
-      call GL_mat(XAH_flat, x_tmp,  adjoint = adj, transpose = .true. )
       ! construct Lyapunov equation
-      res_flat = AX_flat + XAH_flat + Q_flat
+      if (adjoint) then
+         res = AX + XAH + CTCW
+      else
+         res = AX + XAH + BBTW
+      end if
 
-   end subroutine CALE
+   end function CALE
 
-   subroutine CARE(res_flat, x_flat, CTQcC_flat, BRinvBT_mat, adjoint)
-      ! residual
-      real(wp),                 intent(out) :: res_flat(:)
+   function CARE(X, CTQcCW, BRinvBTW, adjoint) result(res)
       ! solution
-      real(wp),                 intent(in)  :: x_flat(:)
+      real(wp)          :: X(N,N)
       ! inhomogeneity
-      real(wp),                 intent(in)  :: CTQcC_flat(:)
+      real(wp)          :: CTQcCW(N,N)
       ! inhomogeneity
-      real(wp),                 intent(in)  :: BRinvBT_mat(:,:)
-      !> Adjoint
+      real(wp)          :: BRinvBTW(N,N)
+      ! adjoint
       logical, optional :: adjoint
-      logical           :: adj
-
+      ! residual
+      real(wp)          :: res(N,N)
+      
       ! internals
-      real(wp),   dimension(N**2) :: x_tmp, AX_flat, XAH_flat, NL_flat
-      real(wp),   dimension(N,N)  :: x_mat
+      real(wp), dimension(N,N) :: AX, XAH
 
-      !> Deal with optional argument
-      adj  = optval(adjoint,.false.)
+      AX = 0.0_wp; XAH = 0.0_wp
+      call GL_mat(AX,  X,             adjoint = adjoint, transpose = .false.)
+      call GL_mat(XAH, transpose(X),  adjoint = adjoint, transpose = .true. )
 
-      res_flat = 0.0_wp; AX_flat = 0.0_wp; XAH_flat = 0.0_wp; x_tmp = 0.0_wp
-      call GL_mat( AX_flat, x_flat, adjoint = adj, transpose = .false.)
-      x_mat = reshape(x_flat, (/ N,N /))
-      x_tmp = reshape(transpose(x_mat), shape(x_flat))
-      call GL_mat(XAH_flat, x_tmp,  adjoint = adj, transpose = .true. )
-      NL_flat = reshape(matmul(x_mat, matmul(BRinvBTW_mat, x_mat)), shape(NL_flat))
       ! construct Lyapunov equation
-      res_flat = AX_flat + XAH_flat + CTQcC_flat + NL_flat
+      res = AX + XAH + CTCW + matmul(X, matmul(BRinvBTW, X))
 
-   end subroutine CARE
+   end function CARE
+
+   subroutine outpost_state(self, info)
+      !! Abstract interface to define the matrix exponential-vector product.
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
+      integer,                                intent(out)   :: info
+      ! internal
+      integer :: rk, iostatus
+      character(len=128) :: filename, msg
+      logical :: exist_file
+      real(wp), dimension(:,:), allocatable :: U
+      select type(self)
+      type is(LR_state)
+         rk = self%rk
+         write(filename, '(A,A,I5.5,A,I5.5,A)') trim(self%casename), '_s', self%step, '_', self%iout, '_S.npy'
+         inquire(file=filename, exist=exist_file)
+         if (.not. exist_file) then
+            call save_npy(filename, self%S(:rk,:rk), iostatus)
+            if (iostatus /= 0) call stop_error('Error saving file '//trim(filename), module=this_module, procedure='outpost_state')
+         else
+            msg = 'Error saving file '//trim(filename)//': file exists!'
+            print *, msg
+            call stop_error(msg, module=this_module, procedure='outpost_state')
+         end if
+         msg = 'Saved file '//trim(filename)
+         print *, msg
+         call logger%log_message(msg, module=this_module, procedure='outpost_state')
+         write(filename, '(A,A,I5.5,A,I5.5,A)') trim(self%casename), '_s', self%step, '_', self%iout, '_U.npy'
+         inquire(file=filename, exist=exist_file)
+         if (.not. exist_file) then
+            
+            allocate(U(N,rk)); U = 0.0_wp
+            call get_state(U, self%U(:rk), 'outpost_state')
+            call save_npy(filename, U, iostatus)
+            if (iostatus /= 0) call stop_error('Error saving file '//trim(filename), module=this_module, procedure='outpost_state')
+         else
+            msg = 'Error saving file '//trim(filename)//': file exists!'
+            call stop_error(msg, module=this_module, procedure='outpost_state')
+         end if
+         msg = 'Saved file '//trim(filename)
+         print *, msg
+         call logger%log_message(msg, module=this_module, procedure='outpost_state')
+      end select
+      return
+   end subroutine outpost_state
 
 end module Ginzburg_Landau_Utils

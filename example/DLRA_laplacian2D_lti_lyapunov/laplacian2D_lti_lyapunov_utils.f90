@@ -21,9 +21,9 @@ module Laplacian2D_LTI_Lyapunov_Utils
    ! initial conditions
    public :: generate_random_initial_condition
    ! misc
-   public :: CALE, build_operator, reconstruct_TQ
+   public :: CALE, build_operator, reconstruct_TQ, solve_lyapunov, outpost_state
 
-   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Utils'
+   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Utils'
 
 contains
 
@@ -47,43 +47,45 @@ contains
    !-----     UTILITIES FOR STATE_VECTOR AND STATE MATRIX TYPES    -----
    !--------------------------------------------------------------------
 
-   subroutine get_state(mat_out, state_in)
+   subroutine get_state(mat_out, state_in, procedure)
       !! Utility function to transfer data from a state vector to a real array
       real(wp),                   intent(out) :: mat_out(:,:)
       class(abstract_vector_rdp), intent(in)  :: state_in(:)
+      character(len=*),           intent(in)  :: procedure
       ! internal variables
       integer :: k, kdim
       mat_out = 0.0_wp
       select type (state_in)
       type is (state_vector)
          kdim = size(state_in)
-         call assert_shape(mat_out, (/ N, kdim /), 'get_state -> state_vector', 'mat_out')
+         call assert_shape(mat_out, [ N, kdim ], 'mat_out', this_module, 'get_state:'//trim(procedure))
          do k = 1, kdim
             mat_out(:,k) = state_in(k)%state
          end do
       type is (state_matrix)
-         call assert_shape(mat_out, (/ N, N /), 'get_state -> state_matrix', 'mat_out')
-         mat_out = reshape(state_in(1)%state, (/ N, N /))
+         call assert_shape(mat_out, [ N, N ], 'mat_out', this_module, 'get_state:'//trim(procedure))
+         mat_out = reshape(state_in(1)%state, [ N, N ])
       end select
       return
    end subroutine get_state
 
-   subroutine set_state(state_out, mat_in)
+   subroutine set_state(state_out, mat_in, procedure)
       !! Utility function to transfer data from a real array to a state vector
       class(abstract_vector_rdp), intent(out) :: state_out(:)
       real(wp),                   intent(in)  :: mat_in(:,:)
+      character(len=*),           intent(in)  :: procedure
       ! internal variables
       integer       :: k, kdim
       select type (state_out)
       type is (state_vector)
          kdim = size(state_out)
-         call assert_shape(mat_in, (/ N, kdim /), 'set_state -> state_vector', 'mat_in')
+         call assert_shape(mat_in, [ N, kdim ], 'mat_in', this_module,'set_state:'//trim(procedure))
          call zero_basis(state_out)
          do k = 1, kdim
             state_out(k)%state = mat_in(:,k)
          end do
       type is (state_matrix)
-         call assert_shape(mat_in, (/ N, N /), 'set_state -> state_matrix', 'mat_in')
+         call assert_shape(mat_in, [ N, N ], 'mat_in', this_module, 'set_state:'//trim(procedure))
          call zero_basis(state_out)
          state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
       end select
@@ -123,60 +125,49 @@ contains
       integer,               intent(in)  :: rk
       ! internals
       class(state_vector),   allocatable :: Utmp(:)
-      integer,               allocatable :: perm(:)
       ! SVD
       real(wp)                           :: U_svd(rk,rk)
       real(wp)                           :: S_svd(rk)
       real(wp)                           :: V_svd(rk,rk)
       integer                            :: i, info
+      character(len=128) :: msg
 
       if (size(U) < rk) then
-         write(*,*) 'Input krylov basis size incompatible with requested rank', rk
-         STOP 1
+         write(msg,'(A,I0)') 'Input krylov basis size incompatible with requested rank ', rk
+         call stop_error(msg, module=this_module, procedure='generate_random_initial_condition')
       else
-         call init_rand(U, .false.)
+         call zero_basis(U)
+         do i = 1,rk
+            call U(i)%rand(.false.)
+         end do
       end if
-      if (size(S,1) < rk) then
-         write(*,*) 'Input coefficient matrix size incompatible with requested rank', rk
-         STOP 1
-      else if (size(S,1) /= size(S,2)) then
-         write(*,*) 'Input coefficient matrix must be square.'
-         STOP 2
-      else
-         S = 0.0_wp
-      end if
+      call assert_shape(S, [ rk,rk ], 'S', this_module, 'generate_random_initial_condition')
+      S = 0.0_wp
+
       ! perform QR
-      allocate(perm(1:rk)); perm = 0
-      allocate(Utmp(1:rk), source=U(1:rk))
-      call qr(Utmp, S, perm, info, verbosity=.false.)
-      if (info /= 0) write(*,*) '  [generate_random_initial_condition] Info: Colinear vectors detected in QR, column ', info
+      allocate(Utmp(rk), source=U(:rk))
+      call qr(Utmp, S, info)
+      call check_info(info, 'qr', module=this_module, procedure='generate_random_initial_condition')
       ! perform SVD
-      call svd(S(:,1:rk), S_svd(1:rk), U_svd(:,1:rk), V_svd(1:rk,1:rk))
-      S = diag(S_svd)
+      call svd(S(:rk,:rk), S_svd, U_svd, V_svd)
+      S(:rk,:rk) = diag(S_svd)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, Utmp, U_svd)
-         call copy_basis(U, Xwrk)
+         call copy(U, Xwrk)
       end block
-      
+      write(msg,'(A,I0,A,I0,A)') 'size(U) = [ ', size(U),' ]: filling the first ', rk, ' columns with noise.'
+      call logger%log_information(msg, module=this_module, procedure='generate_random_initial_condition')
+      return
    end subroutine
 
    !------------------------
    !-----     MISC     -----
    !------------------------
 
-   function CALE(X, A, Q, iftrans) result(Y)
-      real(wp), dimension(n,n) :: X, A, Q, Y
-      logical, optional :: iftrans
-      logical           :: trans
-
-      trans = optval(iftrans, .false.)
-
-      if (trans) then
-         Y = matmul(transpose(A), X) + matmul(X, A) + Q
-      else
-         Y = matmul(A, X) + matmul(X, transpose(A)) + Q
-      end if
+   function CALE(X,A,Q) result(res)
+      real(wp), dimension(n,n) :: X, A, Q, res
+      res = matmul(A, X) + matmul(X, transpose(A)) + Q
    end function CALE
 
    subroutine build_operator(A)
@@ -235,54 +226,88 @@ contains
 
    end subroutine reconstruct_TQ
 
-   subroutine print_svdvals(X_out, tag)
-      !! Compute singular values and print the non-zero ones
-      real(wp),         intent(in) :: X_out(:,:)
-      character(len=*), intent(in) :: tag
+   subroutine solve_lyapunov(X, A, P)
+      !! Solve the Lyapunov equation directly
+      real(wp), intent(out) :: X(N,N)
+      !! Solution
+      real(wp), intent(in)  :: A(N,N)
+      !! Operator
+      real(wp), intent(in)  :: P(N,N)
+      !! Inhomogeneity
+      ! Internal
+      real(wp), dimension(N,N) :: T, Q, Z, V, W, Y
+      real(wp), dimension(N)   :: Dm, wrk, wr, wi
+      real(wp), dimension(N-1) :: E, tw
+      real(wp)                 :: scale
+      integer                  :: isgn, info
+
+      ! Transform operator to tridiagonal form
+      call dsytd2('L', N, A, N, Dm, E, tw, info)
+
+      ! Reconstruct T and Q
+      call reconstruct_TQ(T, Q, A, Dm, E, tw)
+
+      ! compute real Schur form A = Z @ T @ Z.T
+      call dhseqr('S', 'I', N, 1, N, T, N, wr, wi, Z, N, wrk, N, info )
+
+      ! Change RHS Basis: base --> Q --> Z
+      V = matmul(transpose(Q), matmul(-P, Q))
+      W = matmul(transpose(Z), matmul( V, Z))
+
+      ! Compute solution of Lyapunov equation for Schur decomposition
+      isgn = 1; scale = 0.1_wp
+      call dtrsyl('N', 'T', isgn, N, N, T, N, T, N, W, N, scale, info)
+
+      ! Return to original basis to obtain X_ref: Z --> Q --> base
+      Y = matmul(Z, matmul(W, transpose(Z)))
+      X = matmul(Q, matmul(Y, transpose(Q)))
+
+      return
+   end subroutine solve_lyapunov
+
+   subroutine outpost_state(self, info)
+      !! Abstract interface to define the matrix exponential-vector product.
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
+      integer,                                intent(out)   :: info
       ! internal
-      real(wp), allocatable :: svals(:)
-      integer i, n, rki
-
-      N = size(X_out)
-      svals = svdvals(X_out)
-      rki = N
-      do i = 1, N
-         if (svals(i) < 1e-14) then
-             rki = i
-             exit
+      integer :: rk, iostatus
+      character(len=128) :: filename, msg
+      logical :: exist_file
+      real(wp), dimension(:,:), allocatable :: U
+      select type(self)
+      type is(LR_state)
+         rk = self%rk
+         ! remove extension if it is there already
+         write(filename, '(A,A,I5.5,A,I5.5,A)') trim(self%casename), '_s', self%step, '_', self%iout, '_S.npy'
+         inquire(file=filename, exist=exist_file)
+         if (.not. exist_file) then
+            call save_npy(filename, self%S(:rk,:rk), iostatus)
+            if (iostatus /= 0) call stop_error('Error saving file '//trim(filename), module=this_module, procedure='outpost_state')
+         else
+            msg = 'Error saving file '//trim(filename)//': file exists!'
+            print *, msg
+            call stop_error(msg, module=this_module, procedure='outpost_state')
          end if
-      end do
-      write(*,'(A,1X,A4,1X,I3,1X)', ADVANCE='NO') '  OUTPUT_SVD', trim(tag), rki
-      do i = 1, rki
-         write(*,'(E8.2,1x)', ADVANCE='NO') svals(i)
-      end do
-      write(*,*) 
+         msg = 'Saved file '//trim(filename)
+         print *, msg
+         call logger%log_message(msg, module=this_module, procedure='outpost_state')
+         write(filename, '(A,A,I5.5,A,I5.5,A)') trim(self%casename), '_s', self%step, '_', self%iout, '_U.npy'
+         inquire(file=filename, exist=exist_file)
+         if (.not. exist_file) then
+            
+            allocate(U(N,rk)); U = 0.0_wp
+            call get_state(U, self%U(:rk), 'outpost_state')
+            call save_npy(filename, U, iostatus)
+            if (iostatus /= 0) call stop_error('Error saving file '//trim(filename), module=this_module, procedure='outpost_state')
+         else
+            msg = 'Error saving file '//trim(filename)//': file exists!'
+            call stop_error(msg, module=this_module, procedure='outpost_state')
+         end if
+         msg = 'Saved file '//trim(filename)
+         print *, msg
+         call logger%log_message(msg, module=this_module, procedure='outpost_state')
+      end select
       return
-   end subroutine print_svdvals
-
-   subroutine print_info(if_rkad, if_kexpm, Tend, dt, rk, TO)
-      logical,  intent(in) :: if_rkad
-      logical,  intent(in) :: if_kexpm
-      real(wp), intent(in) :: Tend
-      real(wp), intent(in) :: dt
-      integer,  intent(in) :: rk
-      integer,  intent(in) :: TO
-      write(*,*) 
-      write(*,*) "!----------------------------"
-      write(*,*) 
-      write(*,*) "DLRA Lyapunov equation:"
-      write(*,'(A,F12.6)') "    Tend  = ", Tend
-      write(*,'(A,E12.6)') "    dt    = ", dt
-      write(*,*) "   rk0   = ", rk
-      write(*,*) "   order = ", TO
-      write(*,*) 
-      write(*,*) "Parameters:"
-      write(*,*) "   rank_adaptive = ", if_rkad
-      write(*,*) "   Krylov-exptA  = ", if_kexpm
-      write(*,*) 
-      write(*,*) "!----------------------------"
-      write(*,*) 
-      return
-   end subroutine print_info
-
+   end subroutine outpost_state
+   
 end module Laplacian2D_LTI_Lyapunov_Utils

@@ -1,9 +1,10 @@
 program demo
    ! Standard Library
    use stdlib_optval, only : optval 
-   use stdlib_linalg, only : eye, diag
+   use stdlib_linalg, only : eye, svdvals, diag, inv
    use stdlib_math, only : all_close, logspace
    use stdlib_io_npy, only : save_npy
+   use stdlib_logger, only : information_level, warning_level, debug_level, error_level, none_level
    ! LightKrylov for Linear Algebra
    use LightKrylov
    use LightKrylov, only : wp => dp
@@ -24,45 +25,49 @@ program demo
    use Laplacian2D_LTI_Riccati_Utils
    implicit none
 
-   ! DLRA
-   integer, parameter :: rkmax = 14
-   integer, parameter :: rk_X0 = 14
-   logical, parameter :: verb  = .false.
-   logical, parameter :: save  = .false.
-   character*128      :: oname
-   ! rk_B is set in laplacian2D_lti_base.f90
+   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Riccati_Main'
+   character(len=128), parameter :: home = 'example/DLRA_laplacian2D_lti_riccati/local/'
 
-   integer  :: nrk, ndt, rk,  torder
-   real(wp) :: dt, Tend
+   ! DLRA
+   integer, parameter :: rkmax = 11
+   integer, parameter :: rk_X0 = 2
+   ! rk_B is set in laplacian2D_lti_base.f90
+   type(dlra_opts) :: opts
+
+   integer  :: rk, torder
+   real(wp) :: dt, Tend, Tstep
    ! vector of dt values
    real(wp), allocatable :: dtv(:)
    ! vector of rank values
    integer,  allocatable :: rkv(:)
+   ! vector of tolerances
+   real(wp), allocatable :: tolv(:)
+   ! vector of temporal orders
+   integer, allocatable :: TOv(:)
 
    ! Exponential propagator (RKlib).
    type(rklib_riccati_mat), allocatable  :: RK_prop_ricc
 
    ! LTI system
-   type(lti_system)                :: LTI
+   type(lti_system)                      :: LTI
 
    ! Laplacian
-   type(laplace_operator),   allocatable :: A
+   type(laplace_operator), allocatable   :: A
 
    ! LR representation
    type(LR_state)                  :: X
    type(state_vector), allocatable :: U(:)
-   real(wp) , allocatable          :: S(:,:)
+   real(wp),           allocatable :: S(:,:)
    
    ! STATE MATRIX (RKlib)
    type(state_matrix)              :: X_mat_RKlib(2)
-   real(wp), allocatable           :: X_RKlib(:,:,:)
+   real(wp),           allocatable :: X_RKlib(:,:,:)
    real(wp)                        :: X_RKlib_ref(N,N)
 
     ! Initial condition
    type(state_vector)              :: U0(rkmax)
    real(wp)                        :: S0(rkmax,rkmax)
    ! matrix
-   real(wp)                        :: U0_in(N,rkmax)
    real(wp)                        :: X0(N,N)
 
    ! OUTPUT
@@ -70,390 +75,350 @@ program demo
    real(wp)                        :: X_out(N,N)
 
    !> Information flag.
-   integer                         :: info
-   integer                         :: i, j, irep, nrep
+   integer                         :: info, i, j, k, irep, nrep
 
    ! PROBLEM DEFINITION
    real(wp)  :: Adata(N,N)
 
-   ! LAPACK SOLUTION RICATTI
-   real(wp)           :: Hdata(2*N,2*N)
-   real(wp)           :: wr(2*N), wi(2*N)
-   real(wp)           :: VR(2*N,2*N)
-   integer, parameter :: lwork = 1040
-   real(wp)           :: work(lwork)
-   real(wp)           :: UR(2*N,N)
-   real(wp)           :: UI(2*N,N)
-   logical            :: flag
-   real(wp)           :: F(N,N)
-   real(wp)           :: Ginv(N,N)
-   real(wp)           :: Xref(N,N)
-   integer :: icnt
+   ! LAPACK SOLUTION
+   real(wp)  :: Xref(N,N)
+   real(wp)  :: svals(N)
 
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
+   integer, parameter :: irow = 8 ! how many numbers to print per row
+   character(len=128) :: casename
 
-   ! DLRA opts
-   type(dlra_opts) :: opts
+   !--------------------------------
+   ! Define which examples to run:
+   !
+   logical, parameter :: run_fixed_rank_short_integration_time_test   = .true.
+   !
+   ! Integrate the same initial condition for a short time with Runge-Kutta and DLRA.
+   !
+   ! The solution will be far from steady state (the residual will be large) for both methods.
+   ! This test shows the convergence of the method as a function of the step size, the rank
+   ! and the temporal order of DLRA.
+   !
+   logical, parameter :: run_fixed_rank_long_integration_time_test    = .true.
+   !
+   ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA.
+   !
+   ! As the steady state is approached, the error/residual for Runge-Kutta goes to zero.
+   ! Similarly, the test shows the effect of step size, rank and temporal order on the solution
+   ! using DLRA
+   !
+   !logical, parameter :: run_rank_adaptive_long_integration_time_test = .true.
+   !
+   ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA using an 
+   ! adaptive rank.
+   !
+   ! The DLRA algorthm automatically determines the rank necessary to integrate the equations
+   ! such that the error on the singular values does not exceed a chosen tolerance. This rank
+   ! depends on the tolerance but also the chosen time-step.
+   !
+   !--------------------------------
 
-   call logger_setup()
+   call logger%configure(level=error_level, time_stamp=.false.); print *, 'Logging set to error_level.'
    
    call system_clock(count_rate=clock_rate)
 
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#               DYNAMIC LOW-RANK APPROXIMATION  -  DLRA                 #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
+   print *, '             RICCATI EQUATION FOR THE 2D LAPLACE OPERATOR:'
+   print *, ''
+   print *, '                     Algebraic Riccati equation:'
+   print *, '     0 = A @ X + X @ A.T + X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
+   print *, ''               
+   print *, '                   Differential Riccati equation:'
+   print *, '   \dot{X} = A @ X + X @ A.T + X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
+   print *, ''
+   print '(13X,A14,I4,"x",I4)', 'Problem size: ', N, N
+   print *, ''
+   print *, '            Initial condition: rank(X0)               =', rk_X0
+   print *, '            Nonlinearity:      rank(B @ R^{-1} @ B.T) =', rk_b
+   print *, '            Inhomogeneity:     rank(C.T @ Qc @ C)     =', rk_C
+   print *, ''
+   print *, '#########################################################################'
+   print *, ''
+
    ! Set up problem
-   call initialize_problem(1.0_wp, 0.0_wp)
+   call initialize_problem(1.0_wp, 1.0_wp)
 
    ! Define LTI system
    LTI = lti_system()
    call LTI%initialize_lti_system(A, B, CT)
-   
-   write(*,*)
-   write(*,*) 'RICCATI EQUATION FOR THE 2D LAPLACE OPERATOR:'
-   write(*,*)
-   write(*,*) '    Algebraic Lyapunov equation:'
-   write(*,*) '                0 = A.T @ X + X @ A + C.T @ Qc @ C'
-   write(*,*)
-   write(*,*) '    Differential Lyapunov equation:'
-   write(*,*) '          \dot{X} = A.T @ X + X @ A + C.T @ Qc @ C'
-   write(*,*)
-   write(*,'(A16,I4,"x",I4)') '  Problem size: ', N, N
-   write(*,*)
-   write(*,*) '  Initial condition: rank(X0)            =', rk_X0
-   write(*,*) '  Inhomogeneity:     rank(C.T @ Qc @ C)  =', rk_C
-   write(*,*)
-   write(*,*) '---------------------------------------------'
-   write(*,*)
+
+   ! Define initial condition of the form X0 + U0 @ S0 @ U0.T SPD 
+   write(*,*) '    Define initial condition'
+   call generate_random_initial_condition(U0(:rk_X0), S0(:rk_X0,:rk_X0), rk_X0)
+   call get_state(U_out(:,:rk_X0), U0(:rk_X0), 'Extract initial condition')
+
+   ! Compute the full initial condition X0 = U_in @ S0 @ U_in.T
+   X0 = matmul( U_out(:,:rk_X0), matmul(S0(:rk_X0,:rk_X0), transpose(U_out(:,:rk_X0))))
+
+   print *, 'SVD X0'
+   svals = svdvals(X0)
+   print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X0)[1-8]:', svals(:irow)
 
    !------------------
    ! COMPUTE EXACT SOLUTION OF THE RICCATI EQUATION WITH LAPACK
    !------------------
 
-   write(*,*) 'I.   Exact solution of the algebraic Riccati equation (LAPACK):'
+   print *, ''
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#    I.   Exact solution of the algebraic Riccati equation (LAPACK)     #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
    call system_clock(count=clock_start)     ! Start Timer
+   ! Explicit 2D laplacian
+   call build_operator(Adata)
+   ! Solve Riccati equation
+   call solve_riccati(Xref, Adata, BRinvBTdata, CTQcCdata)
+   call system_clock(count=clock_stop)      ! Stop Timer
+
+   print '(A40,F10.4," s")', '--> X_ref.    Elapsed time:', real(clock_stop-clock_start)/real(clock_rate)
+   print *, ''
 
    ! Explicit 2D laplacian
    call build_operator(Adata)
-
-   ! construct Hmat
-   Hdata = 0.0_wp
-   Hdata(  1:N,    1:N  ) =  Adata
-   Hdata(N+1:2*N,N+1:2*N) = -transpose(Adata)
-   Hdata(  1:N,  N+1:2*N) = -BRinvBTdata
-   Hdata(N+1:2*N,  1:N  ) = -CTQcCdata
-
-   call dgeev('N', 'V', 2*N, Hdata, 2*N, wr, wi, VR, 2*N, VR, 2*N, work, lwork, info)
-
-   ! extract stable eigenspace
-   UR = 0.0_wp
-   UI = 0.0_wp
-   icnt = 0
-   flag = .true.
-   do i = 1, 2*N
-      if ( wr(i) .lt. 0.0 ) then
-         icnt = icnt + 1
-         if ( wi(i) .eq. 0.0 ) then ! real
-            UR(:,icnt) = VR(:,i)
-         else                       ! complex
-            if (flag) then
-               UR(:,icnt)   =  VR(:,i)
-               UI(:,icnt)   =  VR(:,i+1)
-               UR(:,icnt+1) =  VR(:,i)
-               UI(:,icnt+1) = -VR(:,i+1)
-               flag = .false.
-            else
-               flag = .true.
-            end if
-         end if
-      end if
-   end do
-   ! construct solution
-   F    = matmul(UR(n+1:2*N,:), transpose(UR(1:N,:))) + matmul(UI(n+1:2*n,:), transpose(UI(1:N,:)))
-   Ginv = matmul(UR(  1:N,  :), transpose(UR(1:N,:))) + matmul(UI(  1:N,  :), transpose(UI(1:N,:)))
-   call inv(Ginv)
-   Xref = matmul(F, Ginv)
-
-   call system_clock(count=clock_stop)      ! Stop Timer
-   write(*,'(A40,F10.4," s")') '--> X_ref.    Elapsed time:', real(clock_stop-clock_start)/real(clock_rate)
-   write(*,*)
-
    ! sanity check
    X0 = CARE(Xref, Adata, CTQcCdata, BRinvBTdata)
-   write(*,*) '    Direct problem:', norm2(X0)/N
+   print '(4X,A,E15.7)', 'Direct problem: | res(X_ref) |/N = ', norm2(X0)/N
+   print *, ''
+   ! compute svd
+   svals = svdvals(Xref)
+   print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
 
-   ! Define initial condition of the form X0 + U0 @ S0 @ U0.T SPD 
-   if (verb .and. io_rank()) write(*,*) '    Define initial condition'
-   call generate_random_initial_condition(U0, S0, rk_X0)
-   call get_state(U_out, U0)
-
-   ! Compute the full initial condition X0 = U_in @ S0 @ U_in.T
-   X0 = matmul( U_out(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U_out(:,1:rk_X0))))
-
-   write(*,*)
-   write(*,*) 'II.  Compute approximate solution of the differential Riccati equation using RKlib:'
-   write(*,*)
-
+   print *, ''
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#    IIa.  Solution using Runge-Kutta over a short time horizon         #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
    ! initialize exponential propagator
-   nrep = 10
-   Tend = 0.1_wp
+   Tend = 0.001_wp
    RK_prop_ricc = rklib_riccati_mat(Tend)
 
-   allocate(X_RKlib(N, N, nrep))
-   call set_state(X_mat_RKlib(1:1), X0)
-   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','|| dX/dt ||_2/N', 'Elapsed time'
+   allocate(X_RKlib(N, N, 1))
+   call get_state(U_out(:,:rk_X0), U0(:rk_X0), 'Get initial condition')
+   X0 = matmul( U_out(:,:rk_X0), matmul(S0(:rk_X0,:rk_X0), transpose(U_out(:,:rk_X0))))
+   call set_state(X_mat_RKlib(1:1), X0, 'Set initial condition')
+   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','| X_RK - X_ref |/N', 'Elapsed time'
    write(*,*) '         ------------------------------------------------------------------------'
-   do irep = 1, nrep
-      call system_clock(count=clock_start)     ! Start Timer
-      ! integrate
-      call RK_prop_ricc%matvec(X_mat_RKlib(1), X_mat_RKlib(2))
-      ! recover output
-      call get_state(X_RKlib(:,:,irep), X_mat_RKlib(2:2))
-      ! replace input
-      call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,irep))
-      call system_clock(count=clock_stop)      ! Stop Timer
-      write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tend, &
-                     & norm2(CARE(X_RKlib(:,:,irep), Adata, CTQcCdata, BRinvBTdata))/N, &
-                     & real(clock_stop-clock_start)/real(clock_rate)
-   end do
+   call system_clock(count=clock_start)     ! Start Timer
+   ! integrate
+   call RK_prop_ricc%matvec(X_mat_RKlib(1), X_mat_RKlib(2))
+   ! recover output
+   call get_state(X_RKlib(:,:,1), X_mat_RKlib(2:2), 'Extract RK solution')
+   ! replace input
+   call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,1), 'Reset initial condition')
+   call system_clock(count=clock_stop)      ! Stop Timer
+   write(*,'(I10,F26.4,E26.8,F18.4," s")') 1, Tend, &
+                  & norm2(CARE(X_RKlib(:,:,1), Adata, CTQcCdata, BRinvBTdata))/N, &
+                  & real(clock_stop-clock_start)/real(clock_rate)
+   
+   ! Choose relevant reference case from RKlib
+   X_RKlib_ref = X_RKlib(:,:,1)
+
+   deallocate(X_RKlib)
+   
+   print *, ''
+   svals = svdvals(X_RKlib_ref)
+   print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
 
    !------------------
    ! COMPUTE DLRA FOR SHORTEST INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
    !------------------
+   print *, ''
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#    IIb.  Solution using fixed-rank DLRA                               #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
+   if (run_fixed_rank_short_integration_time_test) then
+      print '(A10,A8,A4,A10,A8,3(A20),A20)', 'DLRA:','rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
+         & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
+      write(*,'(A)', ADVANCE='NO') '         ------------------------------------------------'
+      print '(A)', '--------------------------------------------------------------'
 
-   write(*,*)
-   write(*,*) 'III. Compute approximate solution of the differential Riccati equation using DLRA:'
-   write(*,*)
-   write(*,'(A10,A4,A4,A10,A8,A26,A20)') 'DLRA:','  rk',' TO','dt','Tend','|| X_DLRA - X_RK ||_2/N', 'Elapsed time'
-   write(*,*) '         ------------------------------------------------------------------------'
+      ! Choose input ranks and integration steps
+      rkv = [ 2, 3, 4 ]
+      dtv = logspace(-6.0_wp, -3.0_wp, 4, 10)
+      dtv = dtv(size(dtv):1:-1)
+      TOv = [ 1 ]
 
-   ! Choose relevant reference case from RKlib
-   X_RKlib_ref = X_RKlib(:,:,1)
-
-   ! Choose input ranks and integration steps
-   nrk = 4; ndt = 5
-   allocate(rkv(1:nrk)); allocate(dtv(1:ndt)); 
-   rkv = (/ 2, 6, 10, 14 /)
-   dtv = logspace(-5.0_wp, -1.0_wp, ndt)
-
-   X = LR_state()
-
-   do torder = 1, 1 ! 2
-      do i = 1, nrk
+      irep = 0
+      X = LR_state()
+      do i = 1, size(rkv)
          rk = rkv(i)
+         do j = 1, size(TOv)
+            torder = TOv(j)
+            do k = 1, size(dtv)
+               irep = irep + 1
+               dt = dtv(k)
 
-         write(*,'(A10,I1)') ' torder = ', torder
+               ! define casename
+               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_IIb_rk', rk, '_TO', torder, '_dt', dt  
 
-         do j = ndt, 1, -1
-            dt = dtv(j)
-            if (verb .and. io_rank()) write(*,*) '    dt = ', dt, 'Tend = ', Tend
+               ! Reset input
+               call X%init(U0, S0, rk, casename=casename)
 
-            ! Reset input
-            call X%initialize_LR_state(U0, S0, rk)
-
-            ! set options
-            opts = dlra_opts(mode=torder, verbose=verb)
-
-            ! run step
-            call system_clock(count=clock_start)     ! Start Timer
-            call projector_splitting_DLRA_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
+               ! run step
+               opts = dlra_opts(mode=torder)
+               call system_clock(count=clock_start)     ! Start Timer
+               call projector_splitting_DLRA_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
                                                                   & Tend, dt, torder, info, &
                                                                   & exptA=exptA, iftrans=.false., options=opts)
-            call system_clock(count=clock_stop)      ! Stop Timer
+               call system_clock(count=clock_stop)      ! Stop Timer
 
-            ! Reconstruct solution
-            call get_state(U_out(:,1:rk), X%U)
-            X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
-      
-            write(*,'(A10,I4," TO",I1,F10.6,F8.4,E26.8,F18.4," s")') 'OUTPUT', &
-                              & rk, torder, dt, Tend, &
-                              & norm2(X_RKlib_ref - X_out)/N, &
-                              & real(clock_stop-clock_start)/real(clock_rate)
-
-            deallocate(X%U)
-            deallocate(X%S)
+               ! Reconstruct solution
+               call get_state(U_out(:,:rk), X%U, 'Extract solution')
+               X_out = matmul(U_out(:,:rk), matmul(X%S, transpose(U_out(:,:rk))))
+               print '(A10,I8," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")', &
+                                    &  'OUTPUT', rk, torder, dt, Tend, &
+                                    & norm2(X_RKlib_ref - X_out)/N, norm2(X_out - Xref)/N, &
+                                    & norm2(X0)/N, real(clock_stop-clock_start)/real(clock_rate)
+               deallocate(X%U, X%S)
+            end do
+            print *, ''
          end do
-
-         if (save) then
-            write(oname,'("example/DLRA_laplacian2D_riccati/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
-            call save_npy(oname, X_out)
-         end if
-
+         print *, ''
       end do
-   end do
-   deallocate(rkv); deallocate(dtv);
+      nrep = irep
 
-   ! Set up problem with non-zero R
-   call initialize_problem(1.0_wp, 1.0_wp)
+      svals = svdvals(X_RKlib_ref)
+      print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_RK)[1-8]:', svals(:irow)
+      svals = svdvals(X_out)
+      print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR)[1-8]:', svals(:irow)
 
-   ! Reset LTI system
-   call copy_basis(LTI%B, B)
-   call copy_basis(LTI%CT, CT)
-
-   write(*,*)
-   write(*,*) 'RICCATI EQUATION FOR THE 2D LAPLACE OPERATOR:'
-   write(*,*)
-   write(*,*) '    Algebraic Lyapunov equation:'
-   write(*,*) '                0 = A.T @ X + X @ A + C.T @ Qc @ C - X @ B @ R^{-1} @ B.T @ X'
-   write(*,*)
-   write(*,*) '    Differential Lyapunov equation:'
-   write(*,*) '          \dot{X} = A.T @ X + X @ A + C.T @ Qc @ C - X @ B @ R^{-1} @ B.T @ X'
-   write(*,*)
-   write(*,'(A16,I4,"x",I4)') '  Problem size: ', N, N
-   write(*,*)
-   write(*,*) '  Initial condition: rank(X0)            =', rk_X0
-   write(*,*) '  Inhomogeneity:     rank(C.T @ Qc @ C)  =', rk_C
-   write(*,*) '  Inhomogeneity:     rank(B)             =', rk_B
-   write(*,*)
-   write(*,*) '---------------------------------------------'
-   write(*,*)
+   else
+      print *, 'Skip.'
+   end if
 
    !------------------
-   ! COMPUTE EXACT SOLUTION OF THE RICCATI EQUATION WITH LAPACK
+   ! COMPUTE SOLUTION WITH RK FOR DIFFERENT INTEGRATION TIMES AND COMPARE TO STUART-BARTELS
    !------------------
-
-   write(*,*) 'I.   Exact solution of the algebraic Riccati equation (LAPACK):'
-   call system_clock(count=clock_start)     ! Start Timer
-
-   ! construct Hmat
-   Hdata = 0.0_wp
-   Hdata(  1:N,    1:N  ) =  Adata
-   Hdata(N+1:2*N,N+1:2*N) = -transpose(Adata)
-   Hdata(  1:N,  N+1:2*N) = -BRinvBTdata
-   Hdata(N+1:2*N,  1:N  ) = -CTQcCdata
-
-   call dgeev('N', 'V', 2*N, Hdata, 2*N, wr, wi, VR, 2*N, VR, 2*N, work, lwork, info)
-
-   ! extract stable eigenspace
-   UR = 0.0_wp
-   UI = 0.0_wp
-   icnt = 0
-   flag = .true.
-   do i = 1, 2*N
-      if ( wr(i) .lt. 0.0 ) then
-         icnt = icnt + 1
-         if ( wi(i) .eq. 0.0 ) then ! real
-            UR(:,icnt) = VR(:,i)
-         else                       ! complex
-            if (flag) then
-               UR(:,icnt)   =  VR(:,i)
-               UI(:,icnt)   =  VR(:,i+1)
-               UR(:,icnt+1) =  VR(:,i)
-               UI(:,icnt+1) = -VR(:,i+1)
-               flag = .false.
-            else
-               flag = .true.
-            end if
-         end if
-      end if
-   end do
-   ! construct solution
-   F    = matmul(UR(n+1:2*N,:), transpose(UR(1:N,:))) + matmul(UI(n+1:2*n,:), transpose(UI(1:N,:)))
-   Ginv = matmul(UR(  1:N,  :), transpose(UR(1:N,:))) + matmul(UI(  1:N,  :), transpose(UI(1:N,:)))
-   call inv(Ginv)
-   Xref = matmul(F, Ginv)
-
-   ! sanity check
-   X0 = CARE(Xref, Adata, CTQcCdata, BRinvBTdata)
-   write(*,*) '    Direct problem:', norm2(X0)/N
-
-   call system_clock(count=clock_stop)      ! Stop Timer
-   write(*,'(A40,F10.4," s")') '--> X_ref.    Elapsed time:', real(clock_stop-clock_start)/real(clock_rate)
-   write(*,*)
-
-   ! Define initial condition
-   if (verb .and. io_rank()) write(*,*) 'Define initial condition'
-   call generate_random_initial_condition(U0, S0, rk_X0)
-   call get_state(U_out, U0)
-
-   ! Compute the full initial condition X0 = U_in @ S0 @ U_in.T
-   X0 = matmul( U_out(:,1:rk_X0), matmul(S0(1:rk_X0,1:rk_X0), transpose(U_out(:,1:rk_X0))))
-
-
-   write(*,*)
-   write(*,*) 'II.  Compute approximate solution of the differential Riccati equation using RKlib:'
-   write(*,*)
-
+   print *, ''
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#    IIIa.  Solution using Runge-Kutta to steady state                  #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
    ! initialize exponential propagator
-   nrep = 10
-   Tend = 0.1_wp
-   RK_prop_ricc = rklib_riccati_mat(Tend)
+   nrep  = 10
+   Tstep = 0.1_wp
+   RK_prop_ricc = rklib_riccati_mat(Tstep)
+   Tend = nrep*Tstep
 
-   X_RKlib = 0.0_wp
-   call set_state(X_mat_RKlib(1:1), X0)
-   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','|| dX/dt ||_2/N', 'Elapsed time'
+   allocate(X_RKlib(N, N, nrep))
+   call get_state(U_out(:,:rk_X0), U0(:rk_X0), 'Get initial condition')
+   X0 = matmul( U_out(:,:rk_X0), matmul(S0(:rk_X0,:rk_X0), transpose(U_out(:,:rk_X0))))
+   call set_state(X_mat_RKlib(1:1), X0, 'Set initial condition')
+   write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','| X_RK - X_ref |/N', 'Elapsed time'
    write(*,*) '         ------------------------------------------------------------------------'
    do irep = 1, nrep
       call system_clock(count=clock_start)     ! Start Timer
       ! integrate
       call RK_prop_ricc%matvec(X_mat_RKlib(1), X_mat_RKlib(2))
       ! recover output
-      call get_state(X_RKlib(:,:,irep), X_mat_RKlib(2:2))
+      call get_state(X_RKlib(:,:,irep), X_mat_RKlib(2:2), 'Extract RK solution')
       ! replace input
-      call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,irep))
+      call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,irep), 'Reset initial condition')
       call system_clock(count=clock_stop)      ! Stop Timer
-      write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tend, &
+      write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tstep, &
                      & norm2(CARE(X_RKlib(:,:,irep), Adata, CTQcCdata, BRinvBTdata))/N, &
                      & real(clock_stop-clock_start)/real(clock_rate)
    end do
-
-   write(*,*)
-   write(*,*) 'III. Compute approximate solution of the differential Riccati equation using DLRA:'
-   write(*,*)
-   write(*,'(A10,A4,A4,A10,A8,A26,A20)') 'DLRA:','  rk',' TO','dt','Tend','|| X_DLRA - X_RK ||_2/N', 'Elapsed time'
-   write(*,*) '         ------------------------------------------------------------------------'
-
+   
    ! Choose relevant reference case from RKlib
-   X_RKlib_ref = X_RKlib(:,:,1)
+   X_RKlib_ref = X_RKlib(:,:,nrep)
 
-   ! Choose input ranks and integration steps
-   nrk = 4; ndt = 5
-   allocate(rkv(1:nrk)); allocate(dtv(1:ndt));
-   rkv = (/ 2, 6, 10, 14 /)
-   dtv = logspace(-5.0_wp, -1.0_wp, ndt)
+   deallocate(X_RKlib)
+   
+   print *, ''
+   svals = svdvals(Xref)
+   print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
+   svals = svdvals(X_RKlib_ref)
+   print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
 
-   X = LR_state()
-
-   do torder = 1, 1 !2
-      do i = 1, nrk
-         rk = rkv(i)
-
-         write(*,'(A10,I1)') ' torder = ', torder
-
-         do j = ndt, 1, -1
-            dt = dtv(j)
-            if (verb .and. io_rank()) write(*,*) '    dt = ', dt, 'Tend = ', Tend
-
-            ! Reset input
-            call X%initialize_LR_state(U0, S0, rk)
-
-            ! set options
-            opts = dlra_opts(mode=torder, verbose=verb)
-
-            ! run step
-            call system_clock(count=clock_start)     ! Start Timer
-            call projector_splitting_DLRA_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
-                                                                & Tend, dt, torder, info, &
-                                                                & exptA=exptA, iftrans=.false., options=opts)
-            call system_clock(count=clock_stop)      ! Stop Timer
-
-            ! Reconstruct solution
-            call get_state(U_out(:,1:rk), X%U)
-            X_out = matmul(U_out(:,1:rk), matmul(X%S, transpose(U_out(:,1:rk))))
+   !------------------
+   ! COMPUTE DLRA FOR SHORTEST INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
+   !------------------
+   print *, ''
+   print *, '#########################################################################'
+   print *, '#                                                                       #'
+   print *, '#    IIIb.  Solution using fixed-rank DLRA                              #'
+   print *, '#                                                                       #'
+   print *, '#########################################################################'
+   print *, ''
+   if (run_fixed_rank_long_integration_time_test) then
+      print '(A10,A8,A4,A10,A8,3(A20),A20)', 'DLRA:','rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
+         & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
+      write(*,'(A)', ADVANCE='NO') '         ------------------------------------------------'
+      print '(A)', '--------------------------------------------------------------'
       
-            write(*,'(A10,I4," TO",I1,F10.6,F8.4,E26.8,F18.4," s")') 'OUTPUT', &
-                              & rk, torder, dt, Tend, &
-                              & norm2(X_RKlib_ref - X_out)/N, &
-                              & real(clock_stop-clock_start)/real(clock_rate)
+      ! Choose input ranks and integration steps
+      rkv = [ 4,  8 ]
+      dtv = logspace(-4.0_wp, -1.0_wp, 4, 10)
+      dtv = dtv(size(dtv):1:-1)
+      TOv = [ 1 ]
 
-            deallocate(X%U)
-            deallocate(X%S)
+      irep = 0
+      X = LR_state()
+      do i = 1, size(rkv)
+         rk = rkv(i)
+         do j = 1, size(TOv)
+            torder = TOv(j)
+            do k = 1, size(dtv)
+               irep = irep + 1
+               dt = dtv(k)
+
+               ! define casename
+               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_IIIb_rk', rk, '_TO', torder, '_dt', dt  
+
+               ! Reset input
+               call X%init(U0, S0, rk, casename=casename)
+
+               ! run step
+               opts = dlra_opts(mode=torder)
+               call system_clock(count=clock_start)     ! Start Timer
+               call projector_splitting_DLRA_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
+                                                                  & Tend, dt, torder, info, &
+                                                                  & exptA=exptA, iftrans=.false., options=opts)
+               call system_clock(count=clock_stop)      ! Stop Timer
+
+               ! Reconstruct solution
+               call get_state(U_out(:,:rk), X%U, 'Extract solution')
+               X_out = matmul(U_out(:,:rk), matmul(X%S, transpose(U_out(:,:rk))))
+               print '(A10,I8," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")', &
+                                    &  'OUTPUT', rk, torder, dt, Tend, &
+                                    & norm2(X_RKlib_ref - X_out)/N, norm2(X_out - Xref)/N, &
+                                    & norm2(X0)/N, real(clock_stop-clock_start)/real(clock_rate)
+               deallocate(X%U, X%S)
+            end do
+            print *, ''
          end do
-
-         if (save) then
-            write(oname,'("example/DLRA_laplacian2D_riccati/data_X_DRLA_TO",I1,"_rk",I2.2,".npy")') torder, rk
-            call save_npy(oname, X_out)
-         end if
-
+         print *, ''
       end do
-   end do
+      nrep = irep
+
+      svals = svdvals(X_RKlib_ref)
+      print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_RK)[1-8]:', svals(:irow)
+      svals = svdvals(X_out)
+      print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR)[1-8]:', svals(:irow)
+
+   else
+      print *, 'Skip.'
+   end if
 
 end program demo

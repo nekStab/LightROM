@@ -39,7 +39,7 @@ module LightROM_RiccatiSolvers
    private 
    ! module name
    private :: this_module
-   character*128, parameter :: this_module = 'LightROM_RiccatiSolvers'
+   character(len=*), parameter :: this_module = 'LR_RiccSolvers'
    public :: projector_splitting_DLRA_riccati_integrator
    public :: G_forward_map_riccati
    public :: K_step_riccati
@@ -174,7 +174,7 @@ module LightROM_RiccatiSolvers
 
       ! Internal variables   
       integer                                                :: istep, nsteps
-      logical                                                :: verbose, converged
+      logical                                                :: converged
       real(wp)                                               :: T
       character*128                                          :: msg
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
@@ -189,8 +189,7 @@ module LightROM_RiccatiSolvers
          opts = dlra_opts()
       end if
 
-      ! set tolerance and verbosity
-      verbose = opts%verbose
+      ! set tolerance
       
       if (present(exptA)) then
          p_exptA => exptA
@@ -208,11 +207,11 @@ module LightROM_RiccatiSolvers
       if ( opts%mode > 2 ) then
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
-         if (io_rank()) call logger%log_message(trim(msg), module=this_module, procedure='DLRA')
+         call logger%log_message(msg, module=this_module, procedure='DLRA')
       else if ( opts%mode < 1 ) then
          write(msg, *) "Invalid time-integration order specified: ", opts%mode
-         call stop_error(trim(msg), module=this_module, &
-                           & procedure='projector_splitting_DLRA_lyapunov_integrator_rdp')
+         call stop_error(msg, module=this_module, &
+                           & procedure='DLRA')
       endif
 
       dlra : do istep = 1, nsteps
@@ -222,9 +221,8 @@ module LightROM_RiccatiSolvers
          T = T + tau
          !> here we can do some checks such as whether we have reached steady state
          if ( mod(istep,opts%chkstep) .eq. 0 ) then
-            if (verbose) then
-               write(*, *) "INFO : ", ISTEP, " steps of DLRA computed. T = ",T
-            endif
+            write(msg,'(I0,A,E15.8)') istep, ' steps of DLRA computed. T= ',T
+            call logger%log_information(msg, module=this_module, procedure='DLRA')
          endif
       enddo dlra
 
@@ -304,26 +302,26 @@ module LightROM_RiccatiSolvers
          ! second order step
          call M_forward_map        (X, A,                  0.5*tau, info, exptA, trans)
          ! Save current state
-         call copy_basis(U0, X%U); S0 = X%S               ! --> save  
+         call copy(U0, X%U); S0 = X%S               ! --> save  
          ! Precompute T0
          block
             class(abstract_vector_rdp), allocatable :: Xwrk(:)
-            call linear_combination(Xwrk, U0, S0); call copy_basis(Uwrk0, Xwrk) ! K0 = U0 @ S0
+            call linear_combination(Xwrk, U0, S0); call copy(Uwrk0, Xwrk) ! K0 = U0 @ S0
             call apply_premult_outerprod_w(Swrk0, U0, Uwrk0, B, Rinv)   ! (U0.T) @ B @ R^(-1) @ B.T @ K0
-            call linear_combination(Xwrk, Uwrk0, Swrk0); call copy_basis(T0, Xwrk) ! K0 @ Swrk0
+            call linear_combination(Xwrk, Uwrk0, Swrk0); call copy(T0, Xwrk) ! K0 @ Swrk0
          end block
          ! First order integration
          call G_forward_map_riccati(X,    B, CT, Qc, Rinv,     tau, info, ifpred=.true., T0=T0)
          ! Precompute Tt
-         call copy_basis(Ut, X%U)                                               ! --> save
+         call copy(Ut, X%U)                                               ! --> save
          block
             class(abstract_vector_rdp), allocatable :: Xwrk(:)
-            call linear_combination(Xwrk, X%U, X%S); call copy_basis(Uwrk0, Xwrk) ! Kt = Ut @ St
+            call linear_combination(Xwrk, X%U, X%S); call copy(Uwrk0, Xwrk) ! Kt = Ut @ St
             call apply_premult_outerprod_w(Swrk0, X%U, Uwrk0, B, Rinv)  ! (Ut.T) @ B @ R^(-1) @ B.T @ Kt
-            call linear_combination(Xwrk, Uwrk0, Swrk0); call copy_basis(Tt, Xwrk) ! Kt @ Swrk0
+            call linear_combination(Xwrk, Uwrk0, Swrk0); call copy(Tt, Xwrk) ! Kt @ Swrk0
          end block
          ! Reset state
-         call copy_basis(X%U, U0); X%S = S0
+         call copy(X%U, U0); X%S = S0
          ! Second order integration
          call G_forward_map_riccati(X,    B, CT, Qc, Rinv,     tau, info, ifpred=.false., &
                                   & T0=T0, Tt=Tt, U0=U0, Ut=Ut)
@@ -386,13 +384,13 @@ module LightROM_RiccatiSolvers
             block
                class(abstract_vector_rdp), allocatable :: Xwrk(:)
                call innerprod(Swrk0, X%U, U0)
-               call linear_combination(Xwrk, T0, Swrk0); call copy_basis(QU, Xwrk)
+               call linear_combination(Xwrk, T0, Swrk0); call copy(QU, Xwrk)
                call innerprod(Swrk0, X%U, Ut)
-               call linear_combination(Xwrk, Tt, Swrk0); call copy_basis(T0, Xwrk) ! overwrite T0 with Gamma
+               call linear_combination(Xwrk, Tt, Swrk0); call copy(T0, Xwrk) ! overwrite T0 with Gamma
             end block
             call axpby_basis(T0, 0.5_wp, QU, 0.5_wp)
             ! Update X to most recent value
-            call copy_basis(X%U, U1)
+            call copy(X%U, U1)
             ! reverse steps based on Gamma
             call S_step_riccati(X, U1, QU, B, CT, Qc, Rinv, 0.5*tau, info, reverse=.true., NL=T0)
             call K_step_riccati(X, U1, QU, B, CT, Qc, Rinv, 0.5*tau, info, reverse=.true., NL=T0)
@@ -405,7 +403,7 @@ module LightROM_RiccatiSolvers
       end if
       
       ! Copy updated low-rank factors to output
-      call copy_basis(X%U, U1)
+      call copy(X%U, U1)
                
       return
    end subroutine G_forward_map_riccati_rdp
@@ -460,17 +458,17 @@ module LightROM_RiccatiSolvers
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, X%U, X%S)                       ! K0 = U0 @ S0
-         call copy_basis(U1, Xwrk)
+         call copy(U1, Xwrk)
       end block
       if (.not.present(NL)) then
          call apply_premult_outerprod_w(Swrk0, X%U, U1, B, Rinv)  ! (U0.T) @ B @ R^(-1) @ B.T @ K0
          block
             class(abstract_vector_rdp), allocatable :: Xwrk(:)
             call linear_combination(Xwrk, U1, Swrk0)   ! K0 @ Swrk0
-            call copy_basis(Uwrk0, Xwrk)
+            call copy(Uwrk0, Xwrk)
          end block
       else  ! non-linear term precomputed
-         call copy_basis(Uwrk0, NL)
+         call copy(Uwrk0, NL)
       end if
       
       ! Combine to form G( K @ U.T ) @ U --> Uwrk0
@@ -582,7 +580,7 @@ module LightROM_RiccatiSolvers
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, X%U, transpose(X%S))  ! L0.T                                    U0 @ S.T
-         call copy_basis(Uwrk1, Xwrk)
+         call copy(Uwrk1, Xwrk)
       end block
       ! Constant part --> Uwrk0
       call apply_outerprod_w(Uwrk0, U1, CT, Qc)
@@ -592,7 +590,7 @@ module LightROM_RiccatiSolvers
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, Uwrk1, Swrk0)  ! (U0 @ S.T) @ (U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T)
-         call copy_basis(X%U, Xwrk)
+         call copy(X%U, Xwrk)
       end block
 
       ! Combine to form U1.T @ G( U1.T@L.T )

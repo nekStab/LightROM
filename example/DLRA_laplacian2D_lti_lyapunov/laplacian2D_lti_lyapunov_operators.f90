@@ -12,7 +12,7 @@ module Laplacian2D_LTI_Lyapunov_Operators
    implicit none
 
    private :: this_module
-   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Operators'
+   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Operators'
    ! operator
    public  :: laplacian, laplacian_mat
    ! exptA
@@ -35,7 +35,7 @@ contains
 
    subroutine direct_matvec_laplace(self, vec_in, vec_out)
       !> Linear Operator.
-      class(laplace_operator),     intent(in)  :: self
+      class(laplace_operator),     intent(inout)  :: self
       !> Input vector.
       class(abstract_vector_rdp),  intent(in)  :: vec_in
       !> Output vector.
@@ -175,5 +175,42 @@ contains
       end select
 
    end subroutine exptA
+
+   !--------------------------------------------------------
+   !-----     TYPE BOUND PROCEDURES FOR LTI SYSTEMS    -----
+   !--------------------------------------------------------
+
+   subroutine initialize_lti_system(self, A, B_in, CT_in, D)
+      class(lti_system),           intent(inout) :: self
+      class(abstract_linop_rdp),   intent(in)    :: A
+      class(abstract_vector_rdp),  intent(in)    :: B_in(:)
+      class(abstract_vector_rdp),  intent(in)    :: CT_in(:)
+      real(wp),          optional, intent(in)    :: D(:,:)
+
+      ! Operator
+      select type (A)
+      type is (laplace_operator)
+         allocate(self%A, source=A)
+      end select
+      ! Input
+      select type (B_in)
+      type is (state_vector)
+         allocate(self%B(rk_b), source=B_in(:rk_b))
+      end select
+      ! Output
+      select type (CT_in)
+         type is (state_vector)
+         allocate(self%CT(rk_c), source=CT_in(:rk_c))
+      end select
+      ! Throughput
+      allocate(self%D(rk_c,rk_b))
+      if (present(D)) then
+         call assert_shape(D, [ rk_c, rk_b ], 'D', this_module, 'initialize_lti_system')
+         self%D = D
+      else
+         self%D = 0.0_wp
+      end if
+      return
+   end subroutine initialize_lti_system
 
 end module Laplacian2D_LTI_Lyapunov_Operators

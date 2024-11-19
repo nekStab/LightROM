@@ -1,19 +1,20 @@
 module LightROM_LyapunovUtils
-   ! Fortran Standard Library
-   use stdlib_logger, only: logger => global_logger
+   use stdlib_optval, only : optval
    ! LightKrylov
    use LightKrylov
    use LightKrylov, only: wp => dp
    use LightKrylov_Constants
+   use LightKrylov_Logger
    use LightKrylov_AbstractVectors
    ! LightROM
    use LightROM_AbstractLTIsystems
+   use LightROM_Utils
    
    implicit none
 
    ! module name
    private :: this_module
-   character*128, parameter :: this_module = 'LightROM_LyapunovUtils'
+   character(len=*), parameter :: this_module = 'LR_LyapUtils'
 
    ! Matrix operations for abstract vector types
    public :: apply_outerprod
@@ -72,7 +73,7 @@ contains
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, A, wrk)
-         call copy_basis(C, Xwrk)
+         call copy(C, Xwrk)
       end block
       return
    end subroutine apply_outerprod_basis_rdp

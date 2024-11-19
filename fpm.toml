@@ -24,7 +24,7 @@ source-form = "free"
 
 [dependencies]
 stdlib = "*"
-LightKrylov = { git = "https://github.com/nekStab/LightKrylov.git", branch = "main"}
+LightKrylov = { git = "https://github.com/nekStab/LightKrylov.git", branch = "dev"}
 
 [dev-dependencies]
 test-drive.git = "https://github.com/nekStab/test-drive"

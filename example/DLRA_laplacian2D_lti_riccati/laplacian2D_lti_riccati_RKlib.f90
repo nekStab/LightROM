@@ -14,7 +14,7 @@ module Laplacian2D_LTI_Riccati_RKlib
    implicit none
 
    private :: this_module
-   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Base'
+   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Base'
 
    !-----------------------------------------------
    !-----     EXPONENTIAL PROPAGATOR RKLIB    -----
@@ -62,7 +62,7 @@ contains
 
    subroutine direct_solver_vec(self, vec_in, vec_out)
       !> Linear Operator.
-      class(rklib_exptA_laplacian), intent(in)  :: self
+      class(rklib_exptA_laplacian), intent(inout)  :: self
       !> Input vector.
       class(abstract_vector_rdp),   intent(in)  :: vec_in
       !> Output vector.
@@ -112,14 +112,14 @@ contains
       call laplacian_mat(dvT, x, .true.)        ! ( A @ X.T ).T
 
       xm = reshape(x, shape(xm))
-      f(1:N**2) = dv + dvT + CTQcC - reshape(matmul(xm, matmul(BRinvBTdata,xm)), shape(CTQcC))
+      f(1:N**2) = dv + dvT + CTQcC - reshape(matmul(xm, matmul(BRinvBTdata,xm)), [N**2])
 
       return
    end subroutine rhs_riccati
 
    subroutine direct_solver_riccati_mat(self, vec_in, vec_out)
       !> Linear Operator.
-      class(rklib_riccati_mat),   intent(in)  :: self
+      class(rklib_riccati_mat),   intent(inout)  :: self
       !> Input vector.
       class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.

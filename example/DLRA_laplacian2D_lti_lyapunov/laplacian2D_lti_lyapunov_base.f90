@@ -1,5 +1,9 @@
 module laplacian2D_LTI_Lyapunov_Base
    ! Standard Library.
+   use stdlib_stats_distribution_normal, only: normal => rvs_normal
+   use stdlib_io_npy, only: save_npy
+   use stdlib_strings, only: replace_all
+   use stdlib_linalg, only: svdvals
    use stdlib_optval, only : optval
    ! LightKrylov for linear algebra.
    use LightKrylov
@@ -24,11 +28,12 @@ module laplacian2D_LTI_Lyapunov_Base
 
    ! --> Mesh related parameters.
    real(wp),      parameter :: L  = 1.0_wp  !> Domain length
-   integer,       parameter :: nx = 10      !> Number of grid points per direction
+   integer,       parameter :: nx = 4       !> Number of grid points per direction
    integer,       parameter :: N  = nx**2   !> total number of grid points
    real(wp),      parameter :: dx = L/nx    !> Grid size.
    real(wp),      parameter :: dx2= dx**2   !> Grid size.
    integer,       parameter :: rk_b = 1     !> rank of the RHS
+   integer,       parameter :: rk_c = 1     !
 
    !-------------------------------------------------------
    !-----     LIGHTKRYLOV SYM LOW RANK STATE TYPE     -----
@@ -37,7 +42,7 @@ module laplacian2D_LTI_Lyapunov_Base
    type, extends(abstract_sym_low_rank_state_rdp), public :: LR_state
    contains
       private
-      procedure, pass(self), public :: initialize_LR_state
+      procedure, pass(self), public :: init => initialize_LR_state
    end type LR_state
 
    !-------------------------------------------
@@ -45,7 +50,7 @@ module laplacian2D_LTI_Lyapunov_Base
    !-------------------------------------------
 
    type, extends(abstract_vector_rdp), public :: state_vector
-      real(wp)      :: state(N) = 0.0_wp
+      real(wp) :: state(N) = 0.0_wp
       contains
       private
       procedure, pass(self), public :: zero => vector_zero
@@ -95,9 +100,9 @@ contains
       return
    end function vector_dot
 
-   integer function vector_get_size(self) result(N)
+   integer function vector_get_size(self) result(ntot)
      class(state_vector), intent(in) :: self
-     N = nx
+     ntot = nx
      return
    end function vector_get_size
 
@@ -118,15 +123,18 @@ contains
       end select
       return
    end subroutine vector_axpby
-
+   
    subroutine vector_rand(self, ifnorm)
       class(state_vector), intent(inout) :: self
       logical, optional,   intent(in)    :: ifnorm
       ! internals
       logical :: normalize
       real(wp) :: alpha
+      real(wp), dimension(N) :: mean, std
       normalize = optval(ifnorm,.true.)
-      call random_number(self%state)
+      mean = 0.0_wp
+      std  = 1.0_wp
+      self%state = normal(mean,std)
       if (normalize) then
          alpha = self%norm()
          call self%scal(1.0/alpha)
@@ -182,8 +190,11 @@ contains
       ! internals
       logical :: normalize
       real(wp) :: alpha
+      real(wp), dimension(N**2) :: mean, std
       normalize = optval(ifnorm, .true.)
-      call random_number(self%state)
+      mean = 0.0_wp
+      std  = 1.0_wp
+      self%state = normal(mean,std)
       if (normalize) then
          alpha = self%norm()
          call self%scal(1.0/alpha)
@@ -195,53 +206,91 @@ contains
    !-----     TYPE BOUND PROCEDURE FOR SYM LOW RANK REPRESENTATION    -----
    !-----------------------------------------------------------------------
 
-   subroutine initialize_LR_state(self, U, S, rk, rkmax)
+   subroutine initialize_LR_state(self, U, S, rk, rkmax, if_rank_adaptive, casename, outpost)
       class(LR_state),            intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: U(:)
       real(wp),                   intent(in)    :: S(:,:)
       integer,                    intent(in)    :: rk
       integer, optional,          intent(in)    :: rkmax
+      logical, optional,          intent(in)    :: if_rank_adaptive
+      logical                                   :: ifrk
+      character(len=128), optional, intent(in)  :: casename
+      procedure(abstract_outpost_rdp), optional :: outpost
 
       ! internals
-      integer :: i, n, rka, info
+      class(abstract_vector_rdp), allocatable   :: Utmp(:)
+      real(wp), allocatable :: R(:, :)
+      integer :: i, m, rka, info
+      character(len=128) :: msg
 
-      n = size(U)
-      call assert_shape(S, [n,n], "initialize_LR_state", "S")
-
-      ! optional size argument
-      if (present(rkmax)) then
-         self%rk = rkmax - 1
-         rka = rkmax
-      else
-         self%rk = rk
-         rka = rk + 1
-      end if
+      ifrk = optval(if_rank_adaptive, .false.)
 
       ! reset time
       self%time = 0.0_wp
 
       select type (U)
       type is (state_vector)
-         if (allocated(self%U)) deallocate(self%U)
-         if (allocated(self%S)) deallocate(self%S)
+         ! set time and optional args
+         self%time = 0.0_wp
+         if (present(outpost)) self%outpost => outpost
+         self%casename = optval(casename, '')
+
+         m = size(U)
+         call assert_shape(S, [m,m], 'S', this_module, 'initialize_LR_state')
+         ! optional size argument
+         if (present(rkmax)) then
+            if (rkmax < rk) then
+               call stop_error('rkmax < rk!', this_module, 'initialize_LR_state')
+            end if
+            self%rk = rk
+            rka = rkmax
+            if (ifrk) then
+               if (rkmax==rk) then
+                  call stop_error('rkmax must be larger than rk for rank-adaptive DLRA!', this_module, 'initialize_LR_state')
+               end if
+               write(msg,'(A,I0,A)') 'Rank-adaptivity enabled. Computation will begin with X%rk = ', self%rk+1, '.'
+               call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
+            end if
+         else
+            self%rk = rk
+            if (ifrk) then
+               rka = rk + 1
+            else
+               rka = rk
+            end if
+         end if
+
          ! allocate & initialize
          allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
          allocate(self%S(rka,rka)); self%S = 0.0_wp
+         write(msg,'(3(A,I0),A)') 'size(X%U) = [ ', rka,' ], X%rk = ', self%rk, ', size(U0) = [ ', m,' ]'
+         call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          ! copy inputs
-         if (self%rk > n) then   ! copy the full IC into self%U
-            call copy_basis(self%U(:n), U)
-            self%S(1:n,1:n) = S
+         if (self%rk > m) then   ! copy the full IC into self%U
+            call copy(self%U(:m), U)
+            self%S(:m,:m) = S
+            write(msg,'(4X,A,I0,A)') 'Transfer the first ', m, ' columns of U0 to X%U.'
+            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
-            call copy_basis(self%U(1:self%rk), U(1:self%rk))
-            self%S(1:self%rk,1:self%rk) = S(1:self%rk,1:self%rk)
+            call copy(self%U(:self%rk), U(:self%rk))
+            self%S(:self%rk,:self%rk) = S(:self%rk,:self%rk)
+            write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
+            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
          end if
          ! top up basis (to rka for rank-adaptivity) with orthonormal columns if needed
-         if (rka > n) then
-            do i = n+1, rka
-               call self%U(i)%rand()
+         if (rka > m) then
+            write(msg,'(4X,A,I0,A)') 'Fill remaining ', rka-m, ' columns with orthonormal noise orthonormal to U0.'
+            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
+            allocate(Utmp(rka-m), source=U(1))
+            do i = 1, rka-m
+               call Utmp(i)%rand()
             end do
-            call orthogonalize_against_basis(self%U(n+1:rka), self%U(:n), info, if_chk_orthonormal=.false.)
-            call orthonormalize_basis(self%U(n+1:rka))
+            allocate(R(rka-m,rka-m)); R = 0.0_wp
+            call orthogonalize_against_basis(Utmp, self%U, info)
+            call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='initialize_LR_state')
+            call qr(Utmp, R, info)
+            call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
+            call copy(self%U(m+1:), Utmp)
          end if
       end select
       return

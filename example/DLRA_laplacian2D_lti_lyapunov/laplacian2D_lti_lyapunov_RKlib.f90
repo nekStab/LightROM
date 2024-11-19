@@ -15,19 +15,7 @@ module Laplacian2D_LTI_Lyapunov_RKlib
 
    private :: this_module
 
-   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_RKLib'
-   ! exptA
-   public :: exptA_rklib
-   
-   !-----------------------------------------------
-   !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
-   !-----------------------------------------------
-
-   type, extends(abstract_lti_system_rdp), public :: lti_system
-   contains
-      private
-      procedure, pass(self), public :: initialize => initialize_lti_system
-   end type lti_system
+   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_RKLib'
 
    !-----------------------------------------------
    !-----     EXPONENTIAL PROPAGATOR RKLIB    -----
@@ -77,7 +65,7 @@ contains
 
    subroutine direct_solver_vec(self, vec_in, vec_out)
       !> Linear Operator.
-      class(rklib_exptA_laplacian), intent(in)  :: self
+      class(rklib_exptA_laplacian), intent(inout)  :: self
       !> Input vector.
       class(abstract_vector_rdp),   intent(in)  :: vec_in
       !> Output vector.
@@ -136,7 +124,7 @@ contains
 
    subroutine direct_solver_mat(self, vec_in, vec_out)
       !> Linear Operator.
-      class(rklib_lyapunov_mat),  intent(in)  :: self
+      class(rklib_lyapunov_mat),  intent(inout)  :: self
       !> Input vector.
       class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
