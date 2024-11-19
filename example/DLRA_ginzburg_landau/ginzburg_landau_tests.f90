@@ -57,9 +57,9 @@ contains
       real(wp)                                     :: etime, Tstep
       ! OUTPUT
       real(wp)                                     :: X_out(N,N)
-      character(len=128)      :: note
+      character(len=128)                           :: note
       ! timer
-      integer            :: clock_rate, clock_start, clock_stop
+      integer :: clock_rate, clock_start, clock_stop
 
       call system_clock(count_rate=clock_rate)
 
@@ -104,7 +104,7 @@ contains
       return
    end subroutine run_lyap_reference_RK
 
-   subroutine run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home)
+   subroutine run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Reference solution (BS)
@@ -125,6 +125,7 @@ contains
       integer,                       intent(in)    :: nprint
       logical,                       intent(in)    :: adjoint
       character(len=128),            intent(in)    :: home
+      logical,                       intent(in)    :: if_save_output
 
       ! Internals
       type(LR_state),                allocatable   :: X
@@ -173,12 +174,11 @@ contains
                opts%mode = torder
 
                ! define casename
-               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_II_rk', rk, '_TO', torder, '_dt', tau
                write(logfile_abs,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDabs_II_rk', rk, '_TO', torder, '_dt', tau, '.dat'
                write(logfile_rel,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDrel_II_rk', rk, '_TO', torder, '_dt', tau, '.dat'
 
                ! Initialize low-rank representation with rank rk
-               call X%initialize_LR_state(U0, S0, rk, rkmax, .false., casename=casename)
+               call X%initialize_LR_state(U0, S0, rk, rkmax, .false.)
 
                ! run integrator
                call system_clock(count=clock_start)     ! Start Timer
@@ -198,8 +198,10 @@ contains
                                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
                                  & norm2(CALE(X_out, adjoint))/N, etime
                deallocate(X%U); deallocate(X%S)
-               call rename(logfile_SVD_abs, logfile_abs)
-               call rename(logfile_SVD_rel, logfile_rel)
+               if (if_save_output) then
+                  call rename(logfile_SVD_abs, logfile_abs)
+                  call rename(logfile_SVD_rel, logfile_rel)
+               end if
             end do
             print *, ''
          end do
@@ -226,7 +228,7 @@ contains
 
    end subroutine run_lyap_DLRA_test
 
-   subroutine run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home)
+   subroutine run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Reference solution (BS)
@@ -247,6 +249,7 @@ contains
       integer,                       intent(in)    :: nprint
       logical,                       intent(in)    :: adjoint
       character(len=128),            intent(in)    :: home
+      logical,                       intent(in)    :: if_save_output
 
       ! Internals
       type(LR_state),                allocatable   :: X
@@ -295,12 +298,11 @@ contains
                opts%mode = torder
 
                ! define casename
-               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_III_rk', rk, '_TO', torder, '_dt', tau
                write(logfile_abs,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDabs_III_rk', rk, '_TO', torder, '_dt', tau, '.dat'
                write(logfile_rel,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDrel_III_rk', rk, '_TO', torder, '_dt', tau, '.dat'
 
                ! Initialize low-rank representation with rank rk
-               call X%initialize_LR_state(U0, S0, rk, rkmax, opts%if_rank_adaptive, casename=casename)
+               call X%initialize_LR_state(U0, S0, rk, rkmax, opts%if_rank_adaptive)
 
                ! run integrator
                call system_clock(count=clock_start)     ! Start Timer
@@ -320,8 +322,10 @@ contains
                                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
                                  & norm2(CALE(X_out, adjoint))/N, etime
                deallocate(X%U); deallocate(X%S)
-               call rename(logfile_SVD_abs, logfile_abs)
-               call rename(logfile_SVD_rel, logfile_rel)
+               if (if_save_output) then
+                  call rename(logfile_SVD_abs, logfile_abs)
+                  call rename(logfile_SVD_rel, logfile_rel)
+               end if
             end do
             print *, ''
          end do

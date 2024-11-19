@@ -24,10 +24,10 @@ program demo
    use Ginzburg_Landau_Tests
    implicit none
 
-   character(len=128), parameter :: this_module = 'Ginzburg_Landau_Main'
-   character(len=128), parameter :: home = 'example/DLRA_ginzburg_landau/local/'
+   character(len=*), parameter :: this_module = 'Ginzburg_Landau_Main'
 
-   character*128      :: onameU, onameS, oname
+   character(len=128), parameter :: home = 'example/DLRA_ginzburg_landau/local/'
+   character(len=128) :: onameU, onameS, oname
    ! rk_B & rk_C are set in ginzburg_landau_base.f90
 
    integer  :: nrk, ntau, rk,  torder
@@ -72,6 +72,7 @@ program demo
    real(wp), dimension(:),       allocatable :: svals
    integer, parameter                        :: irow = 8
    integer                                   :: nprint
+   logical                                   :: if_save_output
 
    !--------------------------------
    ! Define which examples to run:
@@ -112,8 +113,7 @@ program demo
    !
    !--------------------------------
 
-   call logger_setup()
-   call logger%configure(level=error_level, time_stamp=.true.)
+   call logger_setup(logfile=trim(home)//'lightkrylov.log', log_level=error_level, log_stdout=.false., log_timestamp=.true.)
 
    print *, '#########################################################################'
    print *, '#                                                                       #'
@@ -241,8 +241,9 @@ program demo
       dtv = dtv(size(dtv):1:-1) ! reverse vector
       TOv  = [ 1, 2 ] 
       nprint = 16
+      if_save_output = .false.
 
-      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home)
+      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
    else
       print *, 'Skip.'
       print *, ''
@@ -285,8 +286,9 @@ program demo
       dtv = dtv(size(dtv):1:-1) ! reverse vector
       TOv  = [ 1, 2 ] 
       nprint = 40
+      if_save_output = .true.
 
-      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home)
+      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
    else
       print *, 'Skip.'
       print *, ''
@@ -307,8 +309,9 @@ program demo
       TOv  = [ 1, 2 ]
       tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
       nprint = 60
+      if_save_output = .true.
 
-      call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home)
+      call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
    else
       print *, 'Skip.'
       print *, ''

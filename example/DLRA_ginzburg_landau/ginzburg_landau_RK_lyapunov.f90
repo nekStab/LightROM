@@ -13,7 +13,7 @@ module Ginzburg_Landau_RK_Lyapunov
    implicit none
 
    private :: this_module
-   character(len=128), parameter :: this_module = 'Ginzburg_Landau_RK_Lyapunov'
+   character(len=*), parameter :: this_module = 'Ginzburg_Landau_RK_Lyapunov'
    
    public  :: GL_mat
 

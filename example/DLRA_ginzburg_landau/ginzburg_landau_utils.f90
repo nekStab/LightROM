@@ -32,9 +32,9 @@ module Ginzburg_Landau_Utils
    ! initial conditions
    public  :: generate_random_initial_condition
    ! misc
-   public  :: CALE, CARE, outpost_state
+   public  :: CALE, CARE
 
-   character(len=128), parameter :: this_module = 'Ginzburg_Landau_Utils'
+   character(len=*), parameter :: this_module = 'Ginzburg_Landau_Utils'
 
    interface reconstruct_solution
       module procedure reconstruct_solution_X
@@ -335,49 +335,4 @@ contains
       res = AX + XAH + CTCW + matmul(X, matmul(BRinvBTW, X))
 
    end function CARE
-
-   subroutine outpost_state(self, info)
-      !! Abstract interface to define the matrix exponential-vector product.
-      class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
-      integer,                                intent(out)   :: info
-      ! internal
-      integer :: rk, iostatus
-      character(len=128) :: filename, msg
-      logical :: exist_file
-      real(wp), dimension(:,:), allocatable :: U
-      select type(self)
-      type is(LR_state)
-         rk = self%rk
-         write(filename, '(A,A,I5.5,A,I5.5,A)') trim(self%casename), '_s', self%step, '_', self%iout, '_S.npy'
-         inquire(file=filename, exist=exist_file)
-         if (.not. exist_file) then
-            call save_npy(filename, self%S(:rk,:rk), iostatus)
-            if (iostatus /= 0) call stop_error('Error saving file '//trim(filename), module=this_module, procedure='outpost_state')
-         else
-            msg = 'Error saving file '//trim(filename)//': file exists!'
-            print *, msg
-            call stop_error(msg, module=this_module, procedure='outpost_state')
-         end if
-         msg = 'Saved file '//trim(filename)
-         print *, msg
-         call logger%log_message(msg, module=this_module, procedure='outpost_state')
-         write(filename, '(A,A,I5.5,A,I5.5,A)') trim(self%casename), '_s', self%step, '_', self%iout, '_U.npy'
-         inquire(file=filename, exist=exist_file)
-         if (.not. exist_file) then
-            
-            allocate(U(N,rk)); U = 0.0_wp
-            call get_state(U, self%U(:rk), 'outpost_state')
-            call save_npy(filename, U, iostatus)
-            if (iostatus /= 0) call stop_error('Error saving file '//trim(filename), module=this_module, procedure='outpost_state')
-         else
-            msg = 'Error saving file '//trim(filename)//': file exists!'
-            call stop_error(msg, module=this_module, procedure='outpost_state')
-         end if
-         msg = 'Saved file '//trim(filename)
-         print *, msg
-         call logger%log_message(msg, module=this_module, procedure='outpost_state')
-      end select
-      return
-   end subroutine outpost_state
-
 end module Ginzburg_Landau_Utils
