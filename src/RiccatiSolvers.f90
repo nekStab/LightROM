@@ -174,7 +174,7 @@ module LightROM_RiccatiSolvers
       integer                                                :: istep, nsteps
       logical                                                :: converged
       real(wp)                                               :: T
-      character*128                                          :: msg
+      character(len=128)                                     :: msg
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
 
       ! Optional arguments
@@ -215,7 +215,6 @@ module LightROM_RiccatiSolvers
       dlra : do istep = 1, nsteps
          ! dynamical low-rank approximation solver
          call projector_splitting_DLRA_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, opts%mode, info, p_exptA, trans)
-
          T = T + tau
          !> here we can do some checks such as whether we have reached steady state
          if ( mod(istep,opts%chkstep) .eq. 0 ) then
@@ -223,6 +222,7 @@ module LightROM_RiccatiSolvers
             call logger%log_information(msg, module=this_module, procedure='DLRA')
          endif
       enddo dlra
+      deallocate(Uwrk0,Uwrk1,U1,QU,Swrk0,Swrk1)
       return
    end subroutine projector_splitting_DLRA_riccati_integrator_rdp
 
