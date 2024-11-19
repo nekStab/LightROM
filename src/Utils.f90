@@ -420,9 +420,8 @@ contains
       return
    end function is_converged
 
-   subroutine check_options(chkstep, iostep, tau, X, opts)
-      integer,                                 intent(out)   :: chkstep 
-      integer,                                 intent(out)   :: iostep 
+   subroutine check_options(chkstep, tau, X, opts)
+      integer,                                 intent(out)   :: chkstep
       real(wp),                                intent(in)    :: tau
       class(abstract_sym_low_rank_state_rdp),  intent(inout) :: X
       type(dlra_opts),                         intent(inout) :: opts
@@ -452,38 +451,6 @@ contains
          chkstep = opts%chkstep
          write(msg,'(A,I0,A)') 'Convergence check every ', chkstep, ' steps (based on steps).'
          call logger%log_information(msg, module=this_module, procedure='DLRA_check_options')
-      end if
-      !
-      ! RUNTIME OUTPUT CALLBACK
-      !
-      if (opts%ifIO) then ! callback activated
-         if (.not. associated(X%outpost)) then
-            opts%ifIO = .false.
-            write(msg,'(A,E12.5,A)') 'No outposting routine provided. Runtime output will be deactivated.'
-            call logger%log_warning(msg, module=this_module, procedure='DLRA_check_options')
-         end if
-         if (opts%ioctrl_time) then
-            if (opts%iotime <= 0.0_wp) then
-               opts%iotime = opts_default%iotime
-               write(msg,'(A,E12.5,A)') 'Invalid iotime. Reset to default (',  opts%iotime,')'
-               call logger%log_warning(msg, module=this_module, procedure='DLRA_check_options')
-            end if
-            iostep = max(1, NINT(opts%iotime/tau))
-            write(msg,'(A,E12.5,A,I0,A)') 'Output every ', opts%iotime, ' time units (', iostep, ' steps)'
-            call logger%log_information(msg, module=this_module, procedure='DLRA_check_options')
-         else
-            if (opts%iostep <= 0) then
-               opts%iostep = opts_default%iostep
-               write(msg,'(A,I0,A)') "Invalid iotime. Reset to default (",  opts%iostep,")"
-               call logger%log_warning(msg, module=this_module, procedure='DLRA_check_options')
-            end if
-            iostep = opts%iostep
-            write(msg,'(A,I0,A)') 'Output every ', iostep, ' steps (based on steps).'
-            call logger%log_information(msg, module=this_module, procedure='DLRA_check_options')
-         end if
-      else
-         iostep = 0
-         call logger%log_information('No runtime output.', module=this_module, procedure='DLRA_check_options')
       end if
       return
    end subroutine check_options

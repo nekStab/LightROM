@@ -1,11 +1,10 @@
 module LightROM
   implicit none
-  include "dtypes.h"
 
   private
 
   !> Global variables.
-  public :: greetings_LightROM, wp, atol, rtol
+  public :: greetings_LightROM
 
 contains
 

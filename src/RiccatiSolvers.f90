@@ -223,19 +223,6 @@ module LightROM_RiccatiSolvers
             call logger%log_information(msg, module=this_module, procedure='DLRA')
          endif
       enddo dlra
-
-      if (allocated(Uwrk0)) deallocate(Uwrk0)
-      if (allocated(Uwrk1)) deallocate(Uwrk1)
-      if (allocated(Swrk0)) deallocate(Swrk0)
-      if (allocated(Swrk1)) deallocate(Swrk1)
-      if (allocated(QU)) deallocate(QU)
-      if (allocated(U1)) deallocate(U1)
-      if (allocated(U0)) deallocate(U0)
-      if (allocated(T0)) deallocate(T0)
-      if (allocated(Ut)) deallocate(Ut)
-      if (allocated(Tt)) deallocate(Tt)
-      if (allocated(S0)) deallocate(S0)
-
       return
    end subroutine projector_splitting_DLRA_riccati_integrator_rdp
 

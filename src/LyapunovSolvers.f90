@@ -160,7 +160,7 @@ module LightROM_LyapunovSolvers
       !! Options for solver configuration
 
       ! Internal variables
-      integer                                                :: i, j, is, ie, istep, nsteps, irk, chkstep, iostep, ifmt
+      integer                                                :: i, j, is, ie, istep, nsteps, irk, chkstep, ifmt
       integer                                                :: rk_reduction_lock   ! 'timer' to disable rank reduction
       real(wp)                                               :: inc_nrm, nrmX       ! increment and solution norm
       real(wp)                                               :: El                  ! aggregate error estimate
@@ -184,7 +184,7 @@ module LightROM_LyapunovSolvers
       tol = opts%tol
 
       ! Check compatibility of options and determine chk/IO step
-      call check_options(chkstep, iostep, tau, X, opts)
+      call check_options(chkstep, tau, X, opts)
 
       ! Initialize
       rk_reduction_lock = 10
@@ -305,16 +305,6 @@ module LightROM_LyapunovSolvers
                end if
             end if
          endif
-
-         ! Runtime output callback (if requested)
-         if (opts%ifIO .and. associated(X%outpost)) then
-            if (mod(istep, iostep) == 0) then
-               X%iout = X%iout + 1
-               call X%outpost(info)
-               if (info /= 0) call stop_error('Error in outpost.', this_module, '   DLRA')
-            end if
-         end if
-
       enddo dlra
 
       ! Clean up scratch space

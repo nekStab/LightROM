@@ -5,6 +5,8 @@ module LightROM_AbstractLTIsystems
 
    private
 
+   character(len=*), parameter :: this_module = 'LR_AbsLTIsys'
+
    public :: abstract_outpost_rdp
 
    !-------------------------------------------------------
@@ -73,12 +75,6 @@ module LightROM_AbstractLTIsystems
       logical                                  :: is_converged = .false.
       ! Has rank been initialized? (for rank-adaptive DLRA)
       logical                                  :: rank_is_initialised = .false.
-      ! Casename
-      character(len=128)                       :: casename = ''
-      ! Pointer to the outposting routine
-      procedure(abstract_outpost_rdp), pointer :: outpost => null() ! user defined function
-      ! Outposting counter
-      integer                                  :: iout = 0
    contains
    end type abstract_sym_low_rank_state_rdp
 
