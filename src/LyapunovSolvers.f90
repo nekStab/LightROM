@@ -22,10 +22,6 @@ module LightROM_LyapunovSolvers
    real(wp),                    allocatable   :: ssvd(:)
    real(wp),                    allocatable   :: Usvd(:,:), VTsvd(:,:)
 
-   ! lagged solution for computation of increment norm
-   class(abstract_vector_rdp),  allocatable   :: U_lag(:)
-   real(wp),                    allocatable   :: S_lag(:,:)
-
    ! module name
    private :: this_module
    character(len=*), parameter :: this_module = 'LR_LyapSolvers'
@@ -160,15 +156,16 @@ module LightROM_LyapunovSolvers
       !! Options for solver configuration
 
       ! Internal variables
-      integer                                                :: i, j, is, ie, istep, nsteps, irk, chkstep, ifmt
-      integer                                                :: rk_reduction_lock   ! 'timer' to disable rank reduction
-      real(wp)                                               :: inc_nrm, nrmX       ! increment and solution norm
-      real(wp)                                               :: El                  ! aggregate error estimate
-      real(wp)                                               :: err_est             ! current error estimate
-      real(wp)                                               :: tol                 ! current tolerance
-      character(len=128)                                     :: msg, fmt_norm, fmt_sval
-      integer                                                :: rkmax
-      real(wp), dimension(:),                  allocatable   :: svals, dsvals, svals_lag
+      integer                             :: i, j, is, ie, istep, nsteps, irk, chkstep, ifmt
+      integer                             :: rk_reduction_lock   ! 'timer' to disable rank reduction
+      real(wp)                            :: inc_nrm, nrmX       ! increment and solution norm
+      real(wp)                            :: El                  ! aggregate error estimate
+      real(wp)                            :: err_est             ! current error estimate
+      real(wp)                            :: tol                 ! current tolerance
+      character(len=128)                  :: msg, fmt_norm, fmt_sval
+      integer                             :: rkmax
+      logical                             :: if_lastep
+      real(wp), dimension(:), allocatable :: svals, dsvals, svals_lag
 
       ! Optional arguments
       trans = optval(iftrans, .false.)
@@ -193,9 +190,11 @@ module LightROM_LyapunovSolvers
       rkmax = size(X%U)
       ! Allocate memory for SVD & lagged fields
       allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
-      allocate(U_lag(rkmax), source=X%U(1)); allocate(S_lag(rkmax, rkmax))
+
+      call logger%log_message('Initializing Lyapunov solver', module=this_module, procedure='DLRA_main')
 
       ! Compute number of steps
+      if_lastep = .false.
       nsteps = nint(Tend/tau)
       write(msg,'(A,I0,A,F10.8)') 'Integration over ', nsteps, ' steps with dt= ', tau
       call logger%log_information(msg, module=this_module, procedure='DLRA_main')
@@ -230,6 +229,9 @@ module LightROM_LyapunovSolvers
          end if
       end if
 
+      call log_settings(X, Tend, tau, nsteps, opts)
+      call logger%log_message('Starting DLRA integration', module=this_module, procedure='DLRA_main')
+
       dlra : do istep = 1, nsteps
 
          write(msg,'(A,I0,A,I0)') 'Step ', istep, '/', nsteps
@@ -237,12 +239,7 @@ module LightROM_LyapunovSolvers
 
          ! save lag data defore the timestep
          if (mod(istep, chkstep) == 0 .or. istep == nsteps ) then
-            ! allocate lag data (we do it here so we do not need to store the data size and can pass the whole array)
-            call zero_basis(U_lag); call copy(U_lag(:X%rk), X%U(:X%rk))
-            S_lag = 0.0_dp; S_lag(:X%rk,:X%rk) = X%S(:X%rk,:X%rk)
-            svals_lag = svdvals(S_lag)
-            write(msg,'(A,I0,A)') 'Step ', istep, ': Solution saved before timestep for increment norm computation.'
-            call logger%log_debug(msg, module=this_module, procedure='DLRA_main')
+            svals_lag = svdvals(X%S(:X%rk,:X%rk))
          end if
 
          ! dynamical low-rank approximation solver
@@ -270,10 +267,6 @@ module LightROM_LyapunovSolvers
 
          ! here we can do some checks such as whether we have reached steady state
          if (mod(istep, chkstep) == 0 .or. istep == nsteps) then
-            inc_nrm = increment_norm(X, U_lag(:X%rk), S_lag(:X%rk,:X%rk), .true.)
-            nrmX = coefficient_matrix_norm(X, .true.)
-            write(msg,fmt_norm) istep, nsteps, X%time, inc_nrm, nrmX, inc_nrm/tau/nrmX
-            call logger%log_information(msg, module=this_module, procedure='DLRA_main')
             svals = svdvals(X%S(:X%rk,:X%rk))
             irk = min(size(svals), size(svals_lag))
             allocate(dsvals(irk)); dsvals = 0.0_dp
@@ -293,23 +286,23 @@ module LightROM_LyapunovSolvers
             end do
             deallocate(dsvals)
             ! Check convergence
-            X%is_converged = is_converged(svals(:irk), svals_lag(:irk), opts)
+            if (istep == nsteps) if_lastep = .true.
+            X%is_converged = is_converged(X, svals(:irk), svals_lag(:irk), opts, if_lastep)
             if (X%is_converged) then
                write(msg,'(A,I0,A)') "Step ", istep, ": Solution converged!"
                call logger%log_information(msg, module=this_module, procedure='DLRA_main')
                exit dlra
             else ! if final step
-               if (istep == nsteps) then
+               if (if_lastep) then
                   write(msg,'(A,I0,A)') "Step ", istep, ": Solution not converged!"
                   call logger%log_information(msg, module=this_module, procedure='DLRA_main')
                end if
             end if
          endif
       enddo dlra
-
+      call logger%log_message('Exiting Lyapunov solver', module=this_module, procedure='DLRA_main')
       ! Clean up scratch space
-      deallocate(Usvd, ssvd, VTsvd, U_lag, S_lag)
-
+      deallocate(Usvd, ssvd, VTsvd)
       return
    end subroutine projector_splitting_DLRA_lyapunov_integrator_rdp
 
