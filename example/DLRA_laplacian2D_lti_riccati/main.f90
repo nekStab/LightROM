@@ -86,7 +86,6 @@ program demo
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
    integer, parameter :: irow = 8 ! how many numbers to print per row
-   character(len=128) :: casename
 
    !--------------------------------
    ! Define which examples to run:
@@ -118,8 +117,8 @@ program demo
    !
    !--------------------------------
 
-   call logger%configure(level=error_level, time_stamp=.false.); print *, 'Logging set to error_level.'
-   
+   call logger_setup(logfile=trim(home)//'lightkrylov.log', log_level=error_level, log_stdout=.false., log_timestamp=.true.)
+
    call system_clock(count_rate=clock_rate)
 
    print *, '#########################################################################'
@@ -150,6 +149,7 @@ program demo
 
    ! Define LTI system
    LTI = lti_system()
+   A = laplace_operator()
    call LTI%initialize_lti_system(A, B, CT)
 
    ! Define initial condition of the form X0 + U0 @ S0 @ U0.T SPD 
@@ -244,6 +244,9 @@ program demo
    print *, '#########################################################################'
    print *, ''
    if (run_fixed_rank_short_integration_time_test) then
+      call logger%log_message('#', module=this_module)
+      call logger%log_message('# Fixed-rank short time-horizon integration', module=this_module)
+      call logger%log_message('#', module=this_module)
       print '(A10,A8,A4,A10,A8,3(A20),A20)', 'DLRA:','rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
          & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
       write(*,'(A)', ADVANCE='NO') '         ------------------------------------------------'
@@ -265,11 +268,8 @@ program demo
                irep = irep + 1
                dt = dtv(k)
 
-               ! define casename
-               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_IIb_rk', rk, '_TO', torder, '_dt', dt  
-
                ! Reset input
-               call X%init(U0, S0, rk, casename=casename)
+               call X%init(U0, S0, rk)
 
                ! run step
                opts = dlra_opts(mode=torder)
@@ -361,6 +361,9 @@ program demo
    print *, '#########################################################################'
    print *, ''
    if (run_fixed_rank_long_integration_time_test) then
+      call logger%log_message('#', module=this_module)
+      call logger%log_message('# Fixed-rank long time-horizon integration', module=this_module)
+      call logger%log_message('#', module=this_module)
       print '(A10,A8,A4,A10,A8,3(A20),A20)', 'DLRA:','rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
          & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
       write(*,'(A)', ADVANCE='NO') '         ------------------------------------------------'
@@ -382,11 +385,8 @@ program demo
                irep = irep + 1
                dt = dtv(k)
 
-               ! define casename
-               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_IIIb_rk', rk, '_TO', torder, '_dt', dt  
-
                ! Reset input
-               call X%init(U0, S0, rk, casename=casename)
+               call X%init(U0, S0, rk)
 
                ! run step
                opts = dlra_opts(mode=torder)

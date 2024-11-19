@@ -16,7 +16,7 @@ module Laplacian2D_LTI_Riccati_Operators
    ! operator
    public  :: build_operator, laplacian, laplacian_mat, exptA
 
-   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Riccati_Operators'
+   character(len=*), parameter :: this_module = 'Laplacian2D_LTI_Riccati_Operators'
 
    !-----------------------------------------------
    !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
