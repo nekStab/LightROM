@@ -12,7 +12,7 @@ module Laplacian2D_LTI_Lyapunov_Operators
    implicit none
 
    private :: this_module
-   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Operators'
+   character(len=*), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Operators'
    ! operator
    public  :: laplacian, laplacian_mat
 

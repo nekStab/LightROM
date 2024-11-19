@@ -16,7 +16,7 @@ module laplacian2D_LTI_Lyapunov_Base
    implicit none
 
    private :: this_module
-   character*128, parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Base'
+   character(len=*), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Base'
    
    ! problem parameters
    public  :: N, nx, dx, dx2, L, rk_b, B, BBT
@@ -205,7 +205,7 @@ contains
    !-----     TYPE BOUND PROCEDURE FOR SYM LOW RANK REPRESENTATION    -----
    !-----------------------------------------------------------------------
 
-   subroutine initialize_LR_state(self, U, S, rk, rkmax, if_rank_adaptive, casename, outpost)
+   subroutine initialize_LR_state(self, U, S, rk, rkmax, if_rank_adaptive)
       class(LR_state),            intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: U(:)
       real(wp),                   intent(in)    :: S(:,:)
@@ -213,8 +213,6 @@ contains
       integer, optional,          intent(in)    :: rkmax
       logical, optional,          intent(in)    :: if_rank_adaptive
       logical                                   :: ifrk
-      character(len=128), optional, intent(in)  :: casename
-      procedure(abstract_outpost_rdp), optional :: outpost
 
       ! internals
       class(abstract_vector_rdp), allocatable   :: Utmp(:)
@@ -228,8 +226,6 @@ contains
       type is (state_vector)
          ! set time and optional args
          self%time = 0.0_wp
-         if (present(outpost)) self%outpost => outpost
-         self%casename = optval(casename, '')
 
          m = size(U)
          call assert_shape(S, [m,m], 'S', this_module, 'initialize_LR_state')
@@ -278,9 +274,7 @@ contains
             write(msg,'(4X,A,I0,A)') 'Fill remaining ', rka-m, ' columns with orthonormal noise orthonormal to U0.'
             call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
             allocate(Utmp(rka-m), source=U(1))
-            do i = 1, rka-m
-               call Utmp(i)%rand()
-            end do
+            call rand_basis(Utmp)
             allocate(R(rka-m,rka-m)); R = 0.0_wp
             call orthogonalize_against_basis(Utmp, self%U, info)
             call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='initialize_LR_state')

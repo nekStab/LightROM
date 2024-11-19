@@ -22,8 +22,8 @@ program demo
    use Laplacian2D_LTI_Lyapunov_Utils
    implicit none
 
-   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Main'
-   character(len=128), parameter :: home = 'example/DLRA_laplacian2D_lti_lyapunov/local/'
+   character(len=*), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Main'
+   character(len=*), parameter :: home = 'example/DLRA_laplacian2D_lti_lyapunov/local/'
 
    !----------------------------------------------------------
    !-----     LYAPUNOV EQUATION FOR LAPLACE OPERATOR     -----
@@ -87,12 +87,11 @@ program demo
    ! Misc
    integer   :: clock_rate, clock_start, clock_stop
    integer, parameter :: irow = 8 ! how many numbers to print per row
-   character(len=128) :: casename
 
    !--------------------------------
    ! Define which examples to run:
    !
-   logical, parameter :: run_fixed_rank_short_integration_time_test   = .false.
+   logical, parameter :: run_fixed_rank_short_integration_time_test   = .true.
    !
    ! Integrate the same initial condition for a short time with Runge-Kutta and DLRA.
    !
@@ -100,7 +99,7 @@ program demo
    ! This test shows the convergence of the method as a function of the step size, the rank
    ! and the temporal order of DLRA.
    !
-   logical, parameter :: run_fixed_rank_long_integration_time_test    = .false.
+   logical, parameter :: run_fixed_rank_long_integration_time_test    = .true.
    !
    ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA.
    !
@@ -108,7 +107,7 @@ program demo
    ! Similarly, the test shows the effect of step size, rank and temporal order on the solution
    ! using DLRA
    !
-   logical, parameter :: run_rank_adaptive_long_integration_time_test = .false.
+   logical, parameter :: run_rank_adaptive_long_integration_time_test = .true.
    !
    ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA using an 
    ! adaptive rank.
@@ -127,8 +126,8 @@ program demo
    !
    !--------------------------------
 
-   call logger%configure(level=error_level, time_stamp=.false.); print *, 'Logging set to error_level.'
-   
+   call logger_setup(logfile=trim(home)//'lightkrylov.log', log_level=error_level, log_stdout=.false., log_timestamp=.true.)
+
    call system_clock(count_rate=clock_rate)
 
    print *, '#########################################################################'
@@ -163,6 +162,7 @@ program demo
 
    ! Define LTI system
    LTI = lti_system()
+   A = laplace_operator()
    call LTI%initialize_lti_system(A, B, B)
    call zero_basis(LTI%CT)
 
@@ -262,6 +262,9 @@ program demo
    print *, ''
 
    if (run_fixed_rank_short_integration_time_test) then
+      call logger%log_message('#', module=this_module)
+      call logger%log_message('# Fixed-rank short time-horizon integration', module=this_module)
+      call logger%log_message('#', module=this_module)
       print '(A10,A8,A4,A10,A8,3(A20),A20)', 'DLRA:','rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
          & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
       write(*,'(A)', ADVANCE='NO') '         ------------------------------------------------'
@@ -281,11 +284,8 @@ program demo
                irep = irep + 1
                dt = dtv(j)
 
-               ! define casename
-               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_IIb_rk', rk, '_TO', torder, '_dt', dt  
-
                ! Reset input
-               call X%init(U0, S0, rk, casename=casename)
+               call X%init(U0, S0, rk)
 
                ! run step
                opts = dlra_opts(mode=torder, if_rank_adaptive=.false.)
@@ -376,6 +376,9 @@ program demo
    print *, '#########################################################################'
    print *, ''
    if (run_fixed_rank_long_integration_time_test) then
+      call logger%log_message('#', module=this_module)
+      call logger%log_message('# Fixed-rank long time-horizon integration', module=this_module)
+      call logger%log_message('#', module=this_module)
       print '(A10,A8,A4,A10,A8,3(A20),A20)', 'DLRA:','rk',' TO','dt','Tend','| X_LR - X_RK |/N', &
          & '| X_LR - X_ref |/N','| res_LR |/N', 'Elapsed time'
       write(*,'(A)', ADVANCE='NO') '         ------------------------------------------------'
@@ -395,11 +398,8 @@ program demo
                irep = irep + 1
                dt = dtv(j)
 
-               ! define casename
-               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_IIIb_rk', rk, '_TO', torder, '_dt', dt
-
                ! Reset input
-               call X%init(U0, S0, rk, casename=casename)
+               call X%init(U0, S0, rk)
 
                ! run step
                opts = dlra_opts(mode=torder, if_rank_adaptive=.false.)
@@ -442,6 +442,9 @@ program demo
    print *, '#########################################################################'
    print *, ''
    if (run_rank_adaptive_long_integration_time_test) then
+      call logger%log_message('#', module=this_module)
+      call logger%log_message('# Rank-adaptive long time-horizon integration', module=this_module)
+      call logger%log_message('#', module=this_module)
       ! Choose input ranks and integration step
       rk = 8 ! This is for initialisation, but the algorithm will choose the appropriate rank automatically
       dtv = logspace(-4.0_wp, -1.0_wp, 4, 10)
@@ -464,11 +467,8 @@ program demo
                irep = irep + 1
                dt = dtv(j)
 
-               ! define casename
-               write(casename,'(A,A,I2.2,A,I0,A,F8.6,A,E8.2)') trim(home), 'DATA_IIc_TO', torder, '_dt', dt, '_tol', tol
-
                ! Reset input
-               call X%init(U0, S0, rk, rkmax, if_rank_adaptive=.true., casename=casename)
+               call X%init(U0, S0, rk, rkmax, if_rank_adaptive=.true.)
 
                ! run step
                opts = dlra_opts(mode=torder, if_rank_adaptive=.true., tol=tol)
@@ -511,7 +511,9 @@ program demo
    print *, '#########################################################################'
    print *, ''
    if (run_steady_state_convergence_test) then
-      call logger_setup(logfile='lightkrylov.log', log_level=warning_level, log_stdout=.false., log_timestamp=.false.)
+      call logger%log_message('#', module=this_module)
+      call logger%log_message('# Optimum rank long time-horizon integration', module=this_module)
+      call logger%log_message('#', module=this_module)
       ! Choose input ranks and integration steps
       rk = 7
       dt = 1e-4_wp
@@ -533,21 +535,13 @@ program demo
                               ! convergence check
                            &  chkctrl_time     = .true., &
                            &  chktime          = 0.01_dp, &
-                           &  chksvd           = .true., &
                            &  inc_tol          = tol, &
-                              ! output callback
-                           &  ifIO             = .true., &
-                           &  iostep           = 1000, &
-                           &  ioctrl_time      = .false., &
                               ! rank-adaptive settings     
                            &  if_rank_adaptive = .false., &
                            &  tol              = 1e-6_dp)
 
-            ! define casename
-            write(casename,'(A,A,I2.2,A,I0,A,F8.6,A,E8.2)') trim(home), 'DATA_IVa_rk', rk, '_TO', torder, '_dt', dt,  '_inctol', tol
-
             ! Reset input
-            call X%init(U0, S0, rk, outpost=outpost_state, casename=casename)
+            call X%init(U0, S0, rk)
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
