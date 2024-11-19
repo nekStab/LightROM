@@ -400,14 +400,14 @@ contains
 
       converged = .false.
 
-      if (if_lastep) then
-         prefix = 'DLRA check (final time)'
-      else
-         prefix = 'DLRA check'
+      if (mod(X%step,opts%chkstep) == 0) then
+         write(msg,'(I8, F15.8, A,2(E15.7,1X),A,E15.7)') X%step, X%time, ' svals lag ', norm, norm_lag, ' inc_norm ', dnorm
+         call logger%log_message(msg, module=this_module, procedure='DLRA check')
       end if
-
-      write(msg,'(I8, F15.8, A,2(E15.7,1X),A,E15.7)') X%step, X%time, ' svals lag ', norm, norm_lag, ' inc_norm ', dnorm
-      call logger%log_message(msg, module=this_module, procedure=prefix)
+      if (if_lastep) then
+         write(msg,'(I8, F15.8, A,2(E15.7,1X),A,E15.7)') X%step, X%time, ' svals lag ', norm, norm_lag, ' inc_norm ', dnorm
+         call logger%log_message(msg, module=this_module, procedure='DLRA final state')
+      end if
       if (dnorm < opts%inc_tol) converged = .true.
 
       return
@@ -442,9 +442,11 @@ contains
             call logger%log_warning(msg, module=this_module, procedure='DLRA_check_options')
          end if
          chkstep = opts%chkstep
+         opts%chktime = tau*chkstep
          write(msg,'(A,I0,A)') 'Convergence check every ', opts%chkstep, ' steps (based on steps).'
          call logger%log_information(msg, module=this_module, procedure='DLRA_check_options')
       end if
+      opts%chkstep = chkstep
       return
    end subroutine check_options
 
@@ -529,7 +531,7 @@ contains
       write(msg,'(A15," : ", E15.8)') padl('tol',15), opts%inc_tol
       call logger%log_message(msg, module=this_module, procedure='DLRA')
       if (opts%chkctrl_time) then
-         write(msg,'("  Output every ",F8.4," time units (",I0," steps)")') opts%chktime, int(opts%chktime/tau)
+         write(msg,'("  Output every ",F8.4," time units (",I0," steps)")') opts%chktime, nint(opts%chktime/tau)
          call logger%log_message(msg, module=this_module, procedure='DLRA')
       else
          write(msg,'("  Output every ",I0," steps (",F8.4," time units)")') opts%chkstep, opts%chkstep*tau
