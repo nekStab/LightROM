@@ -8,11 +8,13 @@ program demo
    use LightKrylov
    use LightKrylov, only : wp => dp
    use LightKrylov_Logger
+   use LightKrylov_Timing, only: lk_timer => global_lightkrylov_timer
    use LightKrylov_ExpmLib
    use LightKrylov_Utils
    ! LightROM
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
+   use LightROM_Timing, only: lr_timer => global_lightROM_timer
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
    ! Laplacian
@@ -127,6 +129,10 @@ program demo
    !--------------------------------
 
    call logger_setup(logfile=trim(home)//'lightkrylov.log', log_level=error_level, log_stdout=.false., log_timestamp=.true.)
+
+   ! Initialize timers for LightKrylov and LightROM
+   call lk_timer%initialize()
+   call lr_timer%initialize()
 
    call system_clock(count_rate=clock_rate)
 
@@ -329,8 +335,8 @@ program demo
    print *, '#########################################################################'
    print *, ''
    ! initialize exponential propagator
-   nrep  = 20
-   Tstep = 0.05_wp
+   nrep  = 10
+   Tstep = 0.1_wp
    RK_propagator = rklib_lyapunov_mat(Tstep)
    Tend = nrep*Tstep
 
@@ -577,5 +583,12 @@ program demo
       print *, 'Skip.'
       print *, ''
    end if
+
+   ! Print timer summary for laplace operator
+   call A%finalize_timer()
+
+   ! Compute and print timer summary
+   call lk_timer%finalize()
+   call lr_timer%finalize()
 
 end program demo
