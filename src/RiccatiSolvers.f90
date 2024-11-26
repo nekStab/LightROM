@@ -13,6 +13,7 @@ module LightROM_RiccatiSolvers
    use Lightkrylov_BaseKrylov
    ! LightROM modules
    use LightROM_Utils
+   use LightROM_Timing, only: lr_timer => global_lightROM_timer, time_lightROM
    use LightROM_LyapunovUtils
    use LightROM_LyapunovSolvers, only : M_forward_map
    use LightROM_RiccatiUtils
@@ -177,6 +178,8 @@ module LightROM_RiccatiSolvers
       character(len=128)                                     :: msg
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
 
+      if (time_lightROM()) call lr_timer%start('projector_splitting_DLRA_riccati_integrator_rdp')
+
       ! Optional arguments
       trans = optval(iftrans, .false.)
 
@@ -223,6 +226,7 @@ module LightROM_RiccatiSolvers
          endif
       enddo dlra
       deallocate(Uwrk0,Uwrk1,U1,QU,Swrk0,Swrk1)
+      if (time_lightROM()) call lr_timer%stop('projector_splitting_DLRA_riccati_integrator_rdp')
       return
    end subroutine projector_splitting_DLRA_riccati_integrator_rdp
 
@@ -260,6 +264,8 @@ module LightROM_RiccatiSolvers
       ! Internal variables
       integer                                               :: istep, nsteps, rk
       logical                                               :: trans
+
+      if (time_lightROM()) call lr_timer%start('projector_splitting_DLRA_riccati_step_rdp')
 
       ! Optional argument
       trans = optval(iftrans, .false.)
@@ -313,6 +319,8 @@ module LightROM_RiccatiSolvers
          call M_forward_map        (X, A,                  0.5*tau, info, exptA, trans)
       end select
 
+      if (time_lightROM()) call lr_timer%stop('projector_splitting_DLRA_riccati_step_rdp')
+
       return
 
    end subroutine projector_splitting_DLRA_riccati_step_rdp
@@ -346,6 +354,8 @@ module LightROM_RiccatiSolvers
       
       ! Internal variables
       integer                                               :: rk
+
+      if (time_lightROM()) call lr_timer%start('G_forward_map_riccati_rdp')
 
       rk = size(X%U)
       if (.not. allocated(U1))  allocate(U1( 1:rk), source=X%U(1)); 
@@ -389,6 +399,8 @@ module LightROM_RiccatiSolvers
       
       ! Copy updated low-rank factors to output
       call copy(X%U, U1)
+
+      if (time_lightROM()) call lr_timer%stop('G_forward_map_riccati_rdp')
                
       return
    end subroutine G_forward_map_riccati_rdp
@@ -421,6 +433,8 @@ module LightROM_RiccatiSolvers
       integer,                               allocatable    :: perm(:)   ! Permutation vector
       integer                                               :: rk
       logical                                               :: reverse_order
+
+      if (time_lightROM()) call lr_timer%start('K_step_riccati_rdp')
 
       ! Optional arguments
       reverse_order = optval(reverse, .false.)
@@ -468,6 +482,8 @@ module LightROM_RiccatiSolvers
       call apply_inverse_permutation_matrix(Swrk0, perm)
       X%S = Swrk0
 
+      if (time_lightROM()) call lr_timer%stop('K_step_riccati_rdp')
+
       return
    end subroutine K_step_riccati_rdp
 
@@ -498,6 +514,8 @@ module LightROM_RiccatiSolvers
       ! Internal variables
       integer                                              :: rk
       logical                                              :: reverse_order
+
+      if (time_lightROM()) call lr_timer%start('S_step_riccati_rdp')
 
       info = 0
 
@@ -530,6 +548,8 @@ module LightROM_RiccatiSolvers
       ! Construct intermediate coefficient matrix
       X%S = X%S + tau*Swrk0
 
+      if (time_lightROM()) call lr_timer%stop('S_step_riccati_rdp')
+
       return
    end subroutine S_step_riccati_rdp
 
@@ -553,6 +573,8 @@ module LightROM_RiccatiSolvers
 
       ! Internal variables
       integer                                              :: rk
+
+      if (time_lightROM()) call lr_timer%start('L_step_riccati_rdp')
 
       info = 0
 
@@ -586,6 +608,8 @@ module LightROM_RiccatiSolvers
 
       ! Update coefficient matrix
       call innerprod(X%S, Uwrk1, U1)
+
+      if (time_lightROM()) call lr_timer%stop('L_step_riccati_rdp')
 
       return
    end subroutine L_step_riccati_rdp

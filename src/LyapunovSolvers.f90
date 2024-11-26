@@ -15,6 +15,7 @@ module LightROM_LyapunovSolvers
    use LightROM_AbstractLTIsystems
    use LightROM_LyapunovUtils
    use LightROM_Utils
+   use LightROM_Timing, only: lr_timer => global_lightROM_timer, time_lightROM
    
    implicit none
 
@@ -167,6 +168,8 @@ module LightROM_LyapunovSolvers
       logical                             :: if_lastep
       real(wp), dimension(:), allocatable :: svals, dsvals, svals_lag
 
+      if (time_lightROM()) call lr_timer%start('projector_splitting_DLRA_lyapunov_integrator_rdp')
+
       ! Optional arguments
       trans = optval(iftrans, .false.)
 
@@ -303,6 +306,7 @@ module LightROM_LyapunovSolvers
       call logger%log_message('Exiting Lyapunov solver', module=this_module, procedure='DLRA_main')
       ! Clean up scratch space
       deallocate(Usvd, ssvd, VTsvd)
+      if (time_lightROM()) call lr_timer%stop('projector_splitting_DLRA_lyapunov_integrator_rdp')
       return
    end subroutine projector_splitting_DLRA_lyapunov_integrator_rdp
 
@@ -335,6 +339,8 @@ module LightROM_LyapunovSolvers
       integer                                               :: istep, nsteps
       character(len=128)                                    :: msg
 
+      if (time_lightROM()) call lr_timer%start('projector_splitting_DLRA_lyapunov_step_rdp')
+
       select case (mode)
       case (1)
          ! Lie-Trotter splitting
@@ -346,6 +352,8 @@ module LightROM_LyapunovSolvers
          call G_forward_map_lyapunov(X, B,     tau, info)
          call M_forward_map(         X, A, 0.5*tau, info, exptA, trans)
       end select
+
+      if (time_lightROM()) call lr_timer%stop('projector_splitting_DLRA_lyapunov_step_rdp')
 
       return
    end subroutine projector_splitting_DLRA_lyapunov_step_rdp
@@ -500,6 +508,8 @@ module LightROM_LyapunovSolvers
       class(abstract_vector_rdp),             allocatable   :: exptAU    ! scratch basis
       real(wp),                               allocatable   :: R(:,:)    ! QR coefficient matrix
       integer                                               :: i, rk
+
+      if (time_lightROM()) call lr_timer%start('M_forward_map_rdp')
       
       ! Optional argument
       trans = optval(iftrans, .false.)
@@ -519,6 +529,8 @@ module LightROM_LyapunovSolvers
    
       ! Update coefficient matrix
       X%S(:rk,:rk) = matmul(R, matmul(X%S(:rk,:rk), transpose(R)))
+
+      if (time_lightROM()) call lr_timer%stop('M_forward_map_rdp')
 
       return
    end subroutine M_forward_map_rdp
@@ -541,6 +553,8 @@ module LightROM_LyapunovSolvers
       class(abstract_vector_rdp),  allocatable              :: U1(:)
       class(abstract_vector_rdp),  allocatable              :: BBTU(:)
       integer                                               :: rk
+
+      if (time_lightROM()) call lr_timer%start('G_forward_map_lyapunov_rdp')
     
       rk = X%rk
       allocate(  U1(rk), source=X%U(1)); call zero_basis(U1)
@@ -554,6 +568,8 @@ module LightROM_LyapunovSolvers
       call copy(X%U(:rk), U1)
 
       deallocate(U1, BBTU)
+
+      if (time_lightROM()) call lr_timer%stop('G_forward_map_lyapunov_rdp')
                
       return
    end subroutine G_forward_map_lyapunov_rdp
@@ -576,6 +592,8 @@ module LightROM_LyapunovSolvers
       class(abstract_vector_rdp), allocatable :: Uwrk(:)
       integer                                 :: rk
 
+      if (time_lightROM()) call lr_timer%start('K_step_lyapunov_rdp')
+
       rk = X%rk
       call linear_combination(Uwrk, X%U(:rk), X%S(:rk,:rk))  ! K0
       call copy(U1, Uwrk)
@@ -584,9 +602,11 @@ module LightROM_LyapunovSolvers
       call axpby_basis(U1, 1.0_wp, BBTU, tau)                ! K0 + tau*Kdot
       ! Orthonormalize in-place
       call qr(U1, X%S(:rk,:rk), info)
-      call check_info(info, 'qr', module=this_module, procedure='K_step_Lyapunov_rdp')
+      call check_info(info, 'qr', module=this_module, procedure='K_step_lyapunov_rdp')
       
       deallocate(Uwrk)
+
+      if (time_lightROM()) call lr_timer%stop('K_step_lyapunov_rdp')
 
       return
    end subroutine K_step_lyapunov_rdp
@@ -607,12 +627,16 @@ module LightROM_LyapunovSolvers
       integer                                               :: rk
       real(wp),                               allocatable   :: Swrk(:,:)
 
+      if (time_lightROM()) call lr_timer%start('S_step_lyapunov_rdp')
+
       rk = X%rk
       allocate(Swrk(rk,rk)); Swrk = 0.0_wp
       call innerprod(Swrk, U1, BBTU)          ! - Sdot
       ! Construct intermediate coefficient matrix
       X%S(:rk,:rk) = X%S(:rk,:rk) - tau*Swrk
       deallocate(Swrk)
+
+      if (time_lightROM()) call lr_timer%stop('S_step_lyapunov_rdp')
 
       return
    end subroutine S_step_lyapunov_rdp
@@ -633,6 +657,8 @@ module LightROM_LyapunovSolvers
       integer                                               :: rk
       class(abstract_vector_rdp),             allocatable   :: Uwrk(:)
 
+      if (time_lightROM()) call lr_timer%start('L_step_lyapunov_rdp')
+
       rk = X%rk
       call linear_combination(Uwrk, X%U(:rk), transpose(X%S(:rk,:rk)))  ! L0.T
       ! Construct derivative
@@ -643,6 +669,8 @@ module LightROM_LyapunovSolvers
       call innerprod(X%S(:rk,:rk), Uwrk, U1)
 
       deallocate(Uwrk)
+
+      if (time_lightROM()) call lr_timer%stop('L_step_lyapunov_rdp')
 
       return
    end subroutine L_step_lyapunov_rdp
