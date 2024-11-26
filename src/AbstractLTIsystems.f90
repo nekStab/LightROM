@@ -7,8 +7,6 @@ module LightROM_AbstractLTIsystems
 
    character(len=*), parameter :: this_module = 'LR_AbsLTIsys'
 
-   public :: abstract_outpost_rdp
-
    !-------------------------------------------------------
    !-----     ABSTRACT LTI SYSTEM TYPE DEFINITION     -----
    !-------------------------------------------------------
@@ -77,15 +75,6 @@ module LightROM_AbstractLTIsystems
       logical                                  :: rank_is_initialised = .false.
    contains
    end type abstract_sym_low_rank_state_rdp
-
-   abstract interface
-      subroutine abstract_outpost_rdp(self, info)
-         import abstract_sym_low_rank_state_rdp
-         implicit none
-         class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
-         integer,                                intent(out)   :: info
-      end subroutine abstract_outpost_rdp
-   end interface
 
 contains
 
