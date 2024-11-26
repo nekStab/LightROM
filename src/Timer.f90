@@ -44,7 +44,7 @@ contains
       call self%add_timer('projector_splitting_DLRA_lyapunov_integrator_rdp')
       call self%add_timer('projector_splitting_DLRA_lyapunov_step_rdp')
       call self%add_timer('M_forward_map_rdp')
-      call self%add_timer('G_forward_map_rdp')
+      call self%add_timer('G_forward_map_lyapunov_rdp')
       call self%add_timer('K_step_lyapunov_rdp')
       call self%add_timer('S_step_lyapunov_rdp')
       call self%add_timer('L_step_lyapunov_rdp')
@@ -54,10 +54,11 @@ contains
       call self%add_timer('projector_splitting_DLRA_riccati_integrator_rdp')
       call self%add_timer('projector_splitting_DLRA_riccati_step_rdp')
       call self%add_timer('G_forward_map_riccati_rdp')
-      call self%add_timer('K_step_lyapunov_riccati_rdp')
-      call self%add_timer('S_step_lyapunov_riccati_rdp')
-      call self%add_timer('L_step_lyapunov_riccati_rdp')
+      call self%add_timer('K_step_riccati_rdp')
+      call self%add_timer('S_step_riccati_rdp')
+      call self%add_timer('L_step_riccati_rdp')
       call self%add_group('RiccatiSolvers', istart=istart, iend=self%get_timer_count())
+      if_time = .true.
    end subroutine set_lightROM_timers
 
 end module LightROM_Timing
