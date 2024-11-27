@@ -500,7 +500,7 @@ contains
       call logger%log_message('###### solver settings ######', module=this_module, procedure='DLRA')
       write(msg,'(A15," : ", F15.8)') padl('t0',15), X%time
       call logger%log_message(msg, module=this_module, procedure='DLRA')
-      write(msg,'(A15," : ", F15.8)') padl('tf',15), Tend
+      write(msg,'(A15," : ", F15.8)') padl('tf',15), X%time + Tend
       call logger%log_message(msg, module=this_module, procedure='DLRA')
       write(msg,'(A15," : ", F15.8)') padl('dt',15), tau
       call logger%log_message(msg, module=this_module, procedure='DLRA')
