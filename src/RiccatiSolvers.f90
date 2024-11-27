@@ -178,7 +178,7 @@ module LightROM_RiccatiSolvers
       character(len=128)                                     :: msg
       procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
 
-      if (time_lightROM()) call lr_timer%start('projector_splitting_DLRA_riccati_integrator_rdp')
+      if (time_lightROM()) call lr_timer%start('DLRA_riccati_integrator_rdp')
 
       ! Optional arguments
       trans = optval(iftrans, .false.)
@@ -226,7 +226,7 @@ module LightROM_RiccatiSolvers
          endif
       enddo dlra
       deallocate(Uwrk0,Uwrk1,U1,QU,Swrk0,Swrk1)
-      if (time_lightROM()) call lr_timer%stop('projector_splitting_DLRA_riccati_integrator_rdp')
+      if (time_lightROM()) call lr_timer%stop('DLRA_riccati_integrator_rdp')
       return
    end subroutine projector_splitting_DLRA_riccati_integrator_rdp
 
@@ -265,7 +265,7 @@ module LightROM_RiccatiSolvers
       integer                                               :: istep, nsteps, rk
       logical                                               :: trans
 
-      if (time_lightROM()) call lr_timer%start('projector_splitting_DLRA_riccati_step_rdp')
+      if (time_lightROM()) call lr_timer%start('DLRA_riccati_step_rdp')
 
       ! Optional argument
       trans = optval(iftrans, .false.)
@@ -319,7 +319,7 @@ module LightROM_RiccatiSolvers
          call M_forward_map        (X, A,                  0.5*tau, info, exptA, trans)
       end select
 
-      if (time_lightROM()) call lr_timer%stop('projector_splitting_DLRA_riccati_step_rdp')
+      if (time_lightROM()) call lr_timer%stop('DLRA_riccati_step_rdp')
 
       return
 

@@ -168,7 +168,7 @@ module LightROM_LyapunovSolvers
       logical                             :: if_lastep
       real(wp), dimension(:), allocatable :: svals, dsvals, svals_lag
 
-      if (time_lightROM()) call lr_timer%start('projector_splitting_DLRA_lyapunov_integrator_rdp')
+      if (time_lightROM()) call lr_timer%start('DLRA_lyapunov_integrator_rdp')
 
       ! Optional arguments
       trans = optval(iftrans, .false.)
@@ -306,7 +306,7 @@ module LightROM_LyapunovSolvers
       call logger%log_message('Exiting Lyapunov solver', module=this_module, procedure='DLRA_main')
       ! Clean up scratch space
       deallocate(Usvd, ssvd, VTsvd)
-      if (time_lightROM()) call lr_timer%stop('projector_splitting_DLRA_lyapunov_integrator_rdp')
+      if (time_lightROM()) call lr_timer%stop('DLRA_lyapunov_integrator_rdp')
       return
    end subroutine projector_splitting_DLRA_lyapunov_integrator_rdp
 
@@ -339,7 +339,7 @@ module LightROM_LyapunovSolvers
       integer                                               :: istep, nsteps
       character(len=128)                                    :: msg
 
-      if (time_lightROM()) call lr_timer%start('projector_splitting_DLRA_lyapunov_step_rdp')
+      if (time_lightROM()) call lr_timer%start('DLRA_lyapunov_step_rdp')
 
       select case (mode)
       case (1)
@@ -353,7 +353,7 @@ module LightROM_LyapunovSolvers
          call M_forward_map(         X, A, 0.5*tau, info, exptA, trans)
       end select
 
-      if (time_lightROM()) call lr_timer%stop('projector_splitting_DLRA_lyapunov_step_rdp')
+      if (time_lightROM()) call lr_timer%stop('DLRA_lyapunov_step_rdp')
 
       return
    end subroutine projector_splitting_DLRA_lyapunov_step_rdp
