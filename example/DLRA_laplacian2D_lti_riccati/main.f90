@@ -14,6 +14,7 @@ program demo
    ! LightROM
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
+   use LightROM_Timing
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
    use LightROM_RiccatiSolvers, only : projector_splitting_DLRA_riccati_integrator
@@ -90,6 +91,10 @@ program demo
    !--------------------------------
    ! Define which examples to run:
    !
+   logical, parameter :: short_test = .true.
+   !
+   ! Skip the computations with small dt/small tolerance to speed up test
+   !
    logical, parameter :: run_fixed_rank_short_integration_time_test   = .true.
    !
    ! Integrate the same initial condition for a short time with Runge-Kutta and DLRA.
@@ -117,7 +122,15 @@ program demo
    !
    !--------------------------------
 
+   ! Setup logging
    call logger_setup(logfile=trim(home)//'lightkrylov.log', log_level=error_level, log_stdout=.false., log_timestamp=.true.)
+
+   ! Initialize timers for LightKrylov and LightROM
+   call initialize_timers()
+   call global_lightROM_timer%add_timer('DLRA Laplacian Riccati example', start=.true.)
+   call global_lightROM_timer%add_timer('Direct solution (LAPACK)', start=.true.)
+   ! Enumerate timers to check proper initialization
+   call enumerate_timers()
 
    call system_clock(count_rate=clock_rate)
 
@@ -195,6 +208,9 @@ program demo
    svals = svdvals(Xref)
    print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
 
+   call global_lightROM_timer%stop('Direct solution (LAPACK)')
+   call global_lightROM_timer%add_timer('Short time: Runge-Kutta', start=.true.)
+
    print *, ''
    print *, '#########################################################################'
    print *, '#                                                                       #'
@@ -232,6 +248,9 @@ program demo
    print *, ''
    svals = svdvals(X_RKlib_ref)
    print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
+
+   call global_lightROM_timer%stop('Short time: Runge-Kutta')
+   call global_lightROM_timer%add_timer('Short time: DLRA', start=.true.)
 
    !------------------
    ! COMPUTE DLRA FOR SHORTEST INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
@@ -303,6 +322,12 @@ program demo
       print *, 'Skip.'
    end if
 
+   call global_lightROM_timer%stop('Short time: DLRA')
+   call A%reset_timer()
+   call RK_prop_ricc%reset_timer()
+   call reset_timers()
+   call global_lightROM_timer%add_timer('Steady-State: Runge-Kutta', start=.true.)
+
    !------------------
    ! COMPUTE SOLUTION WITH RK FOR DIFFERENT INTEGRATION TIMES AND COMPARE TO STUART-BARTELS
    !------------------
@@ -349,6 +374,9 @@ program demo
    print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_ref)[1-8]:', svals(:irow)
    svals = svdvals(X_RKlib_ref)
    print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_RK )[1-8]:', svals(:irow)
+
+   call global_lightROM_timer%stop('Steady-State: Runge-Kutta')
+   call global_lightROM_timer%add_timer('Steady-State: DLRA', start=.true.)
 
    !------------------
    ! COMPUTE DLRA FOR SHORTEST INTEGRATION TIMES FOR DIFFERENT DT AND COMPARE WITH RK SOLUTION
@@ -419,5 +447,8 @@ program demo
    else
       print *, 'Skip.'
    end if
+
+   ! Compute and print timer summary
+   call finalize_timers()
 
 end program demo

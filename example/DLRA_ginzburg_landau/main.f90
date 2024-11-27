@@ -15,6 +15,7 @@ program demo
    ! LightROM
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
+   use LightROM_Timing
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
    ! GInzburg-Landau
@@ -85,6 +86,10 @@ program demo
    ! Adjoint = .false.:     Solve the direct Lyapunov equation:   0 = A X + X A.T + B @ B.T @ W
    !     The solution to this equation is called the controllability Gramian X.
    !
+   logical, parameter :: short_test = .true.
+   !
+   ! Skip the computations with small dt/small tolerance to speed up test
+   !
    logical, parameter :: run_fixed_rank_short_integration_time_test   = .true.
    !
    ! Integrate the same initial condition for a short time with Runge-Kutta and DLRA.
@@ -113,7 +118,15 @@ program demo
    !
    !--------------------------------
 
+   ! Setup logging
    call logger_setup(logfile=trim(home)//'lightkrylov.log', log_level=error_level, log_stdout=.false., log_timestamp=.true.)
+
+   ! Initialize timers for LightKrylov and LightROM
+   call initialize_timers()
+   call global_lightROM_timer%add_timer('DLRA Ginzburg-Landau example', start=.true.)
+   call global_lightROM_timer%add_timer('Direct solution (LAPACK)', start=.true.)
+   ! Enumerate timers to check proper initialization
+   call enumerate_timers()
 
    print *, '#########################################################################'
    print *, '#                                                                       #'
@@ -204,6 +217,9 @@ program demo
       is = (i-1)*irow+1; ie = i*irow
       print '(2X,I2,"-",I2,*(1X,F16.12))', is, ie, ( svals(j), j = is, ie )
    end do
+
+   call global_lightROM_timer%stop('Direct solution (LAPACK)')
+   call global_lightROM_timer%add_timer('Short time: Runge-Kutta', start=.true.)
    
    print *, ''
    print *, '#########################################################################'
@@ -224,6 +240,9 @@ program demo
       print *, 'Skip.'
       print *, ''
    end if
+
+   call global_lightROM_timer%stop('Short time: Runge-Kutta')
+   call global_lightROM_timer%add_timer('Short time: DLRA', start=.true.)
    
    print *, ''
    print *, '#########################################################################'
@@ -237,7 +256,11 @@ program demo
       ! DLRA with fixed rank
       Tend = T_RK/nstep*iref
       rkv = [ 10, 12, 16 ]
-      dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
+      if (short_test) then
+         dtv = logspace(-3.0_wp, -3.0_wp, 1, 10)
+      else
+         dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
+      end if
       dtv = dtv(size(dtv):1:-1) ! reverse vector
       TOv  = [ 1, 2 ] 
       nprint = 16
@@ -248,6 +271,13 @@ program demo
       print *, 'Skip.'
       print *, ''
    end if
+
+   ! Reset timers
+   call global_lightROM_timer%stop('Short time: DLRA')
+   call A%reset_timer()
+   call prop%reset_timer()
+   call reset_timers()
+   call global_lightROM_timer%add_timer('Steady-State: Runge-Kutta', start=.true.)
 
    print *, ''
    print *, '#########################################################################'
@@ -270,6 +300,9 @@ program demo
       print *, ''
    end if
 
+   call global_lightROM_timer%stop('Steady-State: Runge-Kutta')
+   call global_lightROM_timer%add_timer('Steady-State: DLRA', start=.true.)
+
    print *, ''
    print *, '#########################################################################'
    print *, '#                                                                       #'
@@ -282,7 +315,11 @@ program demo
       ! DLRA with fixed rank
       Tend = T_RK/nstep*iref
       rkv = [ 10, 20, 40 ]
-      dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+      if (short_test) then
+         dtv = logspace(-1.0_wp, 0.0_wp, 2, 10)
+      else
+         dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+      end if
       dtv = dtv(size(dtv):1:-1) ! reverse vector
       TOv  = [ 1, 2 ] 
       nprint = 40
@@ -294,6 +331,9 @@ program demo
       print *, ''
    end if
 
+   call global_lightROM_timer%stop('Steady-State: DLRA')
+   call global_lightROM_timer%add_timer('Steady-State: rank-adaptive DLRA', start=.true.)
+
    print *, ''
    print *, '#########################################################################'
    print *, '#                                                                       #'
@@ -304,10 +344,15 @@ program demo
 
    if (run_rank_adaptive_long_integration_time_test) then
       ! DLRA with adaptive rank
-      dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+      if (short_test) then
+         dtv = logspace(-3.0_wp, 0.0_wp, 2, 10)
+         tolv = [ 1e-2_wp, 1e-6_wp ]
+      else
+         dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+         tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
+      end if
       dtv = dtv(size(dtv):1:-1) ! reverse vector
       TOv  = [ 1, 2 ]
-      tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
       nprint = 60
       if_save_output = .true.
 
@@ -316,6 +361,9 @@ program demo
       print *, 'Skip.'
       print *, ''
    end if
+
+   ! Compute and print timer summary
+   call finalize_timers()
 
    return
 end program demo
