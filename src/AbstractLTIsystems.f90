@@ -67,8 +67,12 @@ module LightROM_AbstractLTIsystems
       integer                                  :: rk = 1
       ! Simulation time
       real(wp)                                 :: time = 0.0_wp
-      ! Simulation step
+      ! Total cumulative simulation time
+      real(wp)                                 :: tot_time = 0.0_wp
+      ! Simulation step counter
       integer                                  :: step = 0
+      ! Total cumulative simulation step counter
+      integer                                  :: tot_step = 0
       ! Converged?
       logical                                  :: is_converged = .false.
       ! Has rank been initialized? (for rank-adaptive DLRA)

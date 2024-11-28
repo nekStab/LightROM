@@ -157,13 +157,13 @@ module LightROM_LyapunovSolvers
       !! Options for solver configuration
 
       ! Internal variables
-      integer                             :: i, j, is, ie, istep, nsteps, irk, chkstep, ifmt
+      integer                             :: i, j, is, ie, istep, nsteps, irk, chkstep, ifmt, irkfmt
       integer                             :: rk_reduction_lock   ! 'timer' to disable rank reduction
       real(wp)                            :: inc_nrm, nrmX       ! increment and solution norm
       real(wp)                            :: El                  ! aggregate error estimate
       real(wp)                            :: err_est             ! current error estimate
       real(wp)                            :: tol                 ! current tolerance
-      character(len=128)                  :: msg, fmt_norm, fmt_sval
+      character(len=128)                  :: msg, fmt_norm, fmt_sval, fmt_step
       integer                             :: rkmax
       logical                             :: if_lastep
       real(wp), dimension(:), allocatable :: svals, dsvals, svals_lag
@@ -189,6 +189,8 @@ module LightROM_LyapunovSolvers
       ! Initialize
       rk_reduction_lock = 10
       X%is_converged = .false.
+      X%time = 0.0_wp
+      X%step = 0
 
       rkmax = size(X%U)
       ! Allocate memory for SVD & lagged fields
@@ -203,8 +205,10 @@ module LightROM_LyapunovSolvers
       call logger%log_information(msg, module=this_module, procedure='DLRA_main')
       ! Pretty output
       ifmt = max(5,int(log10(real(nsteps)))+1)
-      write(fmt_norm,'(A,I0,A,I0,A)') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,": dX= ",E12.5," X= ",E12.5," dX/dt/X= ",E12.5)'
-      write(fmt_sval,'(A,I0,A,I0,A)') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,": ",A,"[",I2,"-",I2,"]",*(E12.5, 1X))'
+      irkfmt = max(3,int(log10(real(rkmax)))+1)
+      write(fmt_norm,'(A,2(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,": dX= ",E12.5," X= ",E12.5," dX/dt/X= ",E12.5)'
+      write(fmt_sval,'(A,3(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,1X,I', irkfmt, ',": ",A,"[",I2,"-",I2,"]",*(E12.5, 1X))'
+      write(fmt_step,'(A,2(I0,A))') '("T= ",F10.4," Ttot= ",F10.4,": Step ",I', ifmt, ',"/",I', ifmt, ')'
       ! Prepare logfile
       call write_logfile_headers(X%rk)
 
@@ -237,7 +241,7 @@ module LightROM_LyapunovSolvers
 
       dlra : do istep = 1, nsteps
 
-         write(msg,'(A,I0,A,I0)') 'Step ', istep, '/', nsteps
+         write(msg,fmt_step) X%time, X%tot_time, istep, nsteps
          call logger%log_information(msg, module=this_module, procedure='DLRA_main')
 
          ! save lag data defore the timestep
@@ -264,9 +268,11 @@ module LightROM_LyapunovSolvers
             call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, opts%mode, info, exptA, trans)
          end if
 
-         ! update time
+         ! update time & step counters
          X%time = X%time + tau
-         X%step = istep
+         X%step = X%step + 1
+         X%tot_time = T%tot_time + tau
+         X%tot_step = T%tot_step + 1
 
          ! here we can do some checks such as whether we have reached steady state
          if (mod(istep, chkstep) == 0 .or. istep == nsteps) then
@@ -279,12 +285,12 @@ module LightROM_LyapunovSolvers
             call stamp_logfiles(X, tau, svals, dsvals)
             do i = 1, ceiling(float(X%rk)/iline)
                is = (i-1)*iline+1; ie = min(X%rk,i*iline)
-               write(msg,fmt_sval) istep, nsteps, X%time, " SVD abs", is, ie, ( svals(j), j = is, ie )
+               write(msg,fmt_sval) istep, nsteps, X%tot_time, X%rk, " SVD abs", is, ie, ( svals(j), j = is, ie )
                call logger%log_information(msg, module=this_module, procedure='DLRA_main')
             end do
             do i = 1, ceiling(float(irk)/iline)
                is = (i-1)*iline+1; ie = min(irk,i*iline)
-               write(msg,fmt_sval) istep, nsteps, X%time, "dSVD rel", is, ie, ( dsvals(j) , j = is, ie )
+               write(msg,fmt_sval) istep, nsteps, X%tot_time, X%rk, "dSVD rel", is, ie, ( dsvals(j) , j = is, ie )
                call logger%log_information(msg, module=this_module, procedure='DLRA_main')
             end do
             deallocate(dsvals)
@@ -415,7 +421,7 @@ module LightROM_LyapunovSolvers
                exit tol_chk
             end if
          end do tol_chk
-         if (.not. found) irk = irk - 1
+         !if (.not. found) irk = irk - 1
          
          ! choose action
          if (.not. found) then ! none of the singular values is below tolerance
@@ -425,8 +431,8 @@ module LightROM_LyapunovSolvers
                         & 'Increase rkmax and restart!'
                call stop_error(msg, module=this_module, procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
             else
-               write(msg,'(A,I0)') 'rk= ', rk + 1
-               call logger%log_warning(msg, module=this_module, procedure='DLRA_main')
+               write(msg,'(A,I0)') 'Rank increased to rk= ', rk + 1
+               call logger%log_message(msg, module=this_module, procedure='DLRA_main')
                
                X%rk = X%rk + 1
                rk = X%rk ! this is only to make the code more readable
@@ -460,8 +466,8 @@ module LightROM_LyapunovSolvers
 
                rk = max(irk, rk - 2)  ! reduce by at most 2
 
-               write(msg, '(A,I0)') 'rk= ', rk
-               call logger%log_warning(msg, module=this_module, procedure='DLRA_main')
+               write(msg, '(A,I0)') 'Rank decreased to rk= ', rk
+               call logger%log_message(msg, module=this_module, procedure='DLRA_main')
             end if
             
          end if ! found
@@ -475,7 +481,7 @@ module LightROM_LyapunovSolvers
       end if
 
       write(msg,'(A,I3,A,I2,A,E14.8,A,I2)') 'rk = ', X%rk-1, ':     s_', irk,' = ', &
-               & ssvd(irk), ', lock: ', rk_reduction_lock
+               & ssvd(irk), ',     lock: ', rk_reduction_lock
       call logger%log_information(msg, module=this_module, procedure='DLRA_main')
 
       ! decrease rk_reduction_lock

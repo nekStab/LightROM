@@ -385,6 +385,7 @@ contains
       integer :: i
       real(wp) :: norm, norm_lag, dnorm
       character(len=128) :: msg, prefix
+      character(len=128), parameter :: fmt = '(A,I8,F15.8,A,2(E15.7,1X),A,E15.7)'
 
       norm     = sqrt(sum(svals**2))
       norm_lag = sqrt(sum(svals_lag**2))
@@ -401,12 +402,11 @@ contains
       converged = .false.
 
       if (mod(X%step,opts%chkstep) == 0) then
-         write(msg,'(I8, F15.8, A,2(E15.7,1X),A,E15.7)') X%step, X%time, ' svals lag ', norm, norm_lag, ' inc_norm ', dnorm
-         call logger%log_message(msg, module=this_module, procedure='DLRA check')
-      end if
-      if (if_lastep) then
-         write(msg,'(I8, F15.8, A,2(E15.7,1X),A,E15.7)') X%step, X%time, ' svals lag ', norm, norm_lag, ' inc_norm ', dnorm
-         call logger%log_message(msg, module=this_module, procedure='DLRA final state')
+         write(msg,fmt) 'Check state: ', X%step, X%time, ' svals lag ', norm, norm_lag, ' inc_norm ', dnorm
+         call logger%log_message(msg, module=this_module, procedure='DLRA')
+      else if (if_lastep) then
+         write(msg,fmt) 'Final state: ', X%step, X%time, ' svals lag ', norm, norm_lag, ' inc_norm ', dnorm
+         call logger%log_message(msg, module=this_module, procedure='DLRA')
       end if
       if (dnorm < opts%inc_tol) converged = .true.
 
@@ -478,12 +478,12 @@ contains
       real(dp), dimension(:), intent(in) :: dsvals
       ! SVD absolute
       open (1234, file=logfile_SVD_abs, status='old', action='write', position='append')
-      write (1234, '(I8,2(1X,F15.9),I4)', ADVANCE='NO') X%step, X%time, lag, X%rk
+      write (1234, '(I8,2(1X,F15.9),I4)', ADVANCE='NO') X%tot_step, X%tot_time, lag, X%rk
       write (1234, '(*(1X,F15.9))') svals
       close (1234)
       ! dSVD relative
       open (1234, file=logfile_SVD_rel, status='old', action='write', position='append')
-      write (1234, '(I8,2(1X,F15.9),I4)', ADVANCE='NO') X%step, X%time, lag, X%rk
+      write (1234, '(I8,2(1X,F15.9),I4)', ADVANCE='NO') X%tot_step, X%tot_time, lag, X%rk
       write (1234, '(*(1X,F15.9))') dsvals
       close (1234)
       return
@@ -498,9 +498,9 @@ contains
       ! internals
       character(len=128) :: msg, ctype
       call logger%log_message('###### solver settings ######', module=this_module, procedure='DLRA')
-      write(msg,'(A15," : ", F15.8)') padl('t0',15), X%time
+      write(msg,'(A15," : ", F15.8)') padl('t0',15), X%tot_time
       call logger%log_message(msg, module=this_module, procedure='DLRA')
-      write(msg,'(A15," : ", F15.8)') padl('tf',15), X%time + Tend
+      write(msg,'(A15," : ", F15.8)') padl('tf',15), X%tot_time + Tend
       call logger%log_message(msg, module=this_module, procedure='DLRA')
       write(msg,'(A15," : ", F15.8)') padl('dt',15), tau
       call logger%log_message(msg, module=this_module, procedure='DLRA')
