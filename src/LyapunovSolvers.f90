@@ -224,6 +224,7 @@ module LightROM_LyapunovSolvers
       ! determine initial rank if rank-adaptive
       if (opts%if_rank_adaptive) then
          if (.not. X%rank_is_initialised) then
+            call logger%log_message('Determine initial rank:', module=this_module, procedure='DLRA_main')
             call set_initial_rank(X, A, B, tau, opts%mode, exptA, trans, tol)
          end if
          if (opts%use_err_est) then
@@ -722,8 +723,10 @@ module LightROM_LyapunovSolvers
       ! save initial condition
       allocate(Utmp(rkmax), source=X%U)
       allocate(Stmp(rkmax,rkmax)); Stmp = X%S
-      
+
       do while (.not. accept_rank .and. X%rk <= rkmax)
+         write(msg,'(4X,A,I0)') 'Test r = ', X%rk
+         call logger%log_message(msg, module=this_module, procedure='set_initial_rank')
          svals = svdvals(X%S(:X%rk,:X%rk))
          ! run integrator
          do i = 1,n
@@ -746,7 +749,7 @@ module LightROM_LyapunovSolvers
             accept_rank = .true.
             X%rk = irk
             write(msg,'(4X,A,I2,A,E10.4)') 'Accpeted rank: r = ', X%rk-1, ',     s_{r+1} = ', svals(X%rk)
-            call logger%log_information(msg, module=this_module, procedure='set_initial_rank')
+            call logger%log_message(msg, module=this_module, procedure='set_initial_rank')
          else
             X%rk = 2*X%rk
          end if
