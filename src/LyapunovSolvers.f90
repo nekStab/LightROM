@@ -208,7 +208,7 @@ module LightROM_LyapunovSolvers
       irkfmt = max(3,int(log10(real(rkmax)))+1)
       write(fmt_norm,'(A,2(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,": dX= ",E12.5," X= ",E12.5," dX/dt/X= ",E12.5)'
       write(fmt_sval,'(A,3(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,1X,I', irkfmt, ',": ",A,"[",I2,"-",I2,"]",*(E12.5, 1X))'
-      write(fmt_step,'(A,2(I0,A))') '("T= ",F10.4,", Ttot= ",F10.4,": Step ",I', ifmt, ',"/",I', ifmt, ')'
+      write(fmt_step,'(A,2(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,", Ttot= ",F10.4)'
       ! Prepare logfile
       call write_logfile_headers(X%rk)
 
