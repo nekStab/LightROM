@@ -271,8 +271,8 @@ module LightROM_LyapunovSolvers
          ! update time & step counters
          X%time = X%time + tau
          X%step = X%step + 1
-         X%tot_time = T%tot_time + tau
-         X%tot_step = T%tot_step + 1
+         X%tot_time = X%tot_time + tau
+         X%tot_step = X%tot_step + 1
 
          ! here we can do some checks such as whether we have reached steady state
          if (mod(istep, chkstep) == 0 .or. istep == nsteps) then
