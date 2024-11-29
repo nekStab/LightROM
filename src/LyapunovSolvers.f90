@@ -242,7 +242,7 @@ module LightROM_LyapunovSolvers
 
       dlra : do istep = 1, nsteps
 
-         write(msg,fmt_step) X%time, X%tot_time, istep, nsteps
+         write(msg,fmt_step) istep, nsteps, X%time, X%tot_time
          call logger%log_information(msg, module=this_module, procedure='DLRA_main')
 
          ! save lag data defore the timestep
