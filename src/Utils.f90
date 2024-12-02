@@ -6,6 +6,7 @@ module LightROM_Utils
    ! LightKrylov for Linear Algebra
    use LightKrylov
    use LightKrylov, only : dp, wp => dp
+   use LightKrylov_Constants
    use LightKrylov_Logger
    use LightKrylov_AbstractVectors
    use LightKrylov_BaseKrylov, only : orthogonalize_against_basis
@@ -454,20 +455,22 @@ contains
       integer, intent(in) :: n0
       ! internals
       integer :: i
-      ! SVD absolute
-      open (1234, file=logfile_SVD_abs, status='replace', action='write')
-      write (1234, '(A8,2(A15,1X),A4)', ADVANCE='NO') 'istep', 'time', 'lag', 'rk'
-      do i = 1, n0
-         write (1234, '(A13,I2.2,1X)', ADVANCE='NO') 's', i
-      end do
-      write (1234, *) ''; close (1234)
-      ! dSVD relative
-      open (1234, file=logfile_SVD_rel, status='replace', action='write')
-      write (1234, '(A8,2(A15,1X),A4)', ADVANCE='NO') 'istep', 'time', 'lag', 'rk'
-      do i = 1, n0
-         write (1234, '(A13,I2.2,1X)', ADVANCE='NO') 'ds', i
-      end do
-      write (1234, *) ''; close (1234)
+      if (io_rank()) then
+         ! SVD absolute
+         open (1234, file=logfile_SVD_abs, status='replace', action='write')
+         write (1234, '(A8,2(A15,1X),A4)', ADVANCE='NO') 'istep', 'time', 'lag', 'rk'
+         do i = 1, n0
+            write (1234, '(A13,I2.2,1X)', ADVANCE='NO') 's', i
+         end do
+         write (1234, *) ''; close (1234)
+         ! dSVD relative
+         open (1234, file=logfile_SVD_rel, status='replace', action='write')
+         write (1234, '(A8,2(A15,1X),A4)', ADVANCE='NO') 'istep', 'time', 'lag', 'rk'
+         do i = 1, n0
+            write (1234, '(A13,I2.2,1X)', ADVANCE='NO') 'ds', i
+         end do
+         write (1234, *) ''; close (1234)
+      end if
       return
    end subroutine write_logfile_headers
 
@@ -476,16 +479,18 @@ contains
       real(dp), intent(in) :: lag
       real(dp), dimension(:), intent(in) :: svals
       real(dp), dimension(:), intent(in) :: dsvals
-      ! SVD absolute
-      open (1234, file=logfile_SVD_abs, status='old', action='write', position='append')
-      write (1234, '(I8,2(1X,F15.9),I4)', ADVANCE='NO') X%tot_step, X%tot_time, lag, X%rk
-      write (1234, '(*(1X,F15.9))') svals
-      close (1234)
-      ! dSVD relative
-      open (1234, file=logfile_SVD_rel, status='old', action='write', position='append')
-      write (1234, '(I8,2(1X,F15.9),I4)', ADVANCE='NO') X%tot_step, X%tot_time, lag, X%rk
-      write (1234, '(*(1X,F15.9))') dsvals
-      close (1234)
+      if (io_rank()) then
+         ! SVD absolute
+         open (1234, file=logfile_SVD_abs, status='old', action='write', position='append')
+         write (1234, '(I8,2(1X,F15.9),I4)', ADVANCE='NO') X%tot_step, X%tot_time, lag, X%rk
+         write (1234, '(*(1X,F15.9))') svals
+         close (1234)
+         ! dSVD relative
+         open (1234, file=logfile_SVD_rel, status='old', action='write', position='append')
+         write (1234, '(I8,2(1X,F15.9),I4)', ADVANCE='NO') X%tot_step, X%tot_time, lag, X%rk
+         write (1234, '(*(1X,F15.9))') dsvals
+         close (1234)
+      end if
       return
    end subroutine stamp_logfiles
 
