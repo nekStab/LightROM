@@ -210,7 +210,7 @@ module LightROM_LyapunovSolvers
       write(fmt_sval,'(A,3(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,1X,I', irkfmt, ',": ",A,"[",I2,"-",I2,"]",*(E12.5, 1X))'
       write(fmt_step,'(A,2(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,", Ttot= ",F10.4)'
       ! Prepare logfile
-      call write_logfile_headers(X%rk)
+      call write_logfile_headers(X%rk, rkmax)
 
       if ( opts%mode > 2 ) then
          write(msg,'(A)') "Time-integration order for the operator splitting of d > 2 &
@@ -401,7 +401,7 @@ module LightROM_LyapunovSolvers
       real(wp)                                              :: norm
       character(len=256)                                    :: msg
 
-      integer, parameter                                    :: max_step = 5  ! might not be needed
+      integer, parameter                                    :: max_step = 20  ! might not be needed
 
       ! ensure that we are integrating one more rank than we use for approximation
       X%rk = X%rk + 1
@@ -478,7 +478,7 @@ module LightROM_LyapunovSolvers
       if (.not. accept_step .and. istep == max_step) then
          write(msg,'(A,I0,A,2(A,E9.2))') 'Rank increased ', max_step, ' times in a single step without ', &
                & 'reaching the desired tolerance on the singular values. s_{k+1} = ', ssvd(irk), ' > ', tol
-         call logger%log_warning(msg, module=this_module, procedure='DLRA_main')
+         call logger%log_error(msg, module=this_module, procedure='DLRA_main')
       end if
 
       write(msg,'(A,I3,A,I2,A,E14.8,A,I2)') 'rk = ', X%rk-1, ':     s_', irk,' = ', &
