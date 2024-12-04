@@ -20,11 +20,12 @@ module LightROM_Utils
    character(len=*), parameter :: this_module     = 'LR_Utils'
    character(len=*), parameter :: logfile_SVD_abs = 'Lyap_SVD_abs.dat'
    character(len=*), parameter :: logfile_SVD_rel = 'Lyap_SVD_rel.dat'
+   logical :: if_overwrite = .true.
 
    public :: dlra_opts
    public :: coefficient_matrix_norm, increment_norm, low_rank_CALE_residual_norm
    public :: is_converged
-   public :: write_logfile_headers, stamp_logfiles, log_settings
+   public :: write_logfile_headers, reset_logfiles, stamp_logfiles, log_settings
    public :: project_onto_common_basis
    public :: Balancing_Transformation
    public :: ROM_Petrov_Galerkin_Projection
@@ -451,28 +452,40 @@ contains
       return
    end subroutine check_options
 
-   subroutine write_logfile_headers(n0)
+   subroutine write_logfile_headers(n0,nmax)
       integer, intent(in) :: n0
+      integer, optional, intent(in) :: nmax
       ! internals
-      integer :: i
-      if (io_rank()) then
+      integer :: i, nmax_, ndigits
+      character(len=128) :: fmt
+      nmax_ = optval(nmax, 100)
+      ndigits = int(log10(real(nmax_)))
+      write(fmt,'("(A",I0,",I",I0,".",I0,"1X)"') 15-ndigits, nditigs, ndigits
+      print *, fmt
+      STOP 9
+      if (io_rank() .and. if_overwrite) then
          ! SVD absolute
          open (1234, file=logfile_SVD_abs, status='replace', action='write')
          write (1234, '(A8,2(A15,1X),A4)', ADVANCE='NO') 'istep', 'time', 'lag', 'rk'
          do i = 1, n0
-            write (1234, '(A13,I2.2,1X)', ADVANCE='NO') 's', i
+            write (1234, fmt, ADVANCE='NO') 's', i
          end do
          write (1234, *) ''; close (1234)
          ! dSVD relative
          open (1234, file=logfile_SVD_rel, status='replace', action='write')
          write (1234, '(A8,2(A15,1X),A4)', ADVANCE='NO') 'istep', 'time', 'lag', 'rk'
          do i = 1, n0
-            write (1234, '(A13,I2.2,1X)', ADVANCE='NO') 'ds', i
+            write (1234, fmt, ADVANCE='NO') 'ds', i
          end do
          write (1234, *) ''; close (1234)
       end if
+      if_overwrite = .false.
       return
    end subroutine write_logfile_headers
+
+   subroutine reset_logfiles()
+      if_overwrite = .true.
+   end subroutine reset_logfiles
 
    subroutine stamp_logfiles(X, lag, svals, dsvals)
       class(abstract_sym_low_rank_state_rdp),  intent(in) :: X
