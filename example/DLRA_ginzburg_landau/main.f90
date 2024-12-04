@@ -271,6 +271,7 @@ program demo
       print *, 'Skip.'
       print *, ''
    end if
+   call reset_lyapsolver()
 
    ! Reset timers
    call global_lightROM_timer%stop('Short time: DLRA')
@@ -295,6 +296,7 @@ program demo
       iref  = 20
 
       call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+      call reset_lyapsolver()
    else
       print *, 'Skip.'
       print *, ''
@@ -326,6 +328,7 @@ program demo
       if_save_output = .true.
 
       call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
+      call reset_lyapsolver()
    else
       print *, 'Skip.'
       print *, ''
@@ -357,6 +360,7 @@ program demo
       if_save_output = .true.
 
       call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
+      call reset_lyapsolver()
    else
       print *, 'Skip.'
       print *, ''

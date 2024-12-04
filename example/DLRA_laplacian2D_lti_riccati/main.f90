@@ -321,6 +321,7 @@ program demo
    else
       print *, 'Skip.'
    end if
+   call reset_lyapsolver()
 
    call global_lightROM_timer%stop('Short time: DLRA')
    call A%reset_timer()
@@ -447,6 +448,7 @@ program demo
    else
       print *, 'Skip.'
    end if
+   call reset_lyapsolver()
 
    ! Compute and print timer summary
    call finalize_timers()

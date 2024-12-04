@@ -139,8 +139,7 @@ contains
       integer                                      :: is, ie
       integer,                         parameter   :: irow = 8
       real(wp),                        allocatable :: svals(:)
-      character(len=128)                           :: note, casename
-      character(len=128)                           :: logfile_abs, logfile_rel
+      character(len=128)                           :: note
       ! DLRA options
       type(dlra_opts)                              :: opts
       ! timer
@@ -173,10 +172,6 @@ contains
                ! set solver options
                opts%mode = torder
 
-               ! define casename
-               write(logfile_abs,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDabs_II_rk', rk, '_TO', torder, '_dt', tau, '.dat'
-               write(logfile_rel,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDrel_II_rk', rk, '_TO', torder, '_dt', tau, '.dat'
-
                ! Initialize low-rank representation with rank rk
                call X%initialize_LR_state(U0, S0, rk, rkmax, .false.)
 
@@ -198,10 +193,6 @@ contains
                                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
                                  & norm2(CALE(X_out, adjoint))/N, etime
                deallocate(X%U); deallocate(X%S)
-               if (if_save_output) then
-                  call rename(logfile_SVD_abs, logfile_abs)
-                  call rename(logfile_SVD_rel, logfile_rel)
-               end if
             end do
             print *, ''
          end do
@@ -262,8 +253,7 @@ contains
       integer                                      :: is, ie
       integer,                         parameter   :: irow = 8
       real(wp),                        allocatable :: svals(:)
-      character(len=128)                           :: note, casename
-      character(len=128)                           :: logfile_abs, logfile_rel
+      character(len=128)                           :: note
       ! DLRA options
       type(dlra_opts)                              :: opts
       ! timer
@@ -297,10 +287,6 @@ contains
                ! set solver options
                opts%mode = torder
 
-               ! define casename
-               write(logfile_abs,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDabs_III_rk', rk, '_TO', torder, '_dt', tau, '.dat'
-               write(logfile_rel,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDrel_III_rk', rk, '_TO', torder, '_dt', tau, '.dat'
-
                ! Initialize low-rank representation with rank rk
                call X%initialize_LR_state(U0, S0, rk, rkmax, opts%if_rank_adaptive)
 
@@ -322,10 +308,6 @@ contains
                                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
                                  & norm2(CALE(X_out, adjoint))/N, etime
                deallocate(X%U); deallocate(X%S)
-               if (if_save_output) then
-                  call rename(logfile_SVD_abs, logfile_abs)
-                  call rename(logfile_SVD_rel, logfile_rel)
-               end if
             end do
             print *, ''
          end do

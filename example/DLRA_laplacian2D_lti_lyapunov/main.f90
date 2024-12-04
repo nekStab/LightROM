@@ -293,7 +293,7 @@ program demo
       ! Choose input ranks and integration steps
       rkv = [ 2, 3, 4 ]
       if (short_test) then
-         dtv = logspace(-4.0_wp, -3.0_wp, 4, 10)
+         dtv = logspace(-4.0_wp, -3.0_wp, 2, 10)
       else
          dtv = logspace(-6.0_wp, -3.0_wp, 4, 10)
       end if
@@ -340,6 +340,7 @@ program demo
       svals = svdvals(X_out)
       print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR)[1-8]:', svals(:irow)
 
+      call reset_lyapsolver()
    else
       print *, 'Skip.'
    end if
@@ -472,6 +473,7 @@ program demo
       print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
       print *, ''
 
+      call reset_lyapsolver()
    else
       print *, 'Skip.'
       print *, ''
@@ -551,6 +553,7 @@ program demo
          print *, '#########################################################################'
          print *, ''
       end do
+      call reset_lyapsolver()
    else
       print *, 'Skip.'
       print *, ''
@@ -638,7 +641,8 @@ program demo
          svals = svdvals(X_out)
          print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
          print *, ''
-      end do   
+      end do
+      call reset_lyapsolver()
    else
       print *, 'Skip.'
       print *, ''
