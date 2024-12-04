@@ -410,6 +410,7 @@ module LightROM_LyapunovSolvers
       X%rk = X%rk + 1
       rk = X%rk ! this is only to make the code more readable
       rkmax = size(X%U)
+      ndigits = max(1,ceiling(log10(real(rkmax))))
       
       accept_step = .false.
       istep = 1
@@ -436,7 +437,8 @@ module LightROM_LyapunovSolvers
                         & 'Increase rkmax and restart!'
                call stop_error(msg, module=this_module, procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
             else
-               write(msg,'(A,I0,A,E9.2)') 'rk= ', rk, ', s_{rk} = ', ssvd(rk)
+               write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8)")') ndigits, ndigits
+               write(msg,fmt) 'rk= ', rk, ', s_', rk,' = ', ssvd(rk)
                call logger%log_message(msg, module=this_module, procedure='DLRA_main')
                write(msg,'(A,I0)') 'Rank increased to rk= ', rk + 1
                call logger%log_message(msg, module=this_module, procedure='DLRA_main')
@@ -482,14 +484,13 @@ module LightROM_LyapunovSolvers
       end do ! while .not. accept_step
 
       if (.not. accept_step .and. istep == max_step) then
-         write(msg,'(A,I0,A,2(A,E9.2))') 'Rank increased ', max_step, ' times in a single step without ', &
+         write(msg,'(A,I0,A,2(A,E11.4))') 'Rank increased ', max_step, ' times in a single step without ', &
                & 'reaching the desired tolerance on the singular values. s_{k+1} = ', ssvd(irk), ' > ', tol
          call stop_error(msg, module=this_module, procedure='DLRA_main')
       end if
 
-      ndigits = max(1,ceiling(log10(real(rkmax))))
       write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8,A,I2)")') ndigits, ndigits
-      write(msg,fmt) 'rk = ', X%rk-1, ':     s_', irk,' = ', &
+      write(msg,fmt) 'rk = ', rk-1, ':     s_', irk,' = ', &
                & ssvd(irk), ',     lock: ', rk_reduction_lock
       call logger%log_information(msg, module=this_module, procedure='DLRA_main')
 
