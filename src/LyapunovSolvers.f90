@@ -27,8 +27,10 @@ module LightROM_LyapunovSolvers
    private :: this_module
    character(len=*), parameter :: this_module = 'LR_LyapSolvers'
    integer, parameter :: iline = 4
+   integer :: LyapSolver_counter = 0
 
    public :: projector_splitting_DLRA_lyapunov_integrator
+   public :: reset_lyapsolver
    public :: M_forward_map
    public :: G_forward_map_lyapunov
    public :: K_step_lyapunov
@@ -169,6 +171,7 @@ module LightROM_LyapunovSolvers
       real(wp), dimension(:), allocatable :: svals, dsvals, svals_lag
 
       if (time_lightROM()) call lr_timer%start('DLRA_lyapunov_integrator_rdp')
+      LyapSolver_counter = LyapSolver_counter + 1
 
       ! Optional arguments
       trans = optval(iftrans, .false.)
@@ -283,7 +286,7 @@ module LightROM_LyapunovSolvers
             do i = 1, irk
                dsvals(i) = abs(svals(i)-svals_lag(i))/svals(i)
             end do
-            call stamp_logfiles(X, tau, svals, dsvals)
+            call stamp_logfiles(X, tau, svals, dsvals, LyapSolver_counter)
             do i = 1, ceiling(float(X%rk)/iline)
                is = (i-1)*iline+1; ie = min(X%rk,i*iline)
                write(msg,fmt_sval) istep, nsteps, X%tot_time, X%rk, " SVD abs", is, ie, ( svals(j), j = is, ie )
@@ -847,5 +850,14 @@ module LightROM_LyapunovSolvers
 
       return
    end subroutine compute_splitting_error
+
+   subroutine reset_lyapsolver()
+      ! internal
+      character(len=128) :: msg
+      write(msg,'(A,I0,A)') 'Lyapunov solver called ', LyapSolver_counter, ' times. Resetting coutner to 0.'
+      call logger%log_message(msg, module=this_module, procedure='DLRA_main')
+      LyapSolver_counter = 0
+      call reset_logfiles()
+   end subroutine reset_lyapsolver
 
 end module LightROM_LyapunovSolvers
