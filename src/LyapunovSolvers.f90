@@ -398,17 +398,18 @@ module LightROM_LyapunovSolvers
       real(wp),                               intent(in)    :: tol
       
       ! Internal variables
-      integer                                               :: istep, rk, irk
+      integer                                               :: istep, rk, irk, rkmax, ndigits
       logical                                               :: accept_step, found
       real(wp),                               allocatable   :: coef(:)
       real(wp)                                              :: norm
-      character(len=256)                                    :: msg
+      character(len=256)                                    :: msg, fmt
 
       integer, parameter                                    :: max_step = 20  ! might not be needed
 
       ! ensure that we are integrating one more rank than we use for approximation
       X%rk = X%rk + 1
       rk = X%rk ! this is only to make the code more readable
+      rkmax = size(X%U)
       
       accept_step = .false.
       istep = 1
@@ -430,8 +431,8 @@ module LightROM_LyapunovSolvers
          ! choose action
          if (.not. found) then ! none of the singular values is below tolerance
             ! increase rank and run another step
-            if (rk == size(X%U)) then ! cannot increase rank without reallocating X%U and X%S
-               write(msg,'(A,I0,A,A)') 'Cannot increase rank, rkmax = ', size(X%U), ' is reached. ', &
+            if (rk == rkmax) then ! cannot increase rank without reallocating X%U and X%S
+               write(msg,'(A,I0,A,A)') 'Cannot increase rank, rkmax = ', rkmax, ' is reached. ', &
                         & 'Increase rkmax and restart!'
                call stop_error(msg, module=this_module, procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
             else
@@ -481,10 +482,12 @@ module LightROM_LyapunovSolvers
       if (.not. accept_step .and. istep == max_step) then
          write(msg,'(A,I0,A,2(A,E9.2))') 'Rank increased ', max_step, ' times in a single step without ', &
                & 'reaching the desired tolerance on the singular values. s_{k+1} = ', ssvd(irk), ' > ', tol
-         call logger%log_error(msg, module=this_module, procedure='DLRA_main')
+         call stop_error(msg, module=this_module, procedure='DLRA_main')
       end if
 
-      write(msg,'(A,I3,A,I2,A,E14.8,A,I2)') 'rk = ', X%rk-1, ':     s_', irk,' = ', &
+      ndigits = max(1,int(log10(real(rkmax))))
+      write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8,A,I2)")') ndigits, ndigits
+      write(msg,fmt) 'rk = ', X%rk-1, ':     s_', irk,' = ', &
                & ssvd(irk), ',     lock: ', rk_reduction_lock
       call logger%log_information(msg, module=this_module, procedure='DLRA_main')
 
