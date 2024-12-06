@@ -165,7 +165,7 @@ module LightROM_LyapunovSolvers
       real(wp)                            :: El                  ! aggregate error estimate
       real(wp)                            :: err_est             ! current error estimate
       real(wp)                            :: tol                 ! current tolerance
-      character(len=128)                  :: msg, fmt_norm, fmt_sval, fmt_step
+      character(len=128)                  :: msg, fmt_sval, fmt_step
       integer                             :: rkmax
       logical                             :: if_lastep
       real(wp), dimension(:), allocatable :: svals, dsvals, svals_lag
@@ -209,8 +209,7 @@ module LightROM_LyapunovSolvers
       ! Pretty output
       ifmt = max(5,ceiling(log10(real(nsteps))))
       irkfmt = max(3,ceiling(log10(real(rkmax))))
-      write(fmt_norm,'(A,2(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,": dX= ",E12.5," X= ",E12.5," dX/dt/X= ",E12.5)'
-      write(fmt_sval,'(A,3(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,1X,I', irkfmt, ',": ",A,"[",I2,"-",I2,"]",*(E12.5, 1X))'
+      write(fmt_sval,'(A,4(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4," : ",A,"[",I', irkfmt, ',"-",I', irkfmt, ',"]",*(E12.5))'
       write(fmt_step,'(A,2(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,", Ttot= ",F10.4)'
       ! Prepare logfile
       call write_logfile_headers(X%rk, rkmax)
