@@ -86,6 +86,10 @@ program demo
    ! Adjoint = .false.:     Solve the direct Lyapunov equation:   0 = A X + X A.T + B @ B.T @ W
    !     The solution to this equation is called the controllability Gramian X.
    !
+   logical, parameter :: main_run = .true.
+   !
+   ! Run the computation instead of the test
+   !
    logical, parameter :: short_test = .true.
    !
    ! Skip the computations with small dt/small tolerance to speed up test
@@ -221,149 +225,170 @@ program demo
    call global_lightROM_timer%stop('Direct solution (LAPACK)')
    call global_lightROM_timer%add_timer('Short time: Runge-Kutta', start=.true.)
    
-   print *, ''
-   print *, '#########################################################################'
-   print *, '#                                                                       #'
-   print *, '#    Ia.  Solution using Runge-Kutta over a short time horizon          #'
-   print *, '#                                                                       #'
-   print *, '#########################################################################'
-   print *, ''
-
-   if (run_fixed_rank_short_integration_time_test) then
-      ! Run RK integrator for the Lyapunov equation
-      T_RK  = 0.01_wp
-      nstep = 10
-      iref  = 5
-
-      call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
-   else
-      print *, 'Skip.'
-      print *, ''
-   end if
-
-   call global_lightROM_timer%stop('Short time: Runge-Kutta')
-   call global_lightROM_timer%add_timer('Short time: DLRA', start=.true.)
-   
-   print *, ''
-   print *, '#########################################################################'
-   print *, '#                                                                       #'
-   print *, '#    Ib.  Solution using fixed-rank DLRA                                #'
-   print *, '#                                                                       #'
-   print *, '#########################################################################'
-   print *, ''
-
-   if (run_fixed_rank_short_integration_time_test) then
-      ! DLRA with fixed rank
-      Tend = T_RK/nstep*iref
-      rkv = [ 10, 12, 16 ]
-      if (short_test) then
-         dtv = logspace(-3.0_wp, -3.0_wp, 1, 10)
-      else
-         dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
-      end if
-      dtv = dtv(size(dtv):1:-1) ! reverse vector
-      TOv  = [ 1, 2 ] 
-      nprint = 16
-      if_save_output = .false.
-
-      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
-   else
-      print *, 'Skip.'
-      print *, ''
-   end if
-   call reset_lyapsolver()
-
-   ! Reset timers
-   call global_lightROM_timer%stop('Short time: DLRA')
-   call A%reset_timer()
-   call prop%reset_timer()
-   call reset_timers()
-   call global_lightROM_timer%add_timer('Steady-State: Runge-Kutta', start=.true.)
-
-   print *, ''
-   print *, '#########################################################################'
-   print *, '#                                                                       #'
-   print *, '#    IIa.  Solution using Runge-Kutta to (close to) steady state        #'
-   print *, '#                                                                       #'
-   print *, '#########################################################################'
-   print *, ''
-   
-   if (run_fixed_rank_long_integration_time_test .or. &
-     & run_rank_adaptive_long_integration_time_test) then
-      ! Run RK integrator for the Lyapunov equation
-      T_RK  = 50.0_wp
-      nstep = 20
-      iref  = 20
-
-      call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
-      call reset_lyapsolver()
-   else
-      print *, 'Skip.'
-      print *, ''
-   end if
-
-   call global_lightROM_timer%stop('Steady-State: Runge-Kutta')
-   call global_lightROM_timer%add_timer('Steady-State: DLRA', start=.true.)
-
-   print *, ''
-   print *, '#########################################################################'
-   print *, '#                                                                       #'
-   print *, '#    IIb.  Solution using fixed-rank DLRA                               #'
-   print *, '#                                                                       #'
-   print *, '#########################################################################'
-   print *, ''
-
-   if (run_fixed_rank_long_integration_time_test) then
-      ! DLRA with fixed rank
-      Tend = T_RK/nstep*iref
-      rkv = [ 10, 20, 40 ]
-      if (short_test) then
-         dtv = logspace(-1.0_wp, 0.0_wp, 2, 10)
-      else
-         dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
-      end if
-      dtv = dtv(size(dtv):1:-1) ! reverse vector
-      TOv  = [ 1, 2 ] 
-      nprint = 40
-      if_save_output = .true.
-
-      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
-      call reset_lyapsolver()
-   else
-      print *, 'Skip.'
-      print *, ''
-   end if
-
-   call global_lightROM_timer%stop('Steady-State: DLRA')
-   call global_lightROM_timer%add_timer('Steady-State: rank-adaptive DLRA', start=.true.)
-
-   print *, ''
-   print *, '#########################################################################'
-   print *, '#                                                                       #'
-   print *, '#    IIc.  Solution using rank-adaptive DLRA                            #'
-   print *, '#                                                                       #'
-   print *, '#########################################################################'
-   print *, ''
-
-   if (run_rank_adaptive_long_integration_time_test) then
+   if (main_run) then
       ! DLRA with adaptive rank
-      if (short_test) then
-         dtv = logspace(-3.0_wp, 0.0_wp, 2, 10)
-         tolv = [ 1e-2_wp, 1e-6_wp ]
-      else
-         dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
-         tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
-      end if
-      dtv = dtv(size(dtv):1:-1) ! reverse vector
-      TOv  = [ 1, 2 ]
+      dtv  = logspace(-2.0_wp, 0.0_wp, 3, 10)
+      dtv  = dtv(size(dtv):1:-1) ! reverse vector
+      tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
+      tolv = tolv(size(tolv):1:-1) ! reverse vector
+      TOv  = [ 2 ]
       nprint = 60
       if_save_output = .true.
 
+      T_RK  = 120.0_wp
+      nstep = 120
+      iref  = 120
+
+      call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+
+      Tend = T_RK/nstep*iref
+
       call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
-      call reset_lyapsolver()
    else
-      print *, 'Skip.'
       print *, ''
+      print *, '#########################################################################'
+      print *, '#                                                                       #'
+      print *, '#    Ia.  Solution using Runge-Kutta over a short time horizon          #'
+      print *, '#                                                                       #'
+      print *, '#########################################################################'
+      print *, ''
+
+      if (run_fixed_rank_short_integration_time_test) then
+         ! Run RK integrator for the Lyapunov equation
+         T_RK  = 0.01_wp
+         nstep = 10
+         iref  = 5
+
+         call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+      else
+         print *, 'Skip.'
+         print *, ''
+      end if
+
+      call global_lightROM_timer%stop('Short time: Runge-Kutta')
+      call global_lightROM_timer%add_timer('Short time: DLRA', start=.true.)
+      
+      print *, ''
+      print *, '#########################################################################'
+      print *, '#                                                                       #'
+      print *, '#    Ib.  Solution using fixed-rank DLRA                                #'
+      print *, '#                                                                       #'
+      print *, '#########################################################################'
+      print *, ''
+
+      if (run_fixed_rank_short_integration_time_test) then
+         ! DLRA with fixed rank
+         Tend = T_RK/nstep*iref
+         rkv = [ 10, 12, 16 ]
+         if (short_test) then
+            dtv = logspace(-3.0_wp, -3.0_wp, 1, 10)
+         else
+            dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
+         end if
+         dtv = dtv(size(dtv):1:-1) ! reverse vector
+         TOv  = [ 1, 2 ] 
+         nprint = 16
+         if_save_output = .false.
+
+         call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
+      else
+         print *, 'Skip.'
+         print *, ''
+      end if
+      call reset_lyapsolver()
+
+      ! Reset timers
+      call global_lightROM_timer%stop('Short time: DLRA')
+      call A%reset_timer()
+      call prop%reset_timer()
+      call reset_timers()
+      call global_lightROM_timer%add_timer('Steady-State: Runge-Kutta', start=.true.)
+
+      print *, ''
+      print *, '#########################################################################'
+      print *, '#                                                                       #'
+      print *, '#    IIa.  Solution using Runge-Kutta to (close to) steady state        #'
+      print *, '#                                                                       #'
+      print *, '#########################################################################'
+      print *, ''
+      
+      if (run_fixed_rank_long_integration_time_test .or. &
+      & run_rank_adaptive_long_integration_time_test) then
+         ! Run RK integrator for the Lyapunov equation
+         T_RK  = 50.0_wp
+         nstep = 20
+         iref  = 20
+
+         call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+         call reset_lyapsolver()
+      else
+         print *, 'Skip.'
+         print *, ''
+      end if
+
+      call global_lightROM_timer%stop('Steady-State: Runge-Kutta')
+      call global_lightROM_timer%add_timer('Steady-State: DLRA', start=.true.)
+
+      print *, ''
+      print *, '#########################################################################'
+      print *, '#                                                                       #'
+      print *, '#    IIb.  Solution using fixed-rank DLRA                               #'
+      print *, '#                                                                       #'
+      print *, '#########################################################################'
+      print *, ''
+
+      if (run_fixed_rank_long_integration_time_test) then
+         ! DLRA with fixed rank
+         Tend = T_RK/nstep*iref
+         rkv = [ 10, 20, 40 ]
+         if (short_test) then
+            dtv = logspace(-1.0_wp, 0.0_wp, 2, 10)
+         else
+            dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+         end if
+         dtv = dtv(size(dtv):1:-1) ! reverse vector
+         TOv  = [ 1, 2 ] 
+         nprint = 40
+         if_save_output = .true.
+
+         call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
+         call reset_lyapsolver()
+      else
+         print *, 'Skip.'
+         print *, ''
+      end if
+
+      call global_lightROM_timer%stop('Steady-State: DLRA')
+      call global_lightROM_timer%add_timer('Steady-State: rank-adaptive DLRA', start=.true.)
+
+      print *, ''
+      print *, '#########################################################################'
+      print *, '#                                                                       #'
+      print *, '#    IIc.  Solution using rank-adaptive DLRA                            #'
+      print *, '#                                                                       #'
+      print *, '#########################################################################'
+      print *, ''
+
+      if (run_rank_adaptive_long_integration_time_test) then
+         ! DLRA with adaptive rank
+         if (short_test) then
+            dtv = logspace(-3.0_wp, 0.0_wp, 2, 10)
+            tolv = [ 1e-2_wp, 1e-6_wp ]
+         else
+            dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+            tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
+         end if
+         dtv = dtv(size(dtv):1:-1) ! reverse vector
+         TOv  = [ 1, 2 ]
+         nprint = 60
+         if_save_output = .true.
+
+         call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
+         call reset_lyapsolver()
+      else
+         print *, 'Skip.'
+         print *, ''
+      end if
    end if
 
    ! Compute and print timer summary
