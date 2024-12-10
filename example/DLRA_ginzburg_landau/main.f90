@@ -74,6 +74,7 @@ program demo
    integer, parameter                        :: irow = 8
    integer                                   :: nprint
    logical                                   :: if_save_output
+   character(len=128)                        :: msg
 
    !--------------------------------
    ! Define which examples to run:
@@ -230,8 +231,20 @@ program demo
       dtv  = logspace(-2.0_wp, 0.0_wp, 3, 10)
       dtv  = dtv(size(dtv):1:-1) ! reverse vector
       tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
-      tolv = tolv(size(tolv):1:-1) ! reverse vector
-      TOv  = [ 2 ]
+      TOv  = [ 1, 2 ]
+      
+      open (1234, file='Lyap_case.log', status='replace', action='write')
+      irep = 0
+      do i = 1, size(tolv)
+         do j = 1, size(TOv)
+            do k = 1, size(dtv)
+               irep= irep + 1
+               write (1234, *) irep, ': stol= ', tolv(i), ', TO= ', TOv(j), ', dt= ', dtv(k) 
+            end do
+         end do
+      end do
+      close (1234)
+
       nprint = 60
       if_save_output = .true.
 
