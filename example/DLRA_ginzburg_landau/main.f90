@@ -239,7 +239,7 @@ program demo
          do j = 1, size(TOv)
             do k = 1, size(dtv)
                irep= irep + 1
-               write (1234, *) irep, ': stol= ', tolv(i), ', TO= ', TOv(j), ', dt= ', dtv(k) 
+               write (1234, '(I3,A,E9.2,A,I1,A,F10.6)') irep, ': stol= ', tolv(i), ', TO= ', TOv(j), ', dt= ', dtv(k) 
             end do
          end do
       end do
@@ -251,13 +251,30 @@ program demo
       T_RK  = 120.0_wp
       nstep = 120
       iref  = 120
+      Tend = T_RK/nstep*iref
+
+      print *, ''
+      print *, '#########################################################################'
+      print *, '#                                                                       #'
+      print *, '#    Ia.  Solution using Runge-Kutta to steady state                    #'
+      print *, '#                                                                       #'
+      print *, '#########################################################################'
+      print *, ''
 
       call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
 
-      Tend = T_RK/nstep*iref
+      print *, ''
+      print *, '#########################################################################'
+      print *, '#                                                                       #'
+      print *, '#    Ib.  Solution using rank-adaptive DLRA                            #'
+      print *, '#                                                                       #'
+      print *, '#########################################################################'
+      print *, ''
 
       call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
+
    else
+      
       print *, ''
       print *, '#########################################################################'
       print *, '#                                                                       #'

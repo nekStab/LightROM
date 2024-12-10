@@ -158,7 +158,7 @@ contains
 
       call system_clock(count_rate=clock_rate)
 
-      print '(A16,A8,A4,A10,A6,A8,4(A19),A12)', 'DLRA:','  rk',' TO','dt','steps','Tend', &
+      print '(A16,A8,A4,A10,A8,A10,4(A19),A12)', 'DLRA:','  rk',' TO','dt','steps','Tend', &
                      & '| X_D |/N', '| X_D - X_RK |/N', '| X_D - X_BS |/N', '| res_D |/N', 'etime'
       X = LR_state()
       do i = 1, size(rkv)
@@ -188,7 +188,7 @@ contains
                etime = real(clock_stop-clock_start)/real(clock_rate)
                ! Reconstruct solution
                call reconstruct_solution(X_out, X)
-               write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I6,F8.4,4(E19.8),F10.2," s")') 1, note, 'OUTPUT', &
+               write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I8,F10.4,4(E19.8),F10.2," s")') 1, note, 'OUTPUT', &
                                  & rk, torder, tau, nsteps, Tend, &
                                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
                                  & norm2(CALE(X_out, adjoint))/N, etime
@@ -270,7 +270,7 @@ contains
          note = 'Xctl'
       end if
  
-      print '(A16,A8,A4,A10,A8,A8,4(A19),A12)', 'DLRA:','rk_end',' TO','dt','steps','Tend', &
+      print '(A16,A8,A4,A10,A8,A10,4(A19),A12)', 'DLRA:','rk_end',' TO','dt','steps','Tend', &
                & '| X_D |/N', '| X_D - X_RK |/N', '| X_D - X_BS |/N', '| res_D |/N', 'etime'
       rk = rk_X0
       X = LR_state()
@@ -306,7 +306,7 @@ contains
                etime = real(clock_stop-clock_start)/real(clock_rate)
                ! Reconstruct solution
                call reconstruct_solution(X_out, X)
-               write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I8,F8.4,4(E19.8),F10.2," s")') 1, note, 'OUTPUT', &
+               write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I8,F10.4,4(E19.8),F10.2," s")') 1, note, 'OUTPUT', &
                                  & X%rk, torder, tau, nsteps, Tend, &
                                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
                                  & norm2(CALE(X_out, adjoint))/N, etime
