@@ -209,7 +209,7 @@ module LightROM_LyapunovSolvers
       ! Pretty output
       ifmt = max(5,ceiling(log10(real(nsteps))))
       irkfmt = max(3,ceiling(log10(real(rkmax))))
-      write(fmt_sval,'(A,4(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4," : ",A,"[",I', irkfmt, ',"-",I', irkfmt, ',"]",*(E12.5))'
+      write(fmt_sval,'(A,5(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,1X,I', irkfmt, '" : ",A,"[",I', irkfmt, ',"-",I', irkfmt, ',"]",*(E12.5))'
       write(fmt_step,'(A,2(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,", Ttot= ",F10.4)'
       ! Prepare logfile
       call write_logfile_headers(X%rk, rkmax)
@@ -403,7 +403,7 @@ module LightROM_LyapunovSolvers
       real(wp)                                              :: norm
       character(len=256)                                    :: msg, fmt
 
-      integer, parameter                                    :: max_step = 20  ! might not be needed
+      integer, parameter                                    :: max_step = 40  ! might not be needed
 
       ! ensure that we are integrating one more rank than we use for approximation
       X%rk = X%rk + 1
@@ -438,7 +438,7 @@ module LightROM_LyapunovSolvers
             else
                write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8)")') ndigits, ndigits
                write(msg,fmt) 'rk= ', rk, ', s_', rk,' = ', ssvd(rk)
-               call logger%log_message(msg, module=this_module, procedure='DLRA_main')
+               call logger%log_information(msg, module=this_module, procedure='DLRA_main')
                write(msg,'(A,I0)') 'Rank increased to rk= ', rk + 1
                call logger%log_message(msg, module=this_module, procedure='DLRA_main')
                
