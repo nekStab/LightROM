@@ -1,7 +1,7 @@
 program demo
    ! Standard Library.
    use stdlib_optval, only : optval 
-   use stdlib_linalg, only : eye, diag
+   use stdlib_linalg, only : eye, diag, eig
    use stdlib_math, only : all_close, logspace
    use stdlib_io_npy, only : save_npy, load_npy
    use stdlib_logger, only : information_level, warning_level, debug_level, error_level, none_level
@@ -51,7 +51,7 @@ program demo
    type(dlra_opts)                           :: opts
 
    ! Initial condition
-   type(state_vector),           allocatable :: U0(:)
+   type(state_vector),           allocatable :: U0(:), output(:)
    real(wp),                     allocatable :: S0(:,:)
    
    ! OUTPUT
@@ -63,23 +63,30 @@ program demo
 
    ! IO
    real(wp),                    allocatable :: U_load(:,:)
+   real(wp),                    allocatable :: XTX(:,:)
+   real(wp),                    allocatable :: wrk(:,:)
+   real(wp),                    allocatable :: eigvecs(:,:)
+   complex(wp),                 allocatable :: eigvals(:)
+   real(wp),                    allocatable :: dmat(:,:)
 
    ! Information flag.
    integer                                   :: info
 
    ! Misc
-   integer                                   :: i, j, k, irep, nstep, iref, is, ie
+   integer                                   :: i, j, k, it, irep, iref, is, ie
+   integer                                   :: nsnap, nstep, nrank
    ! SVD & printing
    real(wp), dimension(:),       allocatable :: svals
    integer, parameter                        :: irow = 8
    integer                                   :: nprint
    logical                                   :: if_save_output
    character(len=128)                        :: msg
+   integer                                   :: nout
 
    !--------------------------------
    ! Define which examples to run:
    !
-   logical, parameter :: adjoint = .true.
+   logical, parameter :: adjoint = .false.
    !
    ! Adjoint = .true.:      Solve the adjoint Lyapunov equation:  0 = A.T X + X A + C.T @ C @ W
    !     The solution to this equation is called the observability Gramian Y.
@@ -273,6 +280,66 @@ program demo
 
       call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
 
+      print *, ''
+      print *, '#########################################################################'
+      print *, '#                                                                       #'
+      print *, '#    Ic.  Solution using POD                                            #'
+      print *, '#                                                                       #'
+      print *, '#########################################################################'
+      print *, ''
+
+     
+      tolv = [ 10.0_wp, 50.0_wp, 100.0_wp ]
+      dtv  = logspace(-1.0_wp, 0.0_wp, 3, 10)
+      dtv  = dtv(size(dtv):1:-1) ! reverse vector
+      print '(1X,A)', 'POD:'
+      do it = 1, size(tolv)
+         Tend = tolv(it)
+         print '(3X,A,F12.6)', '   Tend:', Tend
+         do irep = 1, size(dtv)
+            tau = dtv(irep)
+            prop = exponential_prop(tau)
+            nout = nint(Tend/tau)
+            if (adjoint) then
+               nrank = rk_C
+            else
+               nrank = rk_B
+            end if
+            nsnap = nrank*nout
+            if (allocated(output)) deallocate(output)
+            allocate(output(nsnap), source=CT(1))
+            if (allocated(XTX)) deallocate(XTX)
+            allocate(XTX(nsnap,nsnap))
+            call zero_basis(output)
+            ! Compute impulse response of input/output using direct/adjoint linear solver
+            k = 0
+            do j = 1, nrank
+               do i = 1, nout - 1
+                  k = k + 1
+                  if (adjoint) then
+                     if (i == 1)  then
+                        call copy(output(k), CT(j)) ! initial condtion
+                     end if
+                     call prop%rmatvec(output(k), output(k+1))
+                  else
+                     if (i == 1)  then
+                        call copy(output(k), B(j))  ! initial condtion
+                     end if
+                     call prop%matvec(output(k), output(k+1))
+                  end if
+                  call output(k)%scal(sqrt(tau))
+               end do
+            end do
+            call innerprod(XTX, output, output)
+            nprint = min(8, nsnap)
+            svals = svdvals(XTX)
+            do i = 1, ceiling(nprint*1.0_wp/irow)
+               is = (i-1)*irow+1; ie = min(i*irow, nprint)
+               print '(1X,A,F6.4,A,I2,A,I2,*(1X,F16.12))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+            end do
+         end do
+      end do
+
    else
       
       print *, ''
@@ -329,8 +396,6 @@ program demo
 
       ! Reset timers
       call global_lightROM_timer%stop('Short time: DLRA')
-      call A%reset_timer()
-      call prop%reset_timer()
       call reset_timers()
       call global_lightROM_timer%add_timer('Steady-State: Runge-Kutta', start=.true.)
 
