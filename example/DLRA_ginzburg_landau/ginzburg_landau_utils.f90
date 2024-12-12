@@ -76,21 +76,21 @@ contains
       ! column 1
       x2       = 0.0_wp
       x2(1:nx) = x(2:nx+1)
-      B(1)%state = exp(-((x2 - x_b)/s_b)**2)!*sqrt(weight)
+      B(1)%state = exp(-((x2 - x_b)/s_b)**2)
       ! column 2
       x2            = 0.0_wp
       x2(nx+1:2*nx) = x(2:nx+1)
-      B(2)%state = exp(-((x2 - x_b)/s_b)**2)!*sqrt(weight)
+      B(2)%state = exp(-((x2 - x_b)/s_b)**2)
 
       ! the sensor is a Gaussian centered at branch II
       ! column 1
       x2       = 0.0_wp
       x2(1:nx) = x(2:nx+1)
-      CT(1)%state = exp(-((x2 - x_c)/s_c)**2) !/sqrt(weight)
+      CT(1)%state = exp(-((x2 - x_c)/s_c)**2)
       ! column 2
       x2            = 0.0_wp
       x2(nx+1:2*nx) = x(2:nx+1)
-      CT(2)%state = exp(-((x2 - x_c)/s_c)**2) !/sqrt(weight)
+      CT(2)%state = exp(-((x2 - x_c)/s_c)**2)
 
       ! RK lyap & riccati
       Qc   = eye(rk_c)
