@@ -63,11 +63,9 @@ program demo
 
    ! IO
    real(wp),                    allocatable :: U_load(:,:)
+   
+   ! POD
    real(wp),                    allocatable :: XTX(:,:)
-   real(wp),                    allocatable :: wrk(:,:)
-   real(wp),                    allocatable :: eigvecs(:,:)
-   complex(wp),                 allocatable :: eigvals(:)
-   real(wp),                    allocatable :: dmat(:,:)
 
    ! Information flag.
    integer                                   :: info
