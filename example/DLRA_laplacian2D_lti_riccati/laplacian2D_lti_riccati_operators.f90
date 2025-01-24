@@ -55,7 +55,11 @@ contains
          select type(vec_out)
          type is (state_vector)
             call laplacian(vec_out%state, vec_in%state)
+         class default
+            call stop_error('vec_out must be a state_vector', this_module, 'direct_matvec_laplace')
          end select
+      class default
+         call stop_error('vec_in must be a state_vector', this_module, 'direct_matvec_laplace')
       end select
       return
    end subroutine direct_matvec_laplace
@@ -193,8 +197,14 @@ contains
             select type (A)
             type is (laplace_operator)
                call k_exptA(vec_out, A, vec_in, tau, info, transpose)
+            class default
+               call stop_error('A must be a laplace_operator', this_module, 'exptA')
             end select
+         class default
+            call stop_error('vec_out must be a state_vector', this_module, 'exptA')
          end select
+      class default
+         call stop_error('vec_in must be a state_vector', this_module, 'exptA')
       end select
 
    end subroutine exptA
@@ -211,20 +221,11 @@ contains
       real(wp),          optional, intent(in)    :: D(:,:)
 
       ! Operator
-      select type (A)
-      type is (laplace_operator)
-         allocate(self%A, source=A)
-      end select
+      allocate(self%A, source=A)
       ! Input
-      select type (B_in)
-      type is (state_vector)
-         allocate(self%B(rk_b), source=B_in(1:rk_b))
-      end select
+      allocate(self%B(rk_b), source=B_in(:rk_b))
       ! Output
-      select type (CT_in)
-         type is (state_vector)
-         allocate(self%CT(rk_c), source=CT_in(1:rk_c))
-      end select
+      allocate(self%CT(rk_c), source=CT_in(1:rk_c))
       ! Throughput
       allocate(self%D(rk_c, rk_b))
       if (present(D)) then

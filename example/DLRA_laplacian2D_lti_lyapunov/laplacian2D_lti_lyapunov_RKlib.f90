@@ -83,7 +83,11 @@ contains
              !> Integrate forward in time.
              call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
 
+         class default
+            call stop_error('vec_out must be a state_vector', this_module, 'direct_solver_vec')
          end select
+      class default
+         call stop_error('vec_in must be a state_vector', this_module, 'direct_solver_vec')
       end select
       return
    end subroutine direct_solver_vec
@@ -139,7 +143,11 @@ contains
             call prop%initialize(n=N**2, f=rhs_lyap)
             !> Integrate forward in time.
             call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+         class default
+            call stop_error('vec_out must be a state_matrix', this_module, 'direct_solver_mat')
          end select
+      class default
+         call stop_error('vec_in must be a state_matrix', this_module, 'direct_solver_mat')
       end select
 
       return

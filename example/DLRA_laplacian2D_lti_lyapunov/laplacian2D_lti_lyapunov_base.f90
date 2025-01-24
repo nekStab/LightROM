@@ -95,6 +95,8 @@ contains
       select type(vec)
       type is (state_vector)
          alpha = dot_product(self%state, vec%state)
+      class default
+         call stop_error('vec must be a state_vector', this_module, 'dot')
       end select
       return
    end function vector_dot
@@ -119,6 +121,8 @@ contains
       select type(vec)
       type is (state_vector)
          self%state = alpha*self%state + beta*vec%state
+      class default
+         call stop_error('vec must be a state_vector', this_module, 'axpby')
       end select
       return
    end subroutine vector_axpby
@@ -154,7 +158,9 @@ contains
       class(abstract_vector_rdp), intent(in) :: vec
       select type(vec)
       type is(state_matrix)
-          alpha = dot_product(self%state, vec%state)
+         alpha = dot_product(self%state, vec%state)
+      class default
+         call stop_error('vec must be a state_matrix', this_module, 'matrix_dot')
       end select
       return
    end function matrix_dot
@@ -179,6 +185,8 @@ contains
       select type(vec)
       type is(state_matrix)
           self%state = alpha*self%state + beta*vec%state
+      class default
+         call stop_error('vec must be a state_matrix', this_module, 'matrix_axpby')
       end select
       return
    end subroutine matrix_axpby
@@ -241,7 +249,7 @@ contains
                   call stop_error('rkmax must be larger than rk for rank-adaptive DLRA!', this_module, 'initialize_LR_state')
                end if
                write(msg,'(A,I0,A)') 'Rank-adaptivity enabled. Computation will begin with X%rk = ', self%rk+1, '.'
-               call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
+               call logger%log_information(msg, this_module, 'initialize_LR_state')
             end if
          else
             self%rk = rk
@@ -256,32 +264,34 @@ contains
          allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
          allocate(self%S(rka,rka)); self%S = 0.0_wp
          write(msg,'(3(A,I0),A)') 'size(X%U) = [ ', rka,' ], X%rk = ', self%rk, ', size(U0) = [ ', m,' ]'
-         call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
+         call logger%log_information(msg, this_module, 'initialize_LR_state')
          ! copy inputs
          if (self%rk > m) then   ! copy the full IC into self%U
             call copy(self%U(:m), U)
             self%S(:m,:m) = S
             write(msg,'(4X,A,I0,A)') 'Transfer the first ', m, ' columns of U0 to X%U.'
-            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
+            call logger%log_information(msg, this_module, 'initialize_LR_state')
          else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
             call copy(self%U(:self%rk), U(:self%rk))
             self%S(:self%rk,:self%rk) = S(:self%rk,:self%rk)
             write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
-            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
+            call logger%log_information(msg, this_module, 'initialize_LR_state')
          end if
          ! top up basis (to rka for rank-adaptivity) with orthonormal columns if needed
          if (rka > m) then
             write(msg,'(4X,A,I0,A)') 'Fill remaining ', rka-m, ' columns with orthonormal noise orthonormal to U0.'
-            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
+            call logger%log_information(msg, this_module, 'initialize_LR_state')
             allocate(Utmp(rka-m), source=U(1))
             call rand_basis(Utmp)
             allocate(R(rka-m,rka-m)); R = 0.0_wp
             call orthogonalize_against_basis(Utmp, self%U, info)
-            call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='initialize_LR_state')
+            call check_info(info, 'orthogonalize_against_basis', this_module, 'initialize_LR_state')
             call qr(Utmp, R, info)
-            call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
+            call check_info(info, 'qr', this_module, 'initialize_LR_state')
             call copy(self%U(m+1:), Utmp)
          end if
+      class default
+         call stop_error('U must be a state_vector', this_module, 'initialize_LR_state')
       end select
       return
    end subroutine initialize_LR_state

@@ -93,6 +93,8 @@ contains
       type is (state_matrix)
          call assert_shape(mat_out, [ N, N ], 'mat_out', this_module, 'get_state:'//trim(procedure))
          mat_out = reshape(state_in(1)%state, [ N, N ])
+      class default
+         call stop_error('state must be a state_vector or a state_matrix', this_module, 'get_state')
       end select
       return
    end subroutine get_state
@@ -116,6 +118,8 @@ contains
          call assert_shape(mat_in, [ N, N ], 'mat_in', this_module, 'set_state:'//trim(procedure))
          call zero_basis(state_out)
          state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
+      class default
+         call stop_error('state must be a state_vector or a state_matrix', this_module, 'set_state')
       end select
       return
    end subroutine set_state
@@ -139,6 +143,8 @@ contains
          do k = 1, kdim
             call state(k)%rand(ifnorm = normalize)
          end do
+      class default
+         call stop_error('state must be a state_vector or a state_matrix', this_module, 'init_rand')
       end select
       return
    end subroutine init_rand
@@ -163,7 +169,7 @@ contains
 
       if (size(U) < rk) then
          write(msg,'(A,I0)') 'Input krylov basis size incompatible with requested rank ', rk
-         call stop_error(msg, module=this_module, procedure='generate_random_initial_condition')
+         call stop_error(msg, this_module, 'generate_random_initial_condition')
       else
          call zero_basis(U)
          do i = 1,rk
@@ -176,7 +182,7 @@ contains
       ! perform QR
       allocate(Utmp(rk), source=U(:rk))
       call qr(Utmp, S, info)
-      call check_info(info, 'qr', module=this_module, procedure='generate_random_initial_condition')
+      call check_info(info, 'qr', this_module, 'generate_random_initial_condition')
       ! perform SVD
       call svd(S(:rk,:rk), S_svd, U_svd, V_svd)
       S(:rk,:rk) = diag(S_svd)
@@ -186,7 +192,7 @@ contains
          call copy(U, Xwrk)
       end block
       write(msg,'(A,I0,A,I0,A)') 'size(U) = [ ', size(U),' ]: filling the first ', rk, ' columns with noise.'
-      call logger%log_information(msg, module=this_module, procedure='generate_random_initial_condition')
+      call logger%log_information(msg, this_module, 'generate_random_initial_condition')
       return
    end subroutine
 

@@ -1,4 +1,4 @@
-module Ginzburg_Landau_RK_Lyapunov
+module Ginzburg_Landau_RKlib
    ! Standard Library.
    use stdlib_stats_distribution_normal, only: normal => rvs_normal
    use stdlib_optval, only : optval
@@ -13,7 +13,7 @@ module Ginzburg_Landau_RK_Lyapunov
    implicit none
 
    private :: this_module
-   character(len=*), parameter :: this_module = 'Ginzburg_Landau_RK_Lyapunov'
+   character(len=*), parameter :: this_module = 'Ginzburg_Landau_RKlib'
    
    public  :: GL_mat
 
@@ -45,6 +45,18 @@ module Ginzburg_Landau_RK_Lyapunov
       procedure, pass(self), public :: rmatvec => adjoint_solver_lyap
    end type RK_lyapunov
 
+   !------------------------------
+   !-----     RK RICCATI     -----
+   !------------------------------
+
+   type, extends(abstract_linop_rdp), public :: RK_riccati
+      real(wp) :: tau ! Integration time.
+   contains
+      private
+      procedure, pass(self), public :: matvec => direct_solver_ricc
+      procedure, pass(self), public :: rmatvec => direct_solver_ricc
+   end type RK_riccati
+
 contains
 
    !-----     TYPE-BOUND PROCEDURE FOR MATRICES     -----
@@ -61,6 +73,8 @@ contains
       select type(vec)
       type is(state_matrix)
          alpha = dot_product(self%state, weight_flat*vec%state)
+      class default
+         call stop_error('vec must be a state_matrix', this_module, 'dot')
       end select
       return
    end function matrix_dot
@@ -85,6 +99,8 @@ contains
       select type(vec)
       type is(state_matrix)
          self%state = alpha*self%state + beta*vec%state
+      class default
+         call stop_error('vec must be a state_matrix', this_module, 'axpby')
       end select
       return
    end subroutine matrix_axpby
@@ -206,6 +222,32 @@ contains
       return
    end subroutine adjoint_rhs_lyap
 
+   subroutine rhs_ricc(me, t, x_flat, f_flat)
+      ! Time-integrator.
+      class(rk_class), intent(inout)             :: me
+      ! Current time.
+      real(wp),        intent(in)                :: t
+      ! State vector.
+      real(wp),        dimension(:), intent(in)  :: x_flat
+      ! Time-derivative.
+      real(wp),        dimension(:), intent(out) :: f_flat
+
+      ! internals
+      real(wp),        dimension(N,N)  :: X, AX, XAH
+
+      f_flat = 0.0_wp
+      AX = 0.0_wp; XAH = 0.0_wp;
+      X = reshape(x_flat, [N,N])
+      ! A @ X
+      call GL_mat( AX, X,             adjoint = .false., transpose = .false.)
+      ! build ( A @ X.T ).T = X @ A.T
+      call GL_mat(XAH, transpose(X),  adjoint = .false., transpose = .true.)
+      ! construct Lyapunov equation
+      f_flat = reshape(AX + XAH + CTQcCW - matmul(X, matmul(BRinvBTW, X)), [ N**2 ])
+
+      return
+   end subroutine rhs_ricc
+
    !------------------------------------------------------------------------
    !-----     TYPE-BOUND PROCEDURES FOR THE EXPONENTIAL PROPAGATOR     -----
    !------------------------------------------------------------------------
@@ -230,7 +272,11 @@ contains
             call prop%initialize(n=N**2, f=rhs_lyap)
             ! Integrate forward in time.
             call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+         class default
+            call stop_error('vec_out must be a state_matrix', this_module, 'direct_solver_lyap')
          end select
+      class default
+         call stop_error('vec_in must be a state_matrix', this_module, 'direct_solver_lyap')
       end select
       return
    end subroutine direct_solver_lyap
@@ -255,9 +301,42 @@ contains
             call prop%initialize(n=N**2, f=adjoint_rhs_lyap)
             ! Integrate forward in time.
             call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+         class default
+            call stop_error('vec_out must be a state_matrix', this_module, 'adjoint_solver_lyap')
          end select
+      class default
+         call stop_error('vec_in must be a state_matrix', this_module, 'adjoint_solver_lyap')
       end select
       return
    end subroutine adjoint_solver_lyap
 
-end module Ginzburg_Landau_RK_Lyapunov
+   subroutine direct_solver_ricc(self, vec_in, vec_out)
+      ! Linear Operator.
+      class(rk_riccati) ,          intent(inout)  :: self
+      ! Input vector.
+      class(abstract_vector_rdp),  intent(in)  :: vec_in
+      ! Output vector.
+      class(abstract_vector_rdp),  intent(out) :: vec_out
+
+      ! Time-integrator.
+      type(rks54_class) :: prop
+      real(kind=wp)     :: dt = 1.0_wp
+
+      select type(vec_in)
+      type is(state_matrix)
+         select type(vec_out)
+         type is(state_matrix)
+            ! Initialize propagator.
+            call prop%initialize(n=N**2, f=rhs_ricc)
+            ! Integrate forward in time.
+            call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+         class default
+            call stop_error('vec_out must be a state_matrix', this_module, 'direct_solver_ricc')
+         end select
+      class default
+         call stop_error('vec_in must be a state_matrix', this_module, 'direct_solver_ricc')
+      end select
+      return
+   end subroutine direct_solver_ricc
+
+end module Ginzburg_Landau_RKlib

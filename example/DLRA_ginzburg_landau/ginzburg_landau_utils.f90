@@ -20,7 +20,7 @@ module Ginzburg_Landau_Utils
    ! Ginzburg Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators
-   use Ginzburg_Landau_RK_Lyapunov
+   use Ginzburg_Landau_RKlib
 
    implicit none
 
@@ -97,17 +97,17 @@ contains
       Rinv = eye(rk_b)
 
       allocate(mat(N, rk_b), matW(N, rk_b))
-      call get_state(mat(:,1:rk_b), B(1:rk_b), 'initialize_parameters')
+      call get_state(mat(:,:rk_b), B(:rk_b), 'initialize_parameters')
       matW = matmul(mat, weight_mat(:rk_b,:rk_b)) ! incorporate weights
       BBTW = matmul(mat, transpose(matW))
-      BRinvBTW_mat  = matmul(mat, matmul(Rinv, transpose(matW)))
+      BRinvBTW  = matmul(mat, matmul(Rinv, transpose(matW)))
       deallocate(mat, matW)
 
       allocate(mat(N, rk_c), matW(N, rk_c))
-      call get_state(mat(:,1:rk_c), CT(1:rk_c), 'initialize_parameters')
+      call get_state(mat(:,:rk_c), CT(:rk_c), 'initialize_parameters')
       matW = matmul(mat, weight_mat(:rk_c,:rk_c)) ! incorporate weights
       CTCW = matmul(mat, transpose(matW))
-      CTQcCW_mat =  matmul(mat, matmul(Qc, transpose(matW)))
+      CTQcCW =  matmul(mat, matmul(Qc, transpose(matW)))
       deallocate(mat, matW)
 
       print '(A)', ' ----------------------------------------'
@@ -154,6 +154,8 @@ contains
       type is (state_matrix)
          call assert_shape(mat_out, [ N, N ], 'mat_out', this_module, 'get_state:'//trim(procedure))
          mat_out = reshape(state_in(1)%state, [ N, N ])
+      class default
+         call stop_error('state_in must be a state_vector or a state_matrix', this_module, 'get_state')
       end select
       return
    end subroutine get_state
@@ -177,6 +179,8 @@ contains
          call assert_shape(mat_in, [ N, N ], 'mat_in', this_module, 'set_state:'//trim(procedure))
          call zero_basis(state_out)
          state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
+      class default
+         call stop_error('state_out must be a state_vector or a state_matrix', this_module, 'set_state')
       end select
       return
    end subroutine set_state
@@ -200,6 +204,8 @@ contains
          do k = 1, kdim
             call state(k)%rand(ifnorm = normalize)
          end do
+      class default
+         call stop_error('state must be a state_vector or a state_matrix', this_module, 'init_rand')
       end select
       return
    end subroutine init_rand
@@ -255,7 +261,7 @@ contains
 
       if (size(U) < rk) then
          write(msg,'(A,I0)') 'Input krylov basis size incompatible with requested rank ', rk
-         call stop_error(msg, module=this_module, procedure='generate_random_initial_condition')
+         call stop_error(msg, this_module, 'generate_random_initial_condition')
          STOP 1
       else
          call zero_basis(U)
@@ -269,7 +275,7 @@ contains
       ! perform QR
       allocate(Utmp(rk), source=U(:rk))
       call qr(Utmp, S, info)
-      call check_info(info, 'qr', module=this_module, procedure='generate_random_initial_condition')
+      call check_info(info, 'qr', this_module, 'generate_random_initial_condition')
       ! perform SVD
       call svd(S(:rk,:rk), S_svd, U_svd, V_svd)
       S(:rk,:rk) = diag(S_svd)
@@ -279,7 +285,7 @@ contains
          call copy(U, Xwrk)
       end block
       write(msg,'(A,I0,A,I0,A)') 'size(U) = [ ', size(U),' ]: filling the first ', rk, ' columns with noise.'
-      call logger%log_information(msg, module=this_module, procedure='generate_random_initial_condition')
+      call logger%log_information(msg, this_module, 'generate_random_initial_condition')
       return
    end subroutine
 
@@ -332,7 +338,7 @@ contains
       call GL_mat(XAH, transpose(X),  adjoint = adjoint, transpose = .true. )
 
       ! construct Lyapunov equation
-      res = AX + XAH + CTCW + matmul(X, matmul(BRinvBTW, X))
+      res = AX + XAH + CTQcCW - matmul(X, matmul(BRinvBTW, X))
 
    end function CARE
 end module Ginzburg_Landau_Utils

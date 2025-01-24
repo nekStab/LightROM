@@ -257,7 +257,11 @@ contains
          select type(vec_out)
          type is (state_vector)
             call direct_GL(vec_in%state, vec_out%state)
+         class default
+            call stop_error('vec_out must be a state_vector', this_module, 'direct_matvec_GL')
          end select
+      class default
+         call stop_error('vec_in must be a state_vector', this_module, 'direct_matvec_GL')
       end select
       return
    end subroutine direct_matvec_GL
@@ -274,7 +278,11 @@ contains
          select type(vec_out)
          type is (state_vector)
             call adjoint_GL(vec_in%state, vec_out%state)
+         class default
+            call stop_error('vec_out must be a state_vector', this_module, 'adjoint_matvec_GL')
          end select
+      class default
+         call stop_error('vec_in must be a state_vector', this_module, 'adjoint_matvec_GL')
       end select
       return
    end subroutine adjoint_matvec_GL
@@ -305,7 +313,11 @@ contains
             ! Integrate forward in time.
             call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
 
+         class default
+            call stop_error('vec_out must be a state_vector', this_module, 'direct_solver')
          end select
+      class default
+         call stop_error('vec_in must be a state_vector', this_module, 'direct_solver')
       end select
       return
    end subroutine direct_solver
@@ -326,11 +338,17 @@ contains
       type is(state_vector)
          select type(vec_out)
          type is(state_vector)
+
             ! Initialize propagator.
             call prop%initialize(n=2*nx, f=adjoint_rhs)
             ! Integrate forward in time.
             call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+
+         class default
+            call stop_error('vec_out must be a state_vector', this_module, 'adjoint_solver')
          end select
+      class default
+         call stop_error('vec_in must be a state_vector', this_module, 'adjoint_solver')
       end select
       return
    end subroutine adjoint_solver
@@ -373,8 +391,14 @@ contains
                else
                   call A%matvec(vec_in, vec_out)
                end if 
+            class default
+               call stop_error('A must be an exponential_prop', this_module, 'exptA')
             end select
+         class default
+            call stop_error('vec_out must be a state_vector', this_module, 'exptA')
          end select
+      class default
+         call stop_error('vec_in must be a state_vector', this_module, 'exptA')
       end select
 
    end subroutine exptA
@@ -392,25 +416,13 @@ contains
       real(wp),          optional, intent(in)    :: D(:,:)
 
       ! Operator
-      select type (A)
-      type is (GL_operator)
-         allocate(self%A, source=A)
-      end select
+      allocate(self%A, source=A)
       ! Exp prop
-      select type (prop)
-      type is (exponential_prop)
-         allocate(self%prop, source=prop)
-      end select
+      allocate(self%prop, source=prop)
       ! Input
-      select type (B_in)
-      type is (state_vector)
-         allocate(self%B(rk_b), source=B_in(:rk_b))
-      end select
+      allocate(self%B(rk_b), source=B_in(:rk_b))
       ! Output
-      select type (CT_in)
-         type is (state_vector)
-         allocate(self%CT(rk_c), source=CT_in(:rk_c))
-      end select
+      allocate(self%CT(rk_c), source=CT_in(:rk_c))
       ! Throughput
       allocate(self%D(rk_c,rk_b))
       if (present(D)) then
