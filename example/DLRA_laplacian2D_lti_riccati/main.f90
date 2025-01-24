@@ -294,7 +294,7 @@ program demo
                opts = dlra_opts(mode=torder)
                call system_clock(count=clock_start)     ! Start Timer
                call projector_splitting_DLRA_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
-                                                                  & Tend, dt, torder, info, &
+                                                                  & Tend, dt, info, &
                                                                   & exptA=exptA, iftrans=.false., options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
 
@@ -421,7 +421,7 @@ program demo
                opts = dlra_opts(mode=torder)
                call system_clock(count=clock_start)     ! Start Timer
                call projector_splitting_DLRA_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
-                                                                  & Tend, dt, torder, info, &
+                                                                  & Tend, dt, info, &
                                                                   & exptA=exptA, iftrans=.false., options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
 
