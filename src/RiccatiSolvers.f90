@@ -67,7 +67,7 @@ module LightROM_RiccatiSolvers
 
    contains
 
-   subroutine projector_splitting_DLRA_riccati_integrator_rdp(X, A, B, CT, Qc, Rinv, Tend, tau, mode, info, &
+   subroutine projector_splitting_DLRA_riccati_integrator_rdp(X, A, B, CT, Qc, Rinv, Tend, tau, info, &
                                                                & exptA, iftrans, options)
       !! Main driver for the numerical integrator for the matrix-valued differential Riccati equation of the form
       !!
@@ -158,11 +158,9 @@ module LightROM_RiccatiSolvers
       real(wp),                                intent(inout) :: tau
       !! Desired time step. The avtual time-step will be computed such as to reach Tend in an integer number
       !! of steps.
-      integer,                                 intent(in)    :: mode
-      !! Order of time integration. Only 1st (Lie splitting) and 2nd (Strang splitting) orders are implemented.
       integer,                                 intent(out)   :: info
       !! Information flag.
-      procedure(abstract_exptA_rdp), optional                :: exptA
+      procedure(abstract_exptA_rdp)                          :: exptA
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
       logical,                       optional, intent(in)    :: iftrans
       logical                                                :: trans
@@ -176,7 +174,6 @@ module LightROM_RiccatiSolvers
       logical                                                :: converged
       real(wp)                                               :: T
       character(len=128)                                     :: msg
-      procedure(abstract_exptA_rdp), pointer                 :: p_exptA => null()
 
       if (time_lightROM()) call lr_timer%start('DLRA_riccati_integrator_rdp')
 
@@ -191,12 +188,7 @@ module LightROM_RiccatiSolvers
       end if
 
       ! set tolerance
-      
-      if (present(exptA)) then
-         p_exptA => exptA
-      else
-         p_exptA => k_exptA_rdp
-      endif
+     !tol = opts%tol
 
       ! Initialize
       T         = 0.0_wp
@@ -208,16 +200,15 @@ module LightROM_RiccatiSolvers
       if ( opts%mode > 2 ) then
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
-         call logger%log_message(msg, module=this_module, procedure='DLRA')
+         call logger%log_message(msg, module=this_module, procedure='DLRA_main')
       else if ( opts%mode < 1 ) then
          write(msg, *) "Invalid time-integration order specified: ", opts%mode
-         call stop_error(msg, module=this_module, &
-                           & procedure='DLRA')
+         call stop_error(msg, module=this_module, procedure='DLRA_main')
       endif
 
       dlra : do istep = 1, nsteps
          ! dynamical low-rank approximation solver
-         call projector_splitting_DLRA_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, opts%mode, info, p_exptA, trans)
+         call projector_splitting_DLRA_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, opts%mode, info, exptA, trans)
          T = T + tau
          !> here we can do some checks such as whether we have reached steady state
          if ( mod(istep,opts%chkstep) .eq. 0 ) then
