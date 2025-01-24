@@ -68,7 +68,6 @@ contains
       Bwrk = matmul(Bdata, Rinv)
       BRinvBTdata = matmul( Bwrk, transpose(Bdata) )
 
-      return
    end subroutine initialize_problem
 
    !--------------------------------------------------------------------
@@ -96,7 +95,6 @@ contains
       class default
          call stop_error('state must be a state_vector or a state_matrix', this_module, 'get_state')
       end select
-      return
    end subroutine get_state
 
    subroutine set_state(state_out, mat_in, procedure)
@@ -121,7 +119,6 @@ contains
       class default
          call stop_error('state must be a state_vector or a state_matrix', this_module, 'set_state')
       end select
-      return
    end subroutine set_state
 
    subroutine init_rand(state, ifnorm)
@@ -146,7 +143,6 @@ contains
       class default
          call stop_error('state must be a state_vector or a state_matrix', this_module, 'init_rand')
       end select
-      return
    end subroutine init_rand
 
    !--------------------------------------
@@ -193,7 +189,6 @@ contains
       end block
       write(msg,'(A,I0,A,I0,A)') 'size(U) = [ ', size(U),' ]: filling the first ', rk, ' columns with noise.'
       call logger%log_information(msg, this_module, 'generate_random_initial_condition')
-      return
    end subroutine
 
    !------------------------
@@ -262,7 +257,6 @@ contains
       Ginv = matmul(UR(  1:N,  :), transpose(UR(1:N,:))) + matmul(UI(  1:N,  :), transpose(UI(1:N,:)))
       X    = matmul(F, inv(Ginv))
 
-      return
    end subroutine solve_riccati
 
 end module Laplacian2D_LTI_Riccati_Utils

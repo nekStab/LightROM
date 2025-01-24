@@ -128,7 +128,6 @@ contains
       vec_out(1:nx)      = du
       vec_out(nx+1:2*nx) = dv
 
-      return
    end subroutine direct_GL
 
    !-----------------------------------------------------------
@@ -202,7 +201,6 @@ contains
       vec_out(1:nx)      = du
       vec_out(nx+1:2*nx) = dv
 
-      return
    end subroutine adjoint_GL
 
    !--------------------------------------
@@ -222,7 +220,6 @@ contains
       f = 0.0_wp
       call direct_GL(x, f)
 
-      return
    end subroutine rhs
 
    subroutine adjoint_rhs(me, t, x, f)
@@ -238,7 +235,6 @@ contains
       f = 0.0_wp
       call adjoint_GL(x, f)
 
-      return
    end subroutine adjoint_rhs
 
    !-------------------------------------------------------------
@@ -263,7 +259,6 @@ contains
       class default
          call stop_error('vec_in must be a state_vector', this_module, 'direct_matvec_GL')
       end select
-      return
    end subroutine direct_matvec_GL
 
    subroutine adjoint_matvec_GL(self, vec_in, vec_out)
@@ -284,7 +279,6 @@ contains
       class default
          call stop_error('vec_in must be a state_vector', this_module, 'adjoint_matvec_GL')
       end select
-      return
    end subroutine adjoint_matvec_GL
 
    !------------------------------------------------------------------------
@@ -319,7 +313,6 @@ contains
       class default
          call stop_error('vec_in must be a state_vector', this_module, 'direct_solver')
       end select
-      return
    end subroutine direct_solver
 
    subroutine adjoint_solver(self, vec_in, vec_out)
@@ -350,7 +343,6 @@ contains
       class default
          call stop_error('vec_in must be a state_vector', this_module, 'adjoint_solver')
       end select
-      return
    end subroutine adjoint_solver
 
    !--------------------------------------
@@ -400,7 +392,6 @@ contains
       class default
          call stop_error('vec_in must be a state_vector', this_module, 'exptA')
       end select
-
    end subroutine exptA
 
    !--------------------------------------------------------
@@ -431,7 +422,6 @@ contains
       else
          self%D = 0.0_wp
       end if
-      return
    end subroutine initialize_lti_system
 
 end module Ginzburg_Landau_Operators

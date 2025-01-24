@@ -113,7 +113,6 @@ contains
    subroutine zero(self)
       class(state_vector), intent(inout) :: self
       self%state = 0.0_wp
-      return
    end subroutine zero
 
    real(wp) function dot(self, vec) result(alpha)
@@ -126,20 +125,17 @@ contains
       class default
          call stop_error('vec must be a state_vector', this_module, 'dot')
       end select
-      return
    end function dot
 
    integer function get_size(self) result(N)
      class(state_vector), intent(in) :: self
      N = 2*nx
-     return
    end function get_size
 
    subroutine scal(self, alpha)
       class(state_vector), intent(inout) :: self
       real(wp),            intent(in)    :: alpha
       self%state = self%state * alpha
-      return
    end subroutine scal
 
    subroutine axpby(self, alpha, vec, beta)
@@ -152,7 +148,6 @@ contains
       class default
          call stop_error('vec must be a state_vector', this_module, 'axpby')
       end select
-      return
    end subroutine axpby
 
    subroutine rand(self, ifnorm)
@@ -170,7 +165,6 @@ contains
          alpha = self%norm()
          call self%scal(1.0/alpha)
       endif
-      return
    end subroutine rand
 
    !------------------------------------------------------
@@ -260,7 +254,6 @@ contains
       class default
          call stop_error('U must be a state_vector', this_module, 'initialize_LR_state')
       end select
-      return
    end subroutine initialize_LR_state
 
 end module Ginzburg_Landau_Base

@@ -336,8 +336,7 @@ contains
             print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_D ) ', is, '-', ie, ( svals(j), j = is, ie )
          end do
       end do
-      
-      return
+
    end subroutine run_lyap_DLRArk_test
 
    !
@@ -412,7 +411,6 @@ contains
       print *, ''
       print '(A,F16.12)', '  |  X_RK  |/N = ', norm2(Xref)/N
       print '(A,F16.12)', '  | res_RK |/N = ', norm2(CARE(Xref, CTQcCW, BRinvBTW, adjoint))/N
-      return
    end subroutine run_ricc_reference_RK
 
    subroutine run_ricc_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
@@ -518,7 +516,6 @@ contains
             print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_D ) ', is, '-', ie, ( svals(j), j = is, ie )
          end do
       end if
-
    end subroutine run_ricc_DLRA_test
 
 end module Ginzburg_Landau_Tests

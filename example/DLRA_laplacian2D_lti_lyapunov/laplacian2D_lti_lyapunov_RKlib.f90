@@ -57,8 +57,7 @@ contains
 
       f = 0.0_wp
       call laplacian(f(1:N), x(1:N))
-      
-      return
+
    end subroutine rhs
 
    subroutine direct_solver_vec(self, vec_in, vec_out)
@@ -89,7 +88,6 @@ contains
       class default
          call stop_error('vec_in must be a state_vector', this_module, 'direct_solver_vec')
       end select
-      return
    end subroutine direct_solver_vec
 
    !-----    Lyapunov RHS for RKlib    -----
@@ -150,7 +148,6 @@ contains
          call stop_error('vec_in must be a state_matrix', this_module, 'direct_solver_mat')
       end select
 
-      return
    end subroutine direct_solver_mat
 
 

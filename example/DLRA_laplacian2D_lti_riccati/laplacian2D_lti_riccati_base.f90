@@ -95,7 +95,6 @@ contains
    subroutine vector_zero(self)
       class(state_vector), intent(inout) :: self
       self%state = 0.0_wp
-      return
    end subroutine vector_zero
 
    real(wp) function vector_dot(self, vec) result(alpha)
@@ -104,21 +103,20 @@ contains
       select type(vec)
       type is (state_vector)
          alpha = dot_product(self%state, vec%state)
+      class default
+         call stop_error('vec must be a state_vector', this_module, 'vector_dot')
       end select
-      return
    end function vector_dot
 
    integer function vector_get_size(self) result(ntot)
      class(state_vector), intent(in) :: self
      ntot = nx
-     return
    end function vector_get_size
 
    subroutine vector_scal(self, alpha)
       class(state_vector), intent(inout) :: self
       real(wp),            intent(in)    :: alpha
       self%state = self%state * alpha
-      return
    end subroutine vector_scal
 
    subroutine vector_axpby(self, alpha, vec, beta)
@@ -128,8 +126,9 @@ contains
       select type(vec)
       type is (state_vector)
          self%state = alpha*self%state + beta*vec%state
+      class default
+         call stop_error('vec must be a state_vector', this_module, 'vector_axpby')
       end select
-      return
    end subroutine vector_axpby
 
    subroutine vector_rand(self, ifnorm)
@@ -144,7 +143,6 @@ contains
          alpha = self%norm()
          call self%scal(1.0/alpha)
       endif
-      return
    end subroutine vector_rand
 
    !-----     TYPE-BOUND PROCEDURE FOR MATRICES     -----
@@ -152,7 +150,6 @@ contains
    subroutine matrix_zero(self)
       class(state_matrix), intent(inout) :: self
       self%state = 0.0_wp
-      return
    end subroutine matrix_zero
 
    real(wp) function matrix_dot(self, vec) result(alpha)
@@ -160,22 +157,21 @@ contains
       class(abstract_vector_rdp), intent(in) :: vec
       select type(vec)
       type is(state_matrix)
-          alpha = dot_product(self%state, vec%state)
+         alpha = dot_product(self%state, vec%state)
+      class default
+         call stop_error('vec must be a state_matrix', this_module, 'matrix_dot')
       end select
-      return
    end function matrix_dot
 
    integer function matrix_get_size(self) result(N)
      class(state_matrix), intent(in) :: self
      N = N
-     return
    end function matrix_get_size
 
    subroutine matrix_scal(self, alpha)
       class(state_matrix), intent(inout) :: self
       real(wp),            intent(in)    :: alpha
       self%state = self%state * alpha
-      return
    end subroutine matrix_scal  
 
    subroutine matrix_axpby(self, alpha, vec, beta)
@@ -184,9 +180,10 @@ contains
       real(wp),                   intent(in)    :: alpha, beta
       select type(vec)
       type is(state_matrix)
-          self%state = alpha*self%state + beta*vec%state
+         self%state = alpha*self%state + beta*vec%state
+      class default
+         call stop_error('vec must be a state_matrix', this_module, 'matrix_axpby')
       end select
-      return
    end subroutine matrix_axpby
 
    subroutine matrix_rand(self, ifnorm)
@@ -204,7 +201,6 @@ contains
          alpha = self%norm()
          call self%scal(1.0/alpha)
       endif
-      return
    end subroutine matrix_rand  
 
    !-----------------------------------------------------------------------
@@ -288,8 +284,9 @@ contains
             call check_info(info, 'qr', this_module, 'initialize_LR_state')
             call copy(self%U(m+1:), Utmp)
          end if
+      class default
+         call stop_error('U must be a state_vector', this_module, 'initialize_LR_state')
       end select
-      return
    end subroutine initialize_LR_state
 
 end module Laplacian2D_LTI_Riccati_Base

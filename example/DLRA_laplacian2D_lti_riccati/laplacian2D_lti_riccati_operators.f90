@@ -61,7 +61,6 @@ contains
       class default
          call stop_error('vec_in must be a state_vector', this_module, 'direct_matvec_laplace')
       end select
-      return
    end subroutine direct_matvec_laplace
 
    !---------------------------
@@ -85,7 +84,6 @@ contains
          A(i, i + nx) = 1.0_wp/dx2
          A(i + nx, i) = 1.0_wp/dx2
       end do
-      return
    end subroutine build_operator
 
    subroutine laplacian(vec_out, vec_in)
@@ -124,8 +122,7 @@ contains
       end do
       in = N
       vec_out(in)       = ( vec_in(in - nx) + vec_in(in - 1) - 4*vec_in(in)                                   ) / dx2
-         
-      return
+      
    end subroutine laplacian
 
    subroutine laplacian_mat(flat_mat_out, flat_mat_in, transpose)
@@ -161,8 +158,7 @@ contains
 
       !> Reshape for output
       flat_mat_out = reshape(dmat, shape(flat_mat_in))
-       
-      return
+
    end subroutine laplacian_mat
 
    !--------------------------------------
@@ -234,7 +230,6 @@ contains
       else
          self%D = 0.0_wp
       end if
-      return
    end subroutine initialize_lti_system
 
 end module Laplacian2D_LTI_Riccati_Operators

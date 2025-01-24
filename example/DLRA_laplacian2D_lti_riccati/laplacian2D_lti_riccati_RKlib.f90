@@ -57,7 +57,6 @@ contains
       f = 0.0_wp
       call laplacian(f(1:N), x(1:N))
       
-      return
    end subroutine rhs
 
    subroutine direct_solver_vec(self, vec_in, vec_out)
@@ -88,7 +87,6 @@ contains
       class default
          call stop_error('vec_in must be a state_vector', this_module, 'direct_solver_vec')
       end select
-      return
    end subroutine direct_solver_vec
 
     !-----    Laplacian Riccati RHS for RKlib    -----
@@ -118,7 +116,6 @@ contains
       xm = reshape(x, shape(xm))
       f(1:N**2) = dv + dvT + CTQcC - reshape(matmul(xm, matmul(BRinvBTdata,xm)), [N**2])
 
-      return
    end subroutine rhs_riccati
 
    subroutine direct_solver_riccati_mat(self, vec_in, vec_out)
@@ -147,7 +144,6 @@ contains
          call stop_error('vec_in must be a state_matrix', this_module, 'direct_solver_riccati_mat')
       end select
 
-      return
    end subroutine direct_solver_riccati_mat
 
 end module Laplacian2D_LTI_Riccati_RKlib

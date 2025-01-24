@@ -40,7 +40,6 @@ contains
       !> Construct mesh.
       x = linspace(-L/2, L/2, nx)
 
-      return
    end subroutine initialize_mesh
 
    !--------------------------------------------------------------------
@@ -68,7 +67,6 @@ contains
       class default
          call stop_error('state must be a state_vector or a state_matrix', this_module, 'get_state')
       end select
-      return
    end subroutine get_state
 
    subroutine set_state(state_out, mat_in, procedure)
@@ -93,7 +91,6 @@ contains
       class default
          call stop_error('state must be a state_vector or a state_matrix', this_module, 'set_state')
       end select
-      return
    end subroutine set_state
 
    subroutine init_rand(state, ifnorm)
@@ -118,7 +115,6 @@ contains
       class default
          call stop_error('state must be a state_vector or a state_matrix', this_module, 'init_rand')
       end select
-      return
    end subroutine init_rand
 
    !--------------------------------------
@@ -164,7 +160,6 @@ contains
       end block
       write(msg,'(A,I0,A,I0,A)') 'size(U) = [ ', size(U),' ]: filling the first ', rk, ' columns with noise.'
       call logger%log_information(msg, this_module, 'generate_random_initial_condition')
-      return
    end subroutine
 
    !------------------------
@@ -193,7 +188,6 @@ contains
          A(i, i + nx) = 1.0_wp/dx2
          A(i + nx, i) = 1.0_wp/dx2
       end do
-      return
    end subroutine build_operator
 
    subroutine reconstruct_TQ(T, Q, A, D, E, tw)
@@ -268,7 +262,6 @@ contains
       Y = matmul(Z, matmul(W, transpose(Z)))
       X = matmul(Q, matmul(Y, transpose(Q)))
 
-      return
    end subroutine solve_lyapunov
    
 end module Laplacian2D_LTI_Lyapunov_Utils

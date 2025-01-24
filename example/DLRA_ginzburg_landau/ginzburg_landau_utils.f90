@@ -157,7 +157,6 @@ contains
       class default
          call stop_error('state_in must be a state_vector or a state_matrix', this_module, 'get_state')
       end select
-      return
    end subroutine get_state
 
    subroutine set_state(state_out, mat_in, procedure)
@@ -182,7 +181,6 @@ contains
       class default
          call stop_error('state_out must be a state_vector or a state_matrix', this_module, 'set_state')
       end select
-      return
    end subroutine set_state
 
    subroutine init_rand(state, ifnorm)
@@ -207,7 +205,6 @@ contains
       class default
          call stop_error('state must be a state_vector or a state_matrix', this_module, 'init_rand')
       end select
-      return
    end subroutine init_rand
 
    subroutine reconstruct_solution_X(X, LR_X)
@@ -221,7 +218,6 @@ contains
       call get_state(Uwrk, LR_X%U(1:LR_X%rk), 'reconstruct_solution_X')
       X = matmul(matmul(Uwrk, matmul(LR_X%S(1:LR_X%rk,1:LR_X%rk), transpose(Uwrk))), weight_mat)
 
-      return
    end subroutine reconstruct_solution_X
 
    subroutine reconstruct_solution_US(X, U, S)
@@ -239,7 +235,6 @@ contains
       call get_state(Uwrk, U, 'reconstruct_solution_US')
       X = matmul(matmul(Uwrk, matmul(S, transpose(Uwrk))), weight_mat)
 
-      return
    end subroutine reconstruct_solution_US
 
    !------------------------------------
@@ -286,7 +281,6 @@ contains
       end block
       write(msg,'(A,I0,A,I0,A)') 'size(U) = [ ', size(U),' ]: filling the first ', rk, ' columns with noise.'
       call logger%log_information(msg, this_module, 'generate_random_initial_condition')
-      return
    end subroutine
 
    !-------------------------

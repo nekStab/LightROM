@@ -64,7 +64,6 @@ contains
    subroutine matrix_zero(self)
       class(state_matrix), intent(inout) :: self
       self%state = 0.0_wp
-      return
    end subroutine matrix_zero
 
    real(wp) function matrix_dot(self, vec) result(alpha)
@@ -76,20 +75,17 @@ contains
       class default
          call stop_error('vec must be a state_matrix', this_module, 'matrix_dot')
       end select
-      return
    end function matrix_dot
 
    integer function matrix_get_size(self) result(N)
      class(state_matrix), intent(in) :: self
      N = N**2
-     return
    end function matrix_get_size
 
    subroutine matrix_scal(self, alpha)
       class(state_matrix), intent(inout) :: self
       real(wp),            intent(in)    :: alpha
       self%state = self%state * alpha
-      return
    end subroutine matrix_scal  
 
    subroutine matrix_axpby(self, alpha, vec, beta)
@@ -102,7 +98,6 @@ contains
       class default
          call stop_error('vec must be a state_matrix', this_module, 'matrix_axpby')
       end select
-      return
    end subroutine matrix_axpby
 
    subroutine matrix_rand(self, ifnorm)
@@ -120,7 +115,6 @@ contains
          alpha = self%norm()
          call self%scal(1.0/alpha)
       endif
-      return
    end subroutine matrix_rand
 
    subroutine GL_mat(mat_out, mat_in, adjoint, transpose)
@@ -164,8 +158,7 @@ contains
             end do
          end if
       endif
-      
-      return
+
    end subroutine GL_mat
 
    !--------------------------------------
@@ -194,7 +187,6 @@ contains
       ! construct Lyapunov equation
       f_flat = reshape(AX + XAH + BBTW, [ N**2 ])
 
-      return
    end subroutine rhs_lyap
 
    subroutine adjoint_rhs_lyap(me, t, x_flat, f_flat)
@@ -219,7 +211,6 @@ contains
       ! construct Lyapunov equation
       f_flat = reshape(AHX + XA +  CTCW, [ N**2 ])
 
-      return
    end subroutine adjoint_rhs_lyap
 
    subroutine rhs_ricc(me, t, x_flat, f_flat)
@@ -245,7 +236,6 @@ contains
       ! construct Lyapunov equation
       f_flat = reshape(AX + XAH + CTQcCW - matmul(X, matmul(BRinvBTW, X)), [ N**2 ])
 
-      return
    end subroutine rhs_ricc
 
    !------------------------------------------------------------------------
@@ -278,7 +268,6 @@ contains
       class default
          call stop_error('vec_in must be a state_matrix', this_module, 'direct_solver_lyap')
       end select
-      return
    end subroutine direct_solver_lyap
 
    subroutine adjoint_solver_lyap(self, vec_in, vec_out)
@@ -307,7 +296,6 @@ contains
       class default
          call stop_error('vec_in must be a state_matrix', this_module, 'adjoint_solver_lyap')
       end select
-      return
    end subroutine adjoint_solver_lyap
 
    subroutine direct_solver_ricc(self, vec_in, vec_out)
