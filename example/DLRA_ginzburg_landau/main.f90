@@ -58,7 +58,7 @@ program demo
    real(wp)                                  :: X_out(N,N)
 
    ! Reference solutions (BS & RK)
-   real(wp)                                  :: Xref_BS(N,N)
+   real(wp)                                  :: Xref(N,N)
    real(wp)                                  :: Xref_RK(N,N)
 
    ! IO
@@ -84,15 +84,22 @@ program demo
    !--------------------------------
    ! Define which examples to run:
    !
-   logical, parameter :: adjoint = .false.
+   logical, parameter :: if_lyapunov = .false.
    !
-   ! Adjoint = .true.:      Solve the adjoint Lyapunov equation:  0 = A.T X + X A + C.T @ C @ W
+   ! if_lyapunov = .true.:  Solve the Lyapunov equation:   0 = A @ X + X @ A.T + Q
+   !
+   ! if_lyapunov = .false.: Solve the Riccati equation:    0 = A @ X + X @ A.T + X @ B @ @ R^{-1} @ B.T @ W @ X + Q
+   !
+   logical, parameter :: adjoint = .true. !.false.
+   ! Only considered if if_lyapunov = .true.
+   !
+   ! Adjoint = .true.:      Solve the adjoint Lyapunov equation:  0 = A.T @ X + X @ A + C.T @ C @ W
    !     The solution to this equation is called the observability Gramian Y.
    !
-   ! Adjoint = .false.:     Solve the direct Lyapunov equation:   0 = A X + X A.T + B @ B.T @ W
+   ! Adjoint = .false.:     Solve the direct Lyapunov equation:   0 = A @ X + X @ A.T + B @ B.T @ W
    !     The solution to this equation is called the controllability Gramian X.
    !
-   logical, parameter :: main_run = .true.
+   logical, parameter :: main_run = .false.
    !
    ! Run the computation instead of the test
    !
@@ -150,17 +157,28 @@ program demo
    print *, ''
    print *, '                   with mu(x) = mu_0 * x + mu_2 * x^2'
    print *, ''
-   print *, '                    Algebraic Lyapunov equation:'
-   print *, '                    0 = A @ X + X @ A.T + B @ B.T @ W'
-   print *, ''               
-   print *, '                  Differential Lyapunov equation:'
-   print *, '                 \dot{X} = A @ X + X @ A.T + B @ B.T @ W'
-   print *, ''
-   print '(13X,A,I4,"x",I4)', 'Complex problem size:         ', nx, nx
-   print '(13X,A,I4,"x",I4)', 'Equivalent real problem size: ', N, N
-   print *, ''
-   print *, '            Initial condition: rank(X0) =', rk_X0
-   print *, '            Inhomogeneity:     rank(B)  =', rk_B
+   if (if_lyapunov) then
+      print *, ''
+      print '(13X,A,I4,"x",I4)', 'Complex problem size:          ', nx, nx
+      print '(13X,A,I4,"x",I4)', 'Equivalent real problem size:  ', N, N
+      print *, ''
+      print *, '            Initial condition: rank(X0)  =', rk_X0
+      print *, '            Inhomogeneity:     rank(B)   =', rk_B
+      print *, '            Inhomogeneity:     rank(C.T) =', rk_C
+   else
+      print *, '                     Algebraic Riccati equation:'
+      print *, '     0 = A.T @ X + X @ A - X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
+      print *, ''               
+      print *, '                   Differential Riccati equation:'
+      print *, '   \dot{X} = A.T @ X + X @ A - X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
+      print *, ''
+      print '(13X,A,I4,"x",I4)', 'Complex problem size:                       ', nx, nx
+      print '(13X,A,I4,"x",I4)', 'Equivalent real problem size:               ', N, N
+      print *, ''
+      print *, '            Initial condition: rank(X0)               =', rk_X0
+      print *, '            Nonlinearity:      rank(B @ R^{-1} @ B.T) =', rk_b
+      print *, '            Inhomogeneity:     rank(C.T @ Qc @ C)     =', rk_C
+   end if
    print *, ''
    print *, '#########################################################################'
    print *, ''
@@ -189,21 +207,30 @@ program demo
    end if
 
    print *, ''
-   print *, 'Check residual computation with Bartels-Stuart solution:'
-   if (adjoint) then
-      oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Observability_Yref_BS_W.npy'
+   if (if_lyapunov) then
+      print *, 'Check residual computation with Bartels-Stuart solution:'
+      if (adjoint) then
+         oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Observability_Yref_BS_W.npy'
+      else
+         oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Controllability_Xref_BS_W.npy'
+      end if
    else
-      oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Controllability_Xref_BS_W.npy'
+      print *, 'Check residual computation with Schur decomposition method:'
+      oname = './example/DLRA_ginzburg_landau/CGL_Riccati_Pref_Schur_W.npy'
    end if
    call load_npy(oname, U_load)
-   Xref_BS = U_load
+   Xref = U_load
    
    print *, ''
-   print '(A,F16.12)', '  |  X_BS  |/N = ', norm2(Xref_BS)/N
-   print '(A,F16.12)', '  | res_BS |/N = ', norm2(CALE(Xref_BS, adjoint))/N
+   print '(A,F16.12)', '  |  X_BS  |/N = ', norm2(Xref)/N
+   if (if_lyapunov) then
+      print '(A,F16.12)', '  | res_BS |/N = ', norm2(CALE(Xref, adjoint))/N
+   else
+      print '(A,F16.12)', '  | res_BS |/N = ', norm2(CARE(Xref, CTQcCW, BRinvBTW, adjoint))/N
+   end if
    print *, ''
    ! compute svd
-   svals = svdvals(Xref_BS)
+   svals = svdvals(Xref)
    print *, 'SVD X_BS:'
    do i = 1, ceiling(60.0/irow)
       is = (i-1)*irow+1; ie = i*irow
@@ -266,7 +293,7 @@ program demo
       print *, '#########################################################################'
       print *, ''
 
-      call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+      call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
 
       print *, ''
       print *, '#########################################################################'
@@ -276,7 +303,7 @@ program demo
       print *, '#########################################################################'
       print *, ''
 
-      call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
+      call run_lyap_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
 
       print *, ''
       print *, '#########################################################################'
@@ -348,13 +375,20 @@ program demo
       print *, '#########################################################################'
       print *, ''
 
-      if (run_fixed_rank_short_integration_time_test) then
-         ! Run RK integrator for the Lyapunov equation
-         T_RK  = 0.01_wp
-         nstep = 10
-         iref  = 5
-
-         call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+      if (run_fixed_rank_short_integration_time_test) then         
+         if (if_lyapunov) then
+            T_RK  = 0.01_wp
+            nstep = 10
+            iref  = 5
+            ! Run RK integrator for the Lyapunov equation
+            call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+         else
+            T_RK  = 0.01_wp
+            nstep = 10
+            iref  = 5
+            ! Run RK integrator for the Riccati equation
+            call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+         end if
       else
          print *, 'Skip.'
          print *, ''
@@ -372,25 +406,46 @@ program demo
       print *, ''
 
       if (run_fixed_rank_short_integration_time_test) then
-         ! DLRA with fixed rank
-         Tend = T_RK/nstep*iref
-         rkv = [ 10, 12, 16 ]
-         if (short_test) then
-            dtv = logspace(-3.0_wp, -3.0_wp, 1, 10)
+         if (if_lyapunov) then
+            Tend = T_RK/nstep*iref
+            rkv = [ 10, 12, 16 ]
+            if (short_test) then
+               dtv = logspace(-3.0_wp, -3.0_wp, 1, 10)
+            else
+               dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
+            end if
+            dtv = dtv(size(dtv):1:-1) ! reverse vector
+            TOv  = [ 1, 2 ] 
+            nprint = 16
+            if_save_output = .false.
+            
+            ! DLRA with fixed rank
+            call run_lyap_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
          else
-            dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
+            Tend = T_RK/nstep*iref
+            rkv = [ 6, 10, 14 ]
+            if (short_test) then
+               dtv = logspace(-3.0_wp, -3.0_wp, 1, 10)
+            else
+               dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
+            end if
+            dtv = dtv(size(dtv):1:-1) ! reverse vector
+            TOv  = [ 1 ] 
+            nprint = 16
+            if_save_output = .false.
+            
+            ! DLRA with fixed rank
+            call run_ricc_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
          end if
-         dtv = dtv(size(dtv):1:-1) ! reverse vector
-         TOv  = [ 1, 2 ] 
-         nprint = 16
-         if_save_output = .false.
-
-         call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
       else
          print *, 'Skip.'
          print *, ''
       end if
-      call reset_lyapsolver()
+      if (if_lyapunov) then
+         call reset_lyapsolver()
+      !else
+      !   call reset_riccsolver()
+      end if
 
       ! Reset timers
       call global_lightROM_timer%stop('Short time: DLRA')
@@ -406,14 +461,24 @@ program demo
       print *, ''
       
       if (run_fixed_rank_long_integration_time_test .or. &
-      & run_rank_adaptive_long_integration_time_test) then
-         ! Run RK integrator for the Lyapunov equation
-         T_RK  = 50.0_wp
-         nstep = 20
-         iref  = 20
+     & run_rank_adaptive_long_integration_time_test) then
+         if (if_lyapunov) then
+            T_RK  = 50.0_wp
+            nstep = 20
+            iref  = 20
 
-         call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
-         call reset_lyapsolver()
+            ! Run RK integrator for the Lyapunov equation
+            call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+            call reset_lyapsolver()
+         else
+            T_RK  = 50.0_wp
+            nstep = 20
+            iref  = 20
+            
+            ! Run RK integrator for the Lyapunov equation
+            call run_ricc_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+            !call reset_riccsolver()
+         end if
       else
          print *, 'Skip.'
          print *, ''
@@ -431,21 +496,39 @@ program demo
       print *, ''
 
       if (run_fixed_rank_long_integration_time_test) then
-         ! DLRA with fixed rank
-         Tend = T_RK/nstep*iref
-         rkv = [ 10, 20, 40 ]
-         if (short_test) then
-            dtv = logspace(-1.0_wp, 0.0_wp, 2, 10)
+         if (if_lyapunov) then
+            Tend = T_RK/nstep*iref
+            rkv = [ 10, 20, 40 ]
+            if (short_test) then
+               dtv = logspace(-1.0_wp, 0.0_wp, 2, 10)
+            else
+               dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+            end if
+            dtv = dtv(size(dtv):1:-1) ! reverse vector
+            TOv  = [ 1, 2 ] 
+            nprint = 40
+            if_save_output = .true.
+            
+            ! DLRA with fixed rank
+            call run_lyap_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
+            call reset_lyapsolver()
          else
-            dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+            Tend = T_RK/nstep*iref
+            rkv = [ 10, 20, 40 ]
+            if (short_test) then
+               dtv = logspace(-1.0_wp, 0.0_wp, 2, 10)
+            else
+               dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+            end if
+            dtv = dtv(size(dtv):1:-1) ! reverse vector
+            TOv  = [ 1 ] 
+            nprint = 40
+            if_save_output = .true.
+            
+            ! DLRA with fixed rank
+            call run_ricc_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
+            !call reset_riccsolver()
          end if
-         dtv = dtv(size(dtv):1:-1) ! reverse vector
-         TOv  = [ 1, 2 ] 
-         nprint = 40
-         if_save_output = .true.
-
-         call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
-         call reset_lyapsolver()
       else
          print *, 'Skip.'
          print *, ''
@@ -463,21 +546,41 @@ program demo
       print *, ''
 
       if (run_rank_adaptive_long_integration_time_test) then
-         ! DLRA with adaptive rank
-         if (short_test) then
-            dtv = logspace(-3.0_wp, 0.0_wp, 2, 10)
-            tolv = [ 1e-2_wp, 1e-6_wp ]
+         if (if_lyapunov) then
+            if (short_test) then
+               dtv = logspace(-3.0_wp, 0.0_wp, 2, 10)
+               tolv = [ 1e-2_wp, 1e-6_wp ]
+            else
+               dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+               tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
+            end if
+            dtv = dtv(size(dtv):1:-1) ! reverse vector
+            TOv  = [ 1, 2 ]
+            nprint = 60
+            if_save_output = .true.
+            
+            ! DLRA with adaptive rank
+            call run_lyap_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
+            call reset_lyapsolver()
          else
-            dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
-            tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
+            print *, 'Riccati rank-adaptive not implemented at this time'
+            STOP 87
+            if (short_test) then
+               dtv = logspace(-3.0_wp, 0.0_wp, 2, 10)
+               tolv = [ 1e-2_wp, 1e-6_wp ]
+            else
+               dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+               tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
+            end if
+            dtv = dtv(size(dtv):1:-1) ! reverse vector
+            TOv  = [ 1, 2 ]
+            nprint = 60
+            if_save_output = .true.
+            
+            ! DLRA with adaptive rank
+            !call run_ricc_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
+            !call reset_riccsolver()
          end if
-         dtv = dtv(size(dtv):1:-1) ! reverse vector
-         TOv  = [ 1, 2 ]
-         nprint = 60
-         if_save_output = .true.
-
-         call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
-         call reset_lyapsolver()
       else
          print *, 'Skip.'
          print *, ''
