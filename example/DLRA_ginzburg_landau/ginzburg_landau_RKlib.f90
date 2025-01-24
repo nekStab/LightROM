@@ -74,7 +74,7 @@ contains
       type is(state_matrix)
          alpha = dot_product(self%state, weight_flat*vec%state)
       class default
-         call stop_error('vec must be a state_matrix', this_module, 'dot')
+         call stop_error('vec must be a state_matrix', this_module, 'matrix_dot')
       end select
       return
    end function matrix_dot
@@ -100,7 +100,7 @@ contains
       type is(state_matrix)
          self%state = alpha*self%state + beta*vec%state
       class default
-         call stop_error('vec must be a state_matrix', this_module, 'axpby')
+         call stop_error('vec must be a state_matrix', this_module, 'matrix_axpby')
       end select
       return
    end subroutine matrix_axpby
