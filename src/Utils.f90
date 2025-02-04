@@ -406,10 +406,10 @@ contains
 
       if (mod(X%step,opts%chkstep) == 0) then
          write(msg,fmt) 'Check state: ', X%step, X%time, ' svals lag ', norm, norm_lag, ' inc_norm ', dnorm
-         call logger%log_message(msg, module=this_module, procedure='DLRA')
+         call log_message(msg, module=this_module, procedure='DLRA')
       else if (if_lastep) then
          write(msg,fmt) 'Final state: ', X%step, X%time, ' svals lag ', norm, norm_lag, ' inc_norm ', dnorm
-         call logger%log_message(msg, module=this_module, procedure='DLRA')
+         call log_message(msg, module=this_module, procedure='DLRA')
       end if
       if (dnorm < opts%inc_tol) converged = .true.
 
@@ -433,21 +433,21 @@ contains
          if (opts%chktime <= 0.0_wp) then
             opts%chktime = opts_default%chktime
             write(msg,'(A,E12.5,A)') 'Invalid chktime. Reset to default (',  opts%chktime,')'
-            call logger%log_warning(msg, module=this_module, procedure='DLRA_check_options')
+            call log_warning(msg, module=this_module, procedure='DLRA_check_options')
          end if
          chkstep = max(1, NINT(opts%chktime/tau))
          write(msg,'(A,E12.5,A,I0,A)') 'Convergence check every ', opts%chktime, ' time units (', chkstep, ' steps)'
-         call logger%log_information(msg, module=this_module, procedure='DLRA_check_options')
+         call log_information(msg, module=this_module, procedure='DLRA_check_options')
       else
          if (opts%chkstep <= 0) then
             opts%chkstep = opts_default%chkstep
             write(msg,'(A,I0,A)') "Invalid chktime. Reset to default (",  opts%chkstep,")"
-            call logger%log_warning(msg, module=this_module, procedure='DLRA_check_options')
+            call log_warning(msg, module=this_module, procedure='DLRA_check_options')
          end if
          chkstep = opts%chkstep
          opts%chktime = tau*chkstep
          write(msg,'(A,I0,A)') 'Convergence check every ', opts%chkstep, ' steps (based on steps).'
-         call logger%log_information(msg, module=this_module, procedure='DLRA_check_options')
+         call log_information(msg, module=this_module, procedure='DLRA_check_options')
       end if
       opts%chkstep = chkstep
       return
@@ -518,19 +518,19 @@ contains
          inquire(file=logfile_SVD_abs, exist=exist_origin)
          if (exist_origin) then
             msg = 'Renaming Lyap_SVD_abs.dat --> '//trim(fname)
-            call logger%log_message(msg, module=this_module, procedure='reset_logfiles')
+            call log_message(msg, module=this_module, procedure='reset_logfiles')
             call rename(logfile_SVD_abs, fname)
          end if
          write(fname,'(A,I3.3,A)') trim(basename), rename_counter, '_rel.dat'
          inquire(file=logfile_SVD_rel, exist=exist_origin)
          if (exist_origin) then
             msg = 'Renaming Lyap_SVD_rel.dat --> '//trim(fname)
-            call logger%log_message(msg, module=this_module, procedure='reset_logfiles')
+            call log_message(msg, module=this_module, procedure='reset_logfiles')
             call rename(logfile_SVD_rel, fname)
          end if
       else
          msg = 'Logfiles not renamed. Files may be overwritten.'
-         call logger%log_warning(msg, module=this_module, procedure='reset_logfiles')
+         call log_warning(msg, module=this_module, procedure='reset_logfiles')
       end if
    end subroutine reset_logfiles
 
@@ -542,29 +542,29 @@ contains
       type(dlra_opts), intent(in) :: opts
       ! internals
       character(len=128) :: msg, ctype
-      call logger%log_message('###### solver settings ######', module=this_module, procedure='DLRA')
+      call log_message('###### solver settings ######', module=this_module, procedure='DLRA')
       write(msg,'(A15," : ", F15.8)') padl('t0',15), X%tot_time
-      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      call log_message(msg, module=this_module, procedure='DLRA')
       write(msg,'(A15," : ", F15.8)') padl('tf',15), X%tot_time + Tend
-      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      call log_message(msg, module=this_module, procedure='DLRA')
       write(msg,'(A15," : ", F15.8)') padl('dt',15), tau
-      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      call log_message(msg, module=this_module, procedure='DLRA')
       write(msg,'(A15," : ", I0)')    padl('nsteps',15),  nsteps
-      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      call log_message(msg, module=this_module, procedure='DLRA')
       write(msg,'(A15," : ", I0)')    padl('t-order',15), opts%mode
-      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      call log_message(msg, module=this_module, procedure='DLRA')
       write(msg,'(A15," : ", L)')     padl('adaptive rank',15), opts%if_rank_adaptive
-      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      call log_message(msg, module=this_module, procedure='DLRA')
       if (opts%if_rank_adaptive) then
          write(msg,'(A15," : ", I0)') padl('rk_init',15), X%rk
-         call logger%log_message(msg, module=this_module, procedure='DLRA')
+         call log_message(msg, module=this_module, procedure='DLRA')
          write(msg,'(A15," : ", I0)') padl('rk_max',15), size(X%U)
-         call logger%log_message(msg, module=this_module, procedure='DLRA')
+         call log_message(msg, module=this_module, procedure='DLRA')
          write(msg,'(A15," : sigma_{r+1} < ", E15.8)') padl('adapt. tol.',15), opts%tol
-         call logger%log_message(msg, module=this_module, procedure='DLRA')
+         call log_message(msg, module=this_module, procedure='DLRA')
       else
          write(msg,'(A15," : ", I0)') padl('rk',15), X%rk
-         call logger%log_message(msg, module=this_module, procedure='DLRA')
+         call log_message(msg, module=this_module, procedure='DLRA')
       end if
       if (opts%relative_inc) then
          ctype = 'relative'
@@ -572,17 +572,17 @@ contains
          ctype = 'absolute'
       end if
       write(msg,'(A15," : ",A,A)')    padl('convergence',15), trim(ctype), ' increment of the solution 2-norm'
-      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      call log_message(msg, module=this_module, procedure='DLRA')
       write(msg,'(A15," : ", E15.8)') padl('tol',15), opts%inc_tol
-      call logger%log_message(msg, module=this_module, procedure='DLRA')
+      call log_message(msg, module=this_module, procedure='DLRA')
       if (opts%chkctrl_time) then
          write(msg,'("  Output every ",F8.4," time units (",I0," steps)")') opts%chktime, nint(opts%chktime/tau)
-         call logger%log_message(msg, module=this_module, procedure='DLRA')
+         call log_message(msg, module=this_module, procedure='DLRA')
       else
          write(msg,'("  Output every ",I0," steps (",F8.4," time units)")') opts%chkstep, opts%chkstep*tau
-         call logger%log_message(msg, module=this_module, procedure='DLRA')
+         call log_message(msg, module=this_module, procedure='DLRA')
       end if
-      call logger%log_message('###### solver settings ######', module=this_module, procedure='DLRA')
+      call log_message('###### solver settings ######', module=this_module, procedure='DLRA')
    end subroutine
 
 end module LightROM_Utils

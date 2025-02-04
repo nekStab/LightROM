@@ -200,7 +200,7 @@ module LightROM_RiccatiSolvers
       if ( opts%mode > 2 ) then
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
-         call logger%log_message(msg, module=this_module, procedure='DLRA_main')
+         call log_message(msg, module=this_module, procedure='DLRA_main')
       else if ( opts%mode < 1 ) then
          write(msg, *) "Invalid time-integration order specified: ", opts%mode
          call stop_error(msg, module=this_module, procedure='DLRA_main')
@@ -213,7 +213,7 @@ module LightROM_RiccatiSolvers
          !> here we can do some checks such as whether we have reached steady state
          if ( mod(istep,opts%chkstep) .eq. 0 ) then
             write(msg,'(I0,A,E15.8)') istep, ' steps of DLRA computed. T= ',T
-            call logger%log_information(msg, module=this_module, procedure='DLRA')
+            call log_information(msg, module=this_module, procedure='DLRA')
          endif
       enddo dlra
       deallocate(Uwrk0,Uwrk1,U1,QU,Swrk0,Swrk1)

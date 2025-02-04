@@ -38,12 +38,12 @@ contains
       if (if_time .neqv. value) then
          if_time = value
          if (if_time) then
-            call logger%log_message('LightROM timing enabled.', module=this_module)
+            call log_message('LightROM timing enabled.', module=this_module)
          else
-            call logger%log_message('LightROM timing disabled.', module=this_module)
+            call log_message('LightROM timing disabled.', module=this_module)
          end if
       else
-         call logger%log_debug('LightROM timing switched unchanged.', module=this_module)
+         call log_debug('LightROM timing switched unchanged.', module=this_module)
       end if      
    end subroutine set_lightROM_timer_switch
 

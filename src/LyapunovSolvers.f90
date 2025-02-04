@@ -199,13 +199,13 @@ module LightROM_LyapunovSolvers
       ! Allocate memory for SVD & lagged fields
       allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
 
-      call logger%log_message('Initializing Lyapunov solver', module=this_module, procedure='DLRA_main')
+      call log_message('Initializing Lyapunov solver', module=this_module, procedure='DLRA_main')
 
       ! Compute number of steps
       if_lastep = .false.
       nsteps = nint(Tend/tau)
       write(msg,'(A,I0,A,F10.8)') 'Integration over ', nsteps, ' steps with dt= ', tau
-      call logger%log_information(msg, module=this_module, procedure='DLRA_main')
+      call log_information(msg, module=this_module, procedure='DLRA_main')
       ! Pretty output
       ifmt = max(5,ceiling(log10(real(nsteps))))
       irkfmt = max(3,ceiling(log10(real(rkmax))))
@@ -217,7 +217,7 @@ module LightROM_LyapunovSolvers
       if ( opts%mode > 2 ) then
          write(msg,'(A)') "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
-         call logger%log_message(msg, module=this_module, procedure='DLRA_main')
+         call log_message(msg, module=this_module, procedure='DLRA_main')
       else if ( opts%mode < 1 ) then
          write(msg,'(A,I0)') "Invalid time-integration order specified: ", opts%mode
          call stop_error(msg, module=this_module, procedure='DLRA_main')
@@ -226,7 +226,7 @@ module LightROM_LyapunovSolvers
       ! determine initial rank if rank-adaptive
       if (opts%if_rank_adaptive) then
          if (.not. X%rank_is_initialised) then
-            call logger%log_message('Determine initial rank:', module=this_module, procedure='DLRA_main')
+            call log_message('Determine initial rank:', module=this_module, procedure='DLRA_main')
             call set_initial_rank(X, A, B, tau, opts%mode, exptA, trans, tol)
          end if
          if (opts%use_err_est) then
@@ -235,17 +235,17 @@ module LightROM_LyapunovSolvers
             call compute_splitting_error(err_est, X, A, B, tau, opts%mode, exptA, trans)
             tol = err_est / sqrt(X%U(1)%get_size() - real(X%rk + 1))
             write(msg, *) 'Initialization complete: rk = ', X%rk, ', local error estimate: ', tol
-            call logger%log_information(msg, module=this_module, procedure='DLRA_main')
+            call log_information(msg, module=this_module, procedure='DLRA_main')
          end if
       end if
 
       call log_settings(X, Tend, tau, nsteps, opts)
-      call logger%log_message('Starting DLRA integration', module=this_module, procedure='DLRA_main')
+      call log_message('Starting DLRA integration', module=this_module, procedure='DLRA_main')
 
       dlra : do istep = 1, nsteps
 
          write(msg,fmt_step) istep, nsteps, X%time, X%tot_time
-         call logger%log_information(msg, module=this_module, procedure='DLRA_main')
+         call log_information(msg, module=this_module, procedure='DLRA_main')
 
          ! save lag data defore the timestep
          if (mod(istep, chkstep) == 0 .or. istep == nsteps ) then
@@ -262,7 +262,7 @@ module LightROM_LyapunovSolvers
                   El = El + err_est
                   tol = El / sqrt(256_wp - real(X%rk + 1))
                   write(msg,'(3X,I3,A,E8.2)') istep, ': recomputed error estimate: ', tol
-                  call logger%log_information(msg, module=this_module, procedure='DLRA_main')
+                  call log_information(msg, module=this_module, procedure='DLRA_main')
                else
                   El = El + err_est
                end if
@@ -289,12 +289,12 @@ module LightROM_LyapunovSolvers
             do i = 1, ceiling(float(X%rk)/iline)
                is = (i-1)*iline+1; ie = min(X%rk,i*iline)
                write(msg,fmt_sval) istep, nsteps, X%tot_time, X%rk, " SVD abs", is, ie, ( svals(j), j = is, ie )
-               call logger%log_information(msg, module=this_module, procedure='DLRA_main')
+               call log_information(msg, module=this_module, procedure='DLRA_main')
             end do
             do i = 1, ceiling(float(irk)/iline)
                is = (i-1)*iline+1; ie = min(irk,i*iline)
                write(msg,fmt_sval) istep, nsteps, X%tot_time, X%rk, "dSVD rel", is, ie, ( dsvals(j) , j = is, ie )
-               call logger%log_information(msg, module=this_module, procedure='DLRA_main')
+               call log_information(msg, module=this_module, procedure='DLRA_main')
             end do
             deallocate(dsvals)
             ! Check convergence
@@ -302,17 +302,17 @@ module LightROM_LyapunovSolvers
             X%is_converged = is_converged(X, svals(:irk), svals_lag(:irk), opts, if_lastep)
             if (X%is_converged) then
                write(msg,'(A,I0,A)') "Step ", istep, ": Solution converged!"
-               call logger%log_information(msg, module=this_module, procedure='DLRA_main')
+               call log_information(msg, module=this_module, procedure='DLRA_main')
                exit dlra
             else ! if final step
                if (if_lastep) then
                   write(msg,'(A,I0,A)') "Step ", istep, ": Solution not converged!"
-                  call logger%log_information(msg, module=this_module, procedure='DLRA_main')
+                  call log_information(msg, module=this_module, procedure='DLRA_main')
                end if
             end if
          endif
       enddo dlra
-      call logger%log_message('Exiting Lyapunov solver', module=this_module, procedure='DLRA_main')
+      call log_message('Exiting Lyapunov solver', module=this_module, procedure='DLRA_main')
       ! Clean up scratch space
       deallocate(Usvd, ssvd, VTsvd)
       if (time_lightROM()) call lr_timer%stop('DLRA_lyapunov_integrator_rdp')
@@ -438,9 +438,9 @@ module LightROM_LyapunovSolvers
             else
                write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8)")') ndigits, ndigits
                write(msg,fmt) 'rk= ', rk, ', s_', rk,' = ', ssvd(rk)
-               call logger%log_information(msg, module=this_module, procedure='DLRA_main')
+               call log_information(msg, module=this_module, procedure='DLRA_main')
                write(msg,'(A,I0)') 'Rank increased to rk= ', rk + 1
-               call logger%log_message(msg, module=this_module, procedure='DLRA_main')
+               call log_message(msg, module=this_module, procedure='DLRA_main')
                
                X%rk = X%rk + 1
                rk = X%rk ! this is only to make the code more readable
@@ -475,7 +475,7 @@ module LightROM_LyapunovSolvers
                rk = max(irk, rk - 2)  ! reduce by at most 2
 
                write(msg, '(A,I0)') 'Rank decreased to rk= ', rk
-               call logger%log_message(msg, module=this_module, procedure='DLRA_main')
+               call log_message(msg, module=this_module, procedure='DLRA_main')
             end if
             
          end if ! found
@@ -491,7 +491,7 @@ module LightROM_LyapunovSolvers
       write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8,A,I2)")') ndigits, ndigits
       write(msg,fmt) 'rk = ', rk-1, ':     s_', irk,' = ', &
                & ssvd(irk), ',     lock: ', rk_reduction_lock
-      call logger%log_information(msg, module=this_module, procedure='DLRA_main')
+      call log_information(msg, module=this_module, procedure='DLRA_main')
 
       ! decrease rk_reduction_lock
       if (rk_reduction_lock > 0) rk_reduction_lock = rk_reduction_lock - 1
@@ -734,7 +734,7 @@ module LightROM_LyapunovSolvers
 
       do while (.not. accept_rank .and. X%rk <= rkmax)
          write(msg,'(4X,A,I0)') 'Test r = ', X%rk
-         call logger%log_message(msg, module=this_module, procedure='set_initial_rank')
+         call log_message(msg, module=this_module, procedure='set_initial_rank')
          svals = svdvals(X%S(:X%rk,:X%rk))
          ! run integrator
          do i = 1,n
@@ -752,12 +752,12 @@ module LightROM_LyapunovSolvers
          end do tol_chk
          if (.not. found) irk = irk - 1
          write(msg,'(4X,A,I2,A,E8.2)') 'rk = ', X%rk, ' s_r =', svals(X%rk)
-         call logger%log_debug(msg, module=this_module, procedure='set_initial_rank')
+         call log_debug(msg, module=this_module, procedure='set_initial_rank')
          if (found) then
             accept_rank = .true.
             X%rk = irk
             write(msg,'(4X,A,I2,A,E10.4)') 'Accpeted rank: r = ', X%rk-1, ',     s_{r+1} = ', svals(X%rk)
-            call logger%log_message(msg, module=this_module, procedure='set_initial_rank')
+            call log_message(msg, module=this_module, procedure='set_initial_rank')
          else
             X%rk = 2*X%rk
          end if
@@ -860,7 +860,7 @@ module LightROM_LyapunovSolvers
       ! internal
       character(len=128) :: msg
       write(msg,'(A,I0,A)') 'Lyapunov solver called ', LyapSolver_counter, ' times. Resetting coutner to 0.'
-      call logger%log_message(msg, module=this_module, procedure='DLRA_main')
+      call log_message(msg, module=this_module, procedure='DLRA_main')
       LyapSolver_counter = 0
       call reset_logfiles()
    end subroutine reset_lyapsolver
