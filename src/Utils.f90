@@ -7,7 +7,7 @@ module LightROM_Utils
    use LightKrylov
    use LightKrylov, only : dp, wp => dp
    use LightKrylov_Constants
-   use LightKrylov_Logger
+   use LightKrylov_Logger, only: log_message, log_information, log_warning, log_debug, check_info
    use LightKrylov_AbstractVectors
    use LightKrylov_BaseKrylov, only : orthogonalize_against_basis
    use LightKrylov_Utils, only : abstract_opts, sqrtm
@@ -124,7 +124,7 @@ contains
 
       ! compute inner product with Gramian bases and compte SVD
       allocate(LRCrossGramian(rkc,rko)); allocate(V(rko,rko)); allocate(W(rkc,rkc))
-      call innerprod(LRCrossGramian, Xc, Yo)
+      LRCrossGramian = innerprod(Xc, Yo)
       call svd(LRCrossGramian, S, V, W)
 
       allocate(Sigma(rkmin))
@@ -189,9 +189,9 @@ contains
       do i = 1, rk
          call LTI%A%matvec(Tinv(i), Uwrk(i))
       end do
-      call innerprod(Ahat, T, Uwrk)
-      call innerprod(Bhat, T, LTI%B)
-      call innerprod(Cwrk, LTI%CT, Tinv)
+      Ahat = innerprod(T, Uwrk)
+      Bhat = innerprod(T, LTI%B)
+      Cwrk = innerprod(LTI%CT, Tinv)
       Chat = transpose(Cwrk)
       D = LTI%D
 
@@ -268,7 +268,7 @@ contains
       call check_info(info, 'qr', module=this_module, procedure='project_onto_common_basis_rdp')
 
       ! compute inner product between second basis and its orthonormalized version
-      call innerprod(VpTV, Vp, V)
+      VpTV = innerprod(Vp, V)
 
       return
    end subroutine project_onto_common_basis_rdp

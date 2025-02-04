@@ -316,7 +316,6 @@ module LightROM_LyapunovSolvers
       ! Clean up scratch space
       deallocate(Usvd, ssvd, VTsvd)
       if (time_lightROM()) call lr_timer%stop('DLRA_lyapunov_integrator_rdp')
-      return
    end subroutine projector_splitting_DLRA_lyapunov_integrator_rdp
 
    !-----------------------
@@ -363,8 +362,6 @@ module LightROM_LyapunovSolvers
       end select
 
       if (time_lightROM()) call lr_timer%stop('DLRA_lyapunov_step_rdp')
-
-      return
    end subroutine projector_splitting_DLRA_lyapunov_step_rdp
 
    !-----------------------------
@@ -498,8 +495,6 @@ module LightROM_LyapunovSolvers
       
       ! reset to the rank of the approximation which we use outside of the integrator
       X%rk = rk - 1      
-
-      return
    end subroutine rank_adaptive_PS_DLRA_lyapunov_step_rdp
 
    subroutine M_forward_map_rdp(X, A, tau, info, exptA, iftrans)
@@ -546,8 +541,6 @@ module LightROM_LyapunovSolvers
       X%S(:rk,:rk) = matmul(R, matmul(X%S(:rk,:rk), transpose(R)))
 
       if (time_lightROM()) call lr_timer%stop('M_forward_map_rdp')
-
-      return
    end subroutine M_forward_map_rdp
 
    subroutine G_forward_map_lyapunov_rdp(X, B, tau, info)
@@ -582,11 +575,7 @@ module LightROM_LyapunovSolvers
       ! Copy updated low-rank factors to output
       call copy(X%U(:rk), U1)
 
-      deallocate(U1, BBTU)
-
       if (time_lightROM()) call lr_timer%stop('G_forward_map_lyapunov_rdp')
-               
-      return
    end subroutine G_forward_map_lyapunov_rdp
 
    subroutine K_step_lyapunov_rdp(X, U1, BBTU, B, tau, info)
@@ -618,12 +607,8 @@ module LightROM_LyapunovSolvers
       ! Orthonormalize in-place
       call qr(U1, X%S(:rk,:rk), info)
       call check_info(info, 'qr', module=this_module, procedure='K_step_lyapunov_rdp')
-      
-      deallocate(Uwrk)
 
       if (time_lightROM()) call lr_timer%stop('K_step_lyapunov_rdp')
-
-      return
    end subroutine K_step_lyapunov_rdp
 
    subroutine S_step_lyapunov_rdp(X, U1, BBTU, tau, info)
@@ -646,14 +631,11 @@ module LightROM_LyapunovSolvers
 
       rk = X%rk
       allocate(Swrk(rk,rk)); Swrk = 0.0_wp
-      call innerprod(Swrk, U1, BBTU)          ! - Sdot
+      Swrk = innerprod(U1, BBTU)          ! - Sdot
       ! Construct intermediate coefficient matrix
       X%S(:rk,:rk) = X%S(:rk,:rk) - tau*Swrk
-      deallocate(Swrk)
 
       if (time_lightROM()) call lr_timer%stop('S_step_lyapunov_rdp')
-
-      return
    end subroutine S_step_lyapunov_rdp
 
    subroutine L_step_lyapunov_rdp(X, U1, B, tau, info)
@@ -681,13 +663,9 @@ module LightROM_LyapunovSolvers
       ! Construct solution L1.T
       call axpby_basis(Uwrk, 1.0_wp, X%U(:rk), tau)
       ! Update coefficient matrix
-      call innerprod(X%S(:rk,:rk), Uwrk, U1)
-
-      deallocate(Uwrk)
+      X%S(:rk,:rk) = innerprod(Uwrk, U1)
 
       if (time_lightROM()) call lr_timer%stop('L_step_lyapunov_rdp')
-
-      return
    end subroutine L_step_lyapunov_rdp
 
    subroutine set_initial_rank(X, A, B, tau, mode, exptA, trans, tol, rk_init, nsteps)
@@ -775,8 +753,6 @@ module LightROM_LyapunovSolvers
       ! reset to the rank of the approximation which we use outside of the integrator & mark rank as initialized
       X%rk = X%rk - 1
       X%rank_is_initialised = .true.
-      
-      return
    end subroutine set_initial_rank
 
    subroutine compute_splitting_error(err_est, X, A, B, tau, mode, exptA, trans)
@@ -852,8 +828,6 @@ module LightROM_LyapunovSolvers
       ! reset curret state
       call copy(X%U(:rx), Utmp)
       X%S(:rx,:rx) = Stmp
-
-      return
    end subroutine compute_splitting_error
 
    subroutine reset_lyapsolver()

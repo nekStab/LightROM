@@ -47,7 +47,7 @@ contains
 
       call assert_shape(W, [ size(B), size(B) ], 'W', 'Riccati_Utils', 'apply_outerprod_w_vector_rdp')
 
-      call innerprod(wrk, B, u)
+      wrk = innerprod(B, u)
       block
          class(abstract_vector_rdp), allocatable :: xwrk
          call linear_combination(xwrk, B, matmul(W, wrk))
@@ -69,7 +69,7 @@ contains
       call assert_shape(W, [ size(B), size(B) ], 'W', 'Riccati_Utils', 'apply_outerprod_w_basis_rdp')
 
       call zero_basis(Z)
-      call innerprod(wrk, B, U)
+      wrk = innerprod(B, U)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, B, matmul(W, wrk))
@@ -93,8 +93,8 @@ contains
       call assert_shape(W, [ size(B), size(B) ], 'W', 'Riccati_Utils', 'apply_premult_outerprod_w_vector_rdp')
 
       BTuR = 0.0_wp; uLTB = 0.0_wp; m = 0.0_wp
-      call innerprod(BTuR, B, uR)
-      call innerprod(uLTB, B, uL)
+      BTuR = innerprod(B, uR)
+      uLTB = innerprod(B, uL)
       
       m = dot_product( uLTB, matmul( W, BTuR ) )
    
@@ -116,8 +116,8 @@ contains
       call assert_shape(M, [ size(UL), size(UR) ], 'M', 'Ricatti_Utils', 'apply_premult_outerprod_w_basis_rdp')
       
       BTUR = 0.0_wp; ULTB = 0.0_wp; M = 0.0_wp
-      call innerprod(BTUR, B, UR)
-      call innerprod(ULTB, UL, B)
+      BTUR = innerprod(B, UR)
+      ULTB = innerprod(UL, B)
       
       M = matmul( ULTB, matmul( W, BTUR ) )
    

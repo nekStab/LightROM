@@ -187,9 +187,6 @@ module LightROM_RiccatiSolvers
          opts = dlra_opts()
       end if
 
-      ! set tolerance
-     !tol = opts%tol
-
       ! Initialize
       T         = 0.0_wp
       converged = .false.
@@ -218,7 +215,6 @@ module LightROM_RiccatiSolvers
       enddo dlra
       deallocate(Uwrk0,Uwrk1,U1,QU,Swrk0,Swrk1)
       if (time_lightROM()) call lr_timer%stop('DLRA_riccati_integrator_rdp')
-      return
    end subroutine projector_splitting_DLRA_riccati_integrator_rdp
 
    !-----------------------
@@ -311,9 +307,6 @@ module LightROM_RiccatiSolvers
       end select
 
       if (time_lightROM()) call lr_timer%stop('DLRA_riccati_step_rdp')
-
-      return
-
    end subroutine projector_splitting_DLRA_riccati_step_rdp
 
    subroutine G_forward_map_riccati_rdp(X, B, CT, Qc, Rinv, tau, info, ifpred, T0, Tt, U0, Ut)
@@ -369,9 +362,9 @@ module LightROM_RiccatiSolvers
             call zero_basis(QU); Swrk0 = 0.0_wp                         ! we use QU as a scratch array
             block
                class(abstract_vector_rdp), allocatable :: Xwrk(:)
-               call innerprod(Swrk0, X%U, U0)
+               Swrk0 = innerprod(X%U, U0)
                call linear_combination(Xwrk, T0, Swrk0); call copy(QU, Xwrk)
-               call innerprod(Swrk0, X%U, Ut)
+               Swrk0 = innerprod(X%U, Ut)
                call linear_combination(Xwrk, Tt, Swrk0); call copy(T0, Xwrk) ! overwrite T0 with Gamma
             end block
             call axpby_basis(T0, 0.5_wp, QU, 0.5_wp)
@@ -392,8 +385,6 @@ module LightROM_RiccatiSolvers
       call copy(X%U, U1)
 
       if (time_lightROM()) call lr_timer%stop('G_forward_map_riccati_rdp')
-               
-      return
    end subroutine G_forward_map_riccati_rdp
 
    subroutine K_step_riccati_rdp(X, U1, QU, B, CT, Qc, Rinv, tau, info, reverse, NL)
@@ -474,8 +465,6 @@ module LightROM_RiccatiSolvers
       X%S = Swrk0
 
       if (time_lightROM()) call lr_timer%stop('K_step_riccati_rdp')
-
-      return
    end subroutine K_step_riccati_rdp
 
    subroutine S_step_riccati_rdp(X, U1, QU, B, CT, Qc, Rinv, tau, info, reverse, NL)
@@ -523,14 +512,14 @@ module LightROM_RiccatiSolvers
          ! Compute QU and pass to K step
          call apply_outerprod_w(QU, X%U, CT, Qc)
       endif
-      call innerprod(Swrk0, U1, QU)
+      Swrk0 = innerprod(U1, QU)
 
       ! Non-linear part --> Swrk1
       if (.not.present(NL)) then
          call apply_premult_outerprod_w(Swrk1, X%U, U1, B, Rinv) !       U0.T @ B @ R^(-1) @ B.T @ U1
          Swrk1 = matmul(X%S, matmul(Swrk1, X%S))                 ! S0 @ (U0.T @ B @ R^(-1) @ B.T @ U1) @ S0
       else ! Non-linear term precomputed
-         call innerprod(Swrk1, U1, NL)
+         Swrk1 = innerprod(U1, NL)
       end if
 
       ! Combine to form -U1.T @ G( U1 @ S @ U0.T ) @ U0
@@ -540,8 +529,6 @@ module LightROM_RiccatiSolvers
       X%S = X%S + tau*Swrk0
 
       if (time_lightROM()) call lr_timer%stop('S_step_riccati_rdp')
-
-      return
    end subroutine S_step_riccati_rdp
 
    subroutine L_step_riccati_rdp(X, U1, B, CT, Qc, Rinv, tau, info)
@@ -598,11 +585,9 @@ module LightROM_RiccatiSolvers
       call axpby_basis(Uwrk1, 1.0_wp, Uwrk0, tau)               ! L0.T + tau*Ldot.T
 
       ! Update coefficient matrix
-      call innerprod(X%S, Uwrk1, U1)
+      X%S = innerprod(Uwrk1, U1)
 
       if (time_lightROM()) call lr_timer%stop('L_step_riccati_rdp')
-
-      return
    end subroutine L_step_riccati_rdp
 
 end module LightROM_RiccatiSolvers

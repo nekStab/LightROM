@@ -1,7 +1,7 @@
 module LightROM_Timing
    use LightKrylov
    use LightKrylov, only : dp, wp => dp
-   use LightKrylov_Logger
+   use LightKrylov_Logger, only: log_message, log_information, log_warning, log_debug, check_info
    use LightKrylov_Timing
    implicit none
    private
