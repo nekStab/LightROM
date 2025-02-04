@@ -90,7 +90,7 @@ program demo
    !
    ! if_lyapunov = .false.: Solve the Riccati equation:    0 = A @ X + X @ A.T + X @ B @ @ R^{-1} @ B.T @ W @ X + Q
    !
-   logical, parameter :: adjoint = .true. !.false.
+   logical, parameter :: adjoint = .false. !.false.
    ! Only considered if if_lyapunov = .true.
    !
    ! Adjoint = .true.:      Solve the adjoint Lyapunov equation:  0 = A.T @ X + X @ A + C.T @ C @ W
@@ -355,7 +355,7 @@ program demo
                   call output(k)%scal(sqrt(tau))
                end do
             end do
-            call innerprod(XTX, output, output)
+            XTX = innerprod(output, output)
             nprint = min(8, nsnap)
             svals = svdvals(XTX)
             do i = 1, ceiling(nprint*1.0_wp/irow)

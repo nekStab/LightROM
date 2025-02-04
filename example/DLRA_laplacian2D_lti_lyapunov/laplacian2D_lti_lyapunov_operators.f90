@@ -172,7 +172,7 @@ contains
          type is (state_vector)
             select type (A)
             type is (laplace_operator)
-               call k_exptA(vec_out, A, vec_in, tau, info, transpose)
+               call krylov_exptA(vec_out, A, vec_in, tau, info, transpose)
             class default
                call stop_error('A must be a laplace_operator', this_module, 'exptA')
             end select
