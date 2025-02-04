@@ -1,5 +1,6 @@
 program demo
    ! Standard Library.
+   use stdlib_strings, only: padr
    use stdlib_optval, only : optval 
    use stdlib_linalg, only : eye, diag, eig
    use stdlib_math, only : all_close, logspace
@@ -84,7 +85,7 @@ program demo
    !--------------------------------
    ! Define which examples to run:
    !
-   logical, parameter :: if_lyapunov = .false.
+   logical, parameter :: if_lyapunov = .true.
    !
    ! if_lyapunov = .true.:  Solve the Lyapunov equation:   0 = A @ X + X @ A.T + Q
    !
@@ -145,6 +146,14 @@ program demo
    ! Enumerate timers to check proper initialization
    call enumerate_timers()
 
+   print *, 'Cases to be run:'
+   print '(2X,A45,L4)', padr('if_lyapunov:',50), if_lyapunov
+   print '(2X,A45,L4)', padr('adjoint:',50), adjoint
+   print '(2X,A45,L4)', padr('main_run:',50), main_run
+   print '(2X,A45,L4)', padr('short_test:',50), short_test
+   print '(2X,A45,L4)', padr('run_fixed_rank_short_integration_time_test:',50), run_fixed_rank_short_integration_time_test
+   print '(2X,A45,L4)', padr('run_fixed_rank_long_integration_time_test:',50), run_fixed_rank_long_integration_time_test
+   print '(2X,A45,L4)', padr('run_rank_adaptive_long_integration_time_test:',50), run_rank_adaptive_long_integration_time_test
    print *, '#########################################################################'
    print *, '#                                                                       #'
    print *, '#               DYNAMIC LOW-RANK APPROXIMATION  -  DLRA                 #'
