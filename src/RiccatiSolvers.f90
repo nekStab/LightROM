@@ -412,7 +412,6 @@ module LightROM_RiccatiSolvers
       !! Precomputed non-linear term.
 
       ! Internal variables
-      integer,                               allocatable    :: perm(:)   ! Permutation vector
       integer                                               :: rk
       logical                                               :: reverse_order
 
@@ -426,7 +425,6 @@ module LightROM_RiccatiSolvers
       rk = size(X%U)
       if (.not. allocated(Uwrk0)) allocate(Uwrk0(1:rk), source=X%U(1)); 
       if (.not. allocated(Swrk0)) allocate(Swrk0(1:rk,1:rk)); 
-      allocate(perm(1:rk)); perm = 0
       call zero_basis(Uwrk0); Swrk0 = 0.0_wp
 
       ! Constant part --> QU
@@ -459,9 +457,8 @@ module LightROM_RiccatiSolvers
       call axpby_basis(U1, 1.0_wp, Uwrk0, tau)                   ! K0 + tau*Kdot
 
       ! Orthonormalize in-place
-      call qr(U1, Swrk0, perm, info)
-      call check_info(info, 'qr_pivot', module=this_module, procedure='K_step_Riccati_rdp')
-      call apply_inverse_permutation_matrix(Swrk0, perm)
+      call qr(U1, Swrk0, info)
+      call check_info(info, 'qr', module=this_module, procedure='K_step_Riccati_rdp')
       X%S = Swrk0
 
       if (time_lightROM()) call lr_timer%stop('K_step_riccati_rdp')
