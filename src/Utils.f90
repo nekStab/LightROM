@@ -31,6 +31,7 @@ module LightROM_Utils
    public :: Balancing_Transformation
    public :: ROM_Petrov_Galerkin_Projection
    public :: ROM_Galerkin_Projection
+   public :: Proper_Orthogonal_Decomposition
 
    interface Balancing_Transformation
       module procedure Balancing_Transformation_rdp
@@ -42,6 +43,14 @@ module LightROM_Utils
 
    interface ROM_Galerkin_Projection
       module procedure ROM_Galerkin_Projection_rdp
+   end interface
+
+   interface Proper_Orthogonal_Decomposition
+      module procedure Proper_Orthogonal_Decomposition_rdp
+   end interface
+
+   interface rescale_snapshots
+      module procedure rescale_snapshots_rdp
    end interface
 
    interface project_onto_common_basis
@@ -226,6 +235,146 @@ contains
 
       return
    end subroutine ROM_Galerkin_Projection_rdp
+
+   subroutine Proper_Orthogonal_Decomposition_rdp(sval, prop, X0, tau, Tend, trans, svec)
+      !! Computes the Proper Orthogonal Decomposition (POD) of the impulse response to the input vector based on the
+      !! exponential propagator prop.
+      !! 
+      !! The POD is computed using the singular value decomposition of the weighted inner product of the snapshot matrix
+      !! \[
+      !!     (\lambda_i, \xi_i) = \mbox{svd}(X^T W X)
+      !! \]
+      !! where the snapshot matrix \( X \) is given by
+      !! \[
+      !!    X = [ \: x\sqrt{\tau} \: ]
+      !! \]
+      !! and the individual snapshots \( x_i \) are recursively computed as \( x_{i+1} = e^{\tau A} x_i \) using the 
+      !! exponential propagator for each initial condition. The integration weights \( W \) are automatically applied 
+      !! in the computation of the inner product.
+      !!
+      !! NOTE: 
+      !!    1. We use the snapshot method which assumes that the number of snapshots is smaller than the number of d
+      !!       egrees of freedom of the problem
+      !!    2. We store all the snapshots in memory before performing the inner product.
+      !!
+      real(dp), allocatable, intent(out) :: sval
+      !! POD singular values
+      class(abstract_linop_rdp), intent(in) :: prop
+      !! Exponential propagator
+      class(abstract_vector_rdp), intent(in) :: X0(:)
+      !! Initial condition (impulse)
+      real(dp), intent(in) :: tau 
+      !! Integration time between subsequent snapshots
+      real(dp), intent(in) :: Tend
+      !! Time horizon for the POD computation
+      logical, optional, intent(in) :: trans
+      !! Direct of adjoint mode (default: direct)
+      class(abstract_vector_rdp), optional, allocatable, intent(out) :: svec(:)
+      !! Singular vectors
+
+      ! internals
+      class(abstract_vector_rdp), allocatable :: X(:)   ! Snapshot matrix
+      real(dp), allocatable :: XTX(:,:)  ! Inner product matrix
+      real(dp), allocatable :: svals(:)  ! singular values
+      real(dp), allocatable :: U(:,:), VT(:,:) ! singular vectors
+      integer :: i, j, k, info
+      integer :: nsnap, nstep, nrank
+      logical :: transpose
+
+      transpose = optval(trans, .false.)
+
+      ! Data sizes
+      nrank = size(X0)
+      nstep = floor(Tend/tau)
+      nsnap = nrank*(nstep + 1)
+      
+      ! Set impulse
+      allocate(XTX(nsnap,nsnap)) ; XTX = 0.0_dp
+      allocate(X(nsnap), source=X0(1)) ; call zero_basis(X)
+
+      ! Compute impulse response
+      k = 1
+      do j = 1, nrank ! for each initial condition
+         call copy(X(k), X0(k))
+         do i = 1, nstep ! for the chosen time horizon
+            call apply_exptA(X(k+1), prop, X(k), tau, info, transpose)
+            k = k + 1
+         end do
+      end do
+
+      ! Rescale response for POD
+      do j = 1, nrank
+         call rescale_snapshots(X((k-1)*nstep+1:k*nstep), tau, 1)
+      end do
+      
+      ! Compute POD
+      XTX = innerprod(response, response)
+      if (.not. present(svec)) then
+         ! Compute only the POD singular values
+         sval = svdvals(XTX)
+      else
+         ! Compute POD singular values and vectors
+         call svd(XTX, U, sval, VT)
+         ! Project data matrix onto principal axes
+         call linear_combination(svec, X(2:), U)
+      end if
+   end subroutine Proper_Orthogonal_Decomposition_rdp
+
+   subroutine rescale_snapshots_rdp(X, tau, mode)
+      !! Apply integration weights to the columns of a data matrix for temporal integration. 
+      !! The columns are assumed to be equispaced snapshots at intervals `tau` based on the integration method `mode`.
+      class(abstract_vector_rdp), intent(inout) :: x
+      !! Snapshot matrix to be rescaled
+      real(dp), intent(in) :: tau
+      !! Time difference between snapshots in X (assumed constant)
+      integer, intent(in) :: mode
+      !! Temporal integration mode
+      ! internal
+      integer :: i, n
+      real(dp) :: w
+      character(len=128) :: msg
+      n = size(X)
+      ! Sanity checks
+      if (tau <= 0.0_dp) then
+         write(msg,'(A,F16.12)') "Invalid integration step tau= ", tau
+         call stop_error(msg, this_module, 'rescale_snapshots')
+      end if
+      if (mode == 3 .and. mod(n,2) == 1) then
+         msg = "The number of intervals needs to be even for Simpson's rule"
+         call stop_error(msg, this_module, 'rescale_snapshots')
+      end if
+      select case (mode)
+      case (1)
+         ! uniform weights
+         w = sqrt(tau)
+         do i = 1, size(X)
+            call X(i)%scale(w)
+         end do
+      case (2)
+         ! Trapezoid rule
+         w = sqrt(tau)
+         X(1)%scale(0.5_dp*w)
+         do i = 2, n - 1
+            call X(i)%scale(w)
+         end do
+         X(n)%scale(0.5_dp*w)
+      case (3)
+         ! Composite Simpson's 1/3 rule
+         w = sqrt(tau)/3.0_dp
+         X(1)%scale(w)
+         do i = 2, n-1
+            if (mod(i,2) == 0) then
+               call X(i)%scale(4.0_dp*w)
+            else
+               call X(i)%scale(2.0_dp*w)
+            end if
+         end do
+         X(n)%scale(w)
+      case default
+         write(msg,'(A,I0)') "The selected integration method is not implemented: ", mode
+         call stop_error(msg, this_module, 'rescale_snapshots')
+      end select
+   end subroutine rescale_snapshots_rdp
 
    subroutine project_onto_common_basis_rdp(UTV, VpTV, U, V)
       !! Computes the common orthonormal basis of the space spanned by the union of the input Krylov bases 
