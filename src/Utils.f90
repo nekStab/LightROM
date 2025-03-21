@@ -7,7 +7,7 @@ module LightROM_Utils
    use LightKrylov
    use LightKrylov, only : dp, wp => dp
    use LightKrylov_Constants
-   use LightKrylov_Logger, only: log_message, log_information, log_warning, log_debug, check_info
+   use LightKrylov_Logger, only: log_message, log_information, log_warning, log_debug, check_info, stop_error
    use LightKrylov_AbstractVectors
    use LightKrylov_BaseKrylov, only : orthogonalize_against_basis
    use LightKrylov_Utils, only : abstract_opts, sqrtm
@@ -131,7 +131,7 @@ contains
       rk    = max(rkc, rko)
       rkmin = min(rkc, rko) 
 
-      ! compute inner product with Gramian bases and compte SVD
+      ! compute inner product with Gramian bases and compte SVUD
       allocate(LRCrossGramian(rkc,rko)); allocate(V(rko,rko)); allocate(W(rkc,rkc))
       LRCrossGramian = innerprod(Xc, Yo)
       call svd(LRCrossGramian, S, V, W)
@@ -236,7 +236,7 @@ contains
       return
    end subroutine ROM_Galerkin_Projection_rdp
 
-   subroutine Proper_Orthogonal_Decomposition_rdp(sval, prop, X0, tau, Tend, trans, svec)
+   subroutine Proper_Orthogonal_Decomposition_rdp(svals, prop, X0, tau, Tend, trans, svecs)
       !! Computes the Proper Orthogonal Decomposition (POD) of the impulse response to the input vector based on the
       !! exponential propagator prop.
       !! 
@@ -256,10 +256,11 @@ contains
       !!    1. We use the snapshot method which assumes that the number of snapshots is smaller than the number of d
       !!       egrees of freedom of the problem
       !!    2. We store all the snapshots in memory before performing the inner product.
+      !!    3. We assume that the integration time tau is already set for the propagator
       !!
-      real(dp), allocatable, intent(out) :: sval
+      real(dp), allocatable, intent(out) :: svals(:)
       !! POD singular values
-      class(abstract_linop_rdp), intent(in) :: prop
+      class(abstract_linop_rdp), intent(inout) :: prop
       !! Exponential propagator
       class(abstract_vector_rdp), intent(in) :: X0(:)
       !! Initial condition (impulse)
@@ -269,15 +270,14 @@ contains
       !! Time horizon for the POD computation
       logical, optional, intent(in) :: trans
       !! Direct of adjoint mode (default: direct)
-      class(abstract_vector_rdp), optional, allocatable, intent(out) :: svec(:)
+      class(abstract_vector_rdp), optional, allocatable, intent(out) :: svecs(:)
       !! Singular vectors
 
       ! internals
       class(abstract_vector_rdp), allocatable :: X(:)   ! Snapshot matrix
       real(dp), allocatable :: XTX(:,:)  ! Inner product matrix
-      real(dp), allocatable :: svals(:)  ! singular values
       real(dp), allocatable :: U(:,:), VT(:,:) ! singular vectors
-      integer :: i, j, k, info
+      integer :: i, j, k
       integer :: nsnap, nstep, nrank
       logical :: transpose
 
@@ -295,35 +295,39 @@ contains
       ! Compute impulse response
       k = 1
       do j = 1, nrank ! for each initial condition
-         call copy(X(k), X0(k))
+         call copy(X(k), X0(j))
          do i = 1, nstep ! for the chosen time horizon
-            call apply_exptA(X(k+1), prop, X(k), tau, info, transpose)
+            if (transpose) then
+               call prop%rmatvec(X(k), X(k+1))
+            else
+               call prop%matvec(X(k), X(k+1))
+            end if
             k = k + 1
          end do
       end do
 
       ! Rescale response for POD
       do j = 1, nrank
-         call rescale_snapshots(X((k-1)*nstep+1:k*nstep), tau, 1)
+         call rescale_snapshots(X((j-1)*nstep+1:j*nstep), tau, 1)
       end do
       
       ! Compute POD
-      XTX = innerprod(response, response)
-      if (.not. present(svec)) then
+      XTX = innerprod(X, X)
+      if (.not. present(svecs)) then
          ! Compute only the POD singular values
-         sval = svdvals(XTX)
+         svals = svdvals(XTX)
       else
          ! Compute POD singular values and vectors
-         call svd(XTX, U, sval, VT)
+         call svd(XTX, svals, U, VT)
          ! Project data matrix onto principal axes
-         call linear_combination(svec, X(2:), U)
+         call linear_combination(svecs, X(2:), U)
       end if
    end subroutine Proper_Orthogonal_Decomposition_rdp
 
    subroutine rescale_snapshots_rdp(X, tau, mode)
       !! Apply integration weights to the columns of a data matrix for temporal integration. 
       !! The columns are assumed to be equispaced snapshots at intervals `tau` based on the integration method `mode`.
-      class(abstract_vector_rdp), intent(inout) :: x
+      class(abstract_vector_rdp), intent(inout) :: X(:)
       !! Snapshot matrix to be rescaled
       real(dp), intent(in) :: tau
       !! Time difference between snapshots in X (assumed constant)
@@ -347,29 +351,29 @@ contains
       case (1)
          ! uniform weights
          w = sqrt(tau)
-         do i = 1, size(X)
-            call X(i)%scale(w)
+         do i = 1, n
+            call X(i)%scal(w)
          end do
       case (2)
          ! Trapezoid rule
          w = sqrt(tau)
-         X(1)%scale(0.5_dp*w)
+         call X(1)%scal(0.5_dp*w)
          do i = 2, n - 1
-            call X(i)%scale(w)
+            call X(i)%scal(w)
          end do
-         X(n)%scale(0.5_dp*w)
+         call X(n)%scal(0.5_dp*w)
       case (3)
          ! Composite Simpson's 1/3 rule
          w = sqrt(tau)/3.0_dp
-         X(1)%scale(w)
+         call X(1)%scal(w)
          do i = 2, n-1
             if (mod(i,2) == 0) then
-               call X(i)%scale(4.0_dp*w)
+               call X(i)%scal(4.0_dp*w)
             else
-               call X(i)%scale(2.0_dp*w)
+               call X(i)%scal(2.0_dp*w)
             end if
          end do
-         X(n)%scale(w)
+         call X(n)%scal(w)
       case default
          write(msg,'(A,I0)') "The selected integration method is not implemented: ", mode
          call stop_error(msg, this_module, 'rescale_snapshots')

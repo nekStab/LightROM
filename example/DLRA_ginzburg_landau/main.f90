@@ -2,7 +2,7 @@ program demo
    ! Standard Library.
    use stdlib_strings, only: padr
    use stdlib_optval, only : optval 
-   use stdlib_linalg, only : eye, diag, eig
+   use stdlib_linalg, only : eye, diag
    use stdlib_math, only : all_close, logspace
    use stdlib_io_npy, only : save_npy, load_npy
    use stdlib_logger, only : information_level, warning_level, debug_level, error_level, none_level
@@ -66,7 +66,7 @@ program demo
    real(wp),                    allocatable :: U_load(:,:)
    
    ! POD
-   real(wp),                    allocatable :: XTX(:,:)
+   type(state_vector),          allocatable :: X0(:)    
 
    ! Information flag.
    integer                                   :: info
@@ -322,7 +322,6 @@ program demo
       print *, '#########################################################################'
       print *, ''
 
-     
       tolv = [ 10.0_wp, 50.0_wp, 100.0_wp ]
       dtv  = logspace(-1.0_wp, 0.0_wp, 3, 10)
       dtv  = dtv(size(dtv):1:-1) ! reverse vector
@@ -333,44 +332,18 @@ program demo
          do irep = 1, size(dtv)
             tau = dtv(irep)
             prop = exponential_prop(tau)
-            nout = nint(Tend/tau)
             if (adjoint) then
-               nrank = rk_C
+               allocate(X0(rk_C), source=CT)
             else
-               nrank = rk_B
+               allocate(X0(rk_B), source=B)
             end if
-            nsnap = nrank*nout
-            if (allocated(output)) deallocate(output)
-            allocate(output(nsnap), source=CT(1))
-            if (allocated(XTX)) deallocate(XTX)
-            allocate(XTX(nsnap,nsnap))
-            call zero_basis(output)
-            ! Compute impulse response of input/output using direct/adjoint linear solver
-            k = 0
-            do j = 1, nrank
-               do i = 1, nout - 1
-                  k = k + 1
-                  if (adjoint) then
-                     if (i == 1)  then
-                        call copy(output(k), CT(j)) ! initial condtion
-                     end if
-                     call prop%rmatvec(output(k), output(k+1))
-                  else
-                     if (i == 1)  then
-                        call copy(output(k), B(j))  ! initial condtion
-                     end if
-                     call prop%matvec(output(k), output(k+1))
-                  end if
-                  call output(k)%scal(sqrt(tau))
-               end do
-            end do
-            XTX = innerprod(output, output)
-            nprint = min(8, nsnap)
-            svals = svdvals(XTX)
+            call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, adjoint)
+            nprint = min(8, size(svals))
             do i = 1, ceiling(nprint*1.0_wp/irow)
                is = (i-1)*irow+1; ie = min(i*irow, nprint)
                print '(1X,A,F6.4,A,I2,A,I2,*(1X,F16.12))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
             end do
+            deallocate(X0)
          end do
       end do
 
