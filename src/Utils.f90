@@ -405,11 +405,11 @@ contains
          write(msg,'(A,F16.12)') "Invalid integration step tau= ", tau
          call stop_error(msg, this_module, 'rescale_snapshots')
       end if
-      if (mode == 3 .and. mod(n,2) == 1) then
+      if (mode_ == 3 .and. mod(n,2) == 1) then
          msg = "The number of intervals needs to be even for Simpson's rule"
          call stop_error(msg, this_module, 'rescale_snapshots')
       end if
-      select case (mode)
+      select case (mode_)
       case (1)
          ! uniform weights
          w = sqrt(tau)
@@ -419,25 +419,25 @@ contains
       case (2)
          ! Trapezoid rule
          w = sqrt(tau)
-         call X(1)%scal(0.5_dp*w)
+         call X(1)%scal(sqrt(0.5_dp)*w)
          do i = 2, n - 1
             call X(i)%scal(w)
          end do
-         call X(n)%scal(0.5_dp*w)
+         call X(n)%scal(sqrt(0.5_dp)*w)
       case (3)
          ! Composite Simpson's 1/3 rule
-         w = sqrt(tau)/3.0_dp
+         w = sqrt(tau/3.0_dp)
          call X(1)%scal(w)
          do i = 2, n-1
             if (mod(i,2) == 0) then
-               call X(i)%scal(4.0_dp*w)
-            else
                call X(i)%scal(2.0_dp*w)
+            else
+               call X(i)%scal(sqrt(2.0_dp)*w)
             end if
          end do
          call X(n)%scal(w)
       case default
-         write(msg,'(A,I0)') "The selected integration method is not implemented: ", mode
+         write(msg,'(A,I0)') "The selected integration method is not implemented: ", mode_
          call stop_error(msg, this_module, 'rescale_snapshots')
       end select
    end subroutine rescale_snapshots_rdp
