@@ -46,7 +46,8 @@ module LightROM_Utils
    end interface
 
    interface Proper_Orthogonal_Decomposition
-      module procedure Proper_Orthogonal_Decomposition_rdp
+      module procedure Proper_Orthogonal_Decomposition_Impulse_rdp
+      module procedure Proper_Orthogonal_Decomposition_Data_rdp
    end interface
 
    interface rescale_snapshots
@@ -236,7 +237,7 @@ contains
       return
    end subroutine ROM_Galerkin_Projection_rdp
 
-   subroutine Proper_Orthogonal_Decomposition_rdp(svals, prop, X0, tau, Tend, trans, svecs)
+   subroutine Proper_Orthogonal_Decomposition_Impulse_rdp(svals, prop, X0, tau, Tend, trans, mode, svecs)
       !! Computes the Proper Orthogonal Decomposition (POD) of the impulse response to the input vector based on the
       !! exponential propagator prop.
       !! 
@@ -270,6 +271,8 @@ contains
       !! Time horizon for the POD computation
       logical, optional, intent(in) :: trans
       !! Direct of adjoint mode (default: direct)
+      integer, optional, intent(in) :: mode
+      !! Time integration mode
       class(abstract_vector_rdp), optional, allocatable, intent(out) :: svecs(:)
       !! Singular vectors
 
@@ -308,7 +311,7 @@ contains
 
       ! Rescale response for POD
       do j = 1, nrank
-         call rescale_snapshots(X((j-1)*nstep+1:j*nstep), tau, 1)
+         call rescale_snapshots(X((j-1)*nstep+1:j*nstep), tau, mode)
       end do
       
       ! Compute POD
@@ -322,7 +325,65 @@ contains
          ! Project data matrix onto principal axes
          call linear_combination(svecs, X(2:), U)
       end if
-   end subroutine Proper_Orthogonal_Decomposition_rdp
+   end subroutine Proper_Orthogonal_Decomposition_Impulse_rdp
+
+   subroutine Proper_Orthogonal_Decomposition_Data_rdp(svals, X, tau, mode, svecs)
+      !! Computes the Proper Orthogonal Decomposition (POD) of the input vector of data snapshots taken at constant time
+      !! intervals tau
+      !! 
+      !! The POD is computed using the singular value decomposition of the weighted inner product of the snapshot matrix
+      !! \[
+      !!     (\lambda_i, \xi_i) = \mbox{svd}(X^T W X)
+      !! \]
+      !! where the snapshot matrix \( X \) is given by
+      !! \[
+      !!    X = [ \: x\sqrt{\tau} \: ]
+      !! \]
+      !! The integration weights \( W \) are automatically applied in the computation of the inner product.
+      !!
+      !! NOTE: 
+      !!    1. We use the snapshot method which assumes that the number of snapshots is smaller than the number of
+      !!       degrees of freedom of the problem
+      !!    2. The input data matrix is destroyed.
+      !!    3. We assume that the the snapshots are equidistant in time
+      !!
+      real(dp), allocatable, intent(out) :: svals(:)
+      !! POD singular values
+      class(abstract_vector_rdp), intent(inout) :: X(:)
+      !! Snapshots
+      real(dp), intent(in) :: tau 
+      !! Integration time between subsequent snapshots
+      integer, optional, intent(in) :: mode
+      !! Time integration mode
+      class(abstract_vector_rdp), optional, allocatable, intent(out) :: svecs(:)
+      !! Singular vectors
+
+      ! internals
+      real(dp), allocatable :: XTX(:,:)  ! Inner product matrix
+      real(dp), allocatable :: U(:,:), VT(:,:) ! singular vectors
+      integer :: i, j, k
+      integer :: nsnap, nstep, nrank
+
+      ! Data sizes
+      nsnap = size(X)      
+      ! Set impulse
+      allocate(XTX(nsnap,nsnap)) ; XTX = 0.0_dp
+
+      ! Rescale response for POD
+      call rescale_snapshots(X, tau, mode)
+      
+      ! Compute POD
+      XTX = innerprod(X, X)
+      if (.not. present(svecs)) then
+         ! Compute only the POD singular values
+         svals = svdvals(XTX)
+      else
+         ! Compute POD singular values and vectors
+         call svd(XTX, svals, U, VT)
+         ! Project data matrix onto principal axes
+         call linear_combination(svecs, X(2:), U)
+      end if
+   end subroutine Proper_Orthogonal_Decomposition_Data_rdp
 
    subroutine rescale_snapshots_rdp(X, tau, mode)
       !! Apply integration weights to the columns of a data matrix for temporal integration. 
@@ -331,12 +392,13 @@ contains
       !! Snapshot matrix to be rescaled
       real(dp), intent(in) :: tau
       !! Time difference between snapshots in X (assumed constant)
-      integer, intent(in) :: mode
+      integer, optional, intent(in) :: mode
       !! Temporal integration mode
       ! internal
-      integer :: i, n
+      integer :: i, n, mode_
       real(dp) :: w
       character(len=128) :: msg
+      mode_ = optval(mode, 1)
       n = size(X)
       ! Sanity checks
       if (tau <= 0.0_dp) then
