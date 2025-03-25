@@ -7,9 +7,11 @@ program Tester
   use testdrive, only : new_unittest, unittest_type, error_type, check
   use LightKrylov
   use LightKrylov_Logger
+  use LightKrylov_TestUtils
   !> Abstract implementation of ROM-LTI techniques.
   use LightROM
-  use TestLyapunov
+  use LightROM_TestUtils
+  use LightROM_TestLyapunov
 
   implicit none
 
