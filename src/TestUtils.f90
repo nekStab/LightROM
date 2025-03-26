@@ -43,7 +43,7 @@ module LightROM_TestUtils
     real(dp)               :: mu(nx)
 
     ! Input parameters
-    real(dp)               :: weight(N)       ! integration weights
+    real(dp)               :: weight(N)          ! integration weights
     real(dp), parameter    :: x_b = -11.0_dp     ! location of input Gaussian
     real(dp), parameter    :: s_b = 1.0_dp       ! variance of input Gaussian
 
@@ -87,9 +87,9 @@ contains
         real(dp), allocatable, intent(out) :: BBT(:,:)
         ! internal
         real(dp), allocatable :: x(:)
-        real(dp)              :: x2(1:N)
+        real(dp)              :: x2(N)
         real(dp)              :: X0mat(N,2)
-        integer               :: i
+        integer               :: i, j
 
         ! Construct mesh.
         x = linspace(-L/2, L/2, nx+2)
@@ -112,7 +112,7 @@ contains
         x2(1:nx) = x(2:nx+1)
         X0(1)%state = exp(-((x2 - x_b)/s_b)**2)
         ! column 2
-        x2            = 0.0_dp
+        x2         = 0.0_dp
         x2(nx+1:N) = x(2:nx+1)
         X0(2)%state = exp(-((x2 - x_b)/s_b)**2)
 
@@ -121,7 +121,7 @@ contains
         BBT = matmul(X0mat, dx*transpose(X0mat))
 
         ! Build the GL opreator
-        allocate(A(N,N))
+        allocate(A(N,N)); A = 0.0_dp
         do i = 1, N
             x2 = 0.0_dp
             x2(i) = 1.0_dp
@@ -147,62 +147,62 @@ contains
         real(dp)                :: d2u, d2v, cu, cv
   
         u = vec_in(1:nx)     
-        v = vec_in(nx+1:N)
-  
+        v = vec_in(nx+1:2*nx)
+
         !---------------------------------------------------
         !-----     Linear Ginzburg Landau Equation     -----
         !---------------------------------------------------
-  
+
         cu = u(2) / (2*dx) ; cv = v(2) / (2*dx)
         du(1) = -(real(nu)*cu - aimag(nu)*cv) ! Convective term.
         dv(1) = -(aimag(nu)*cu + real(nu)*cv) ! Convective term.
-  
+
         d2u = (u(2) - 2*u(1)) / dx**2 ; d2v = (v(2) - 2*v(1)) / dx**2
         du(1) = du(1) + real(gamma)*d2u - aimag(gamma)*d2v ! Diffusion term.
         dv(1) = dv(1) + aimag(gamma)*d2u + real(gamma)*d2v ! Diffusion term.
-  
+
         du(1) = du(1) + mu(1)*u(1) ! Non-parallel term.
         dv(1) = dv(1) + mu(1)*v(1) ! Non-parallel term.
-  
+
         ! Interior nodes.
         do i = 2, nx-1
-           ! Convective term.
-           cu = (u(i+1) - u(i-1)) / (2*dx)
-           cv = (v(i+1) - v(i-1)) / (2*dx)
-           du(i) = -(real(nu)*cu - aimag(nu)*cv)
-           dv(i) = -(aimag(nu)*cu + real(nu)*cv)
-  
-           ! Diffusion term.
-           d2u = (u(i+1) - 2*u(i) + u(i-1)) / dx**2
-           d2v = (v(i+1) - 2*v(i) + v(i-1)) / dx**2
-           du(i) = du(i) + real(gamma)*d2u - aimag(gamma)*d2v
-           dv(i) = dv(i) + aimag(gamma)*d2u + real(gamma)*d2v
-  
-           ! Non-parallel term.
-           du(i) = du(i) + mu(i)*u(i)
-           dv(i) = dv(i) + mu(i)*v(i)
+            ! Convective term.
+            cu = (u(i+1) - u(i-1)) / (2*dx)
+            cv = (v(i+1) - v(i-1)) / (2*dx)
+            du(i) = -(real(nu)*cu - aimag(nu)*cv)
+            dv(i) = -(aimag(nu)*cu + real(nu)*cv)
+
+            ! Diffusion term.
+            d2u = (u(i+1) - 2*u(i) + u(i-1)) / dx**2
+            d2v = (v(i+1) - 2*v(i) + v(i-1)) / dx**2
+            du(i) = du(i) + real(gamma)*d2u - aimag(gamma)*d2v
+            dv(i) = dv(i) + aimag(gamma)*d2u + real(gamma)*d2v
+
+            ! Non-parallel term.
+            du(i) = du(i) + mu(i)*u(i)
+            dv(i) = dv(i) + mu(i)*v(i)
         enddo
-  
+
         ! Right most boundary points.
         cu = -u(nx-1) / (2*dx) ; cv = -v(nx-1) / (2*dx)
         du(nx) = -(real(nu)*cu - aimag(nu)*cv) ! Convective term.
         dv(nx) = -(aimag(nu)*cu + real(nu)*cv) ! Convective term.
-  
+
         d2u = (-2*u(nx) + u(nx-1)) / dx**2 ; d2v = (-2*v(nx) + v(nx-1)) / dx**2
         du(nx) = du(nx) + real(gamma)*d2u - aimag(gamma)*d2v ! Diffusion term.
         dv(nx) = dv(nx) + aimag(gamma)*d2u + real(gamma)*d2v ! Diffusion term.
-  
+
         du(nx) = du(nx) + mu(nx)*u(nx) ! Non-parallel term.
         dv(nx) = dv(nx) + mu(nx)*v(nx) ! Non-parallel term.
-  
+
         vec_out(1:nx)      = du
-        vec_out(nx+1:N) = dv
+        vec_out(nx+1:2*nx) = dv
   
     end subroutine GL_operator
     
     subroutine GL_rhs(me, t, x, f)
         ! Time-integrator.
-        class(rk_class), intent(inout)             :: me
+        class(rk_class), intent(inout)      :: me
         ! Current time.
         real(dp), intent(in)                :: t
         ! State vector.

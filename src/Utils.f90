@@ -291,13 +291,10 @@ contains
       nstep = floor(Tend/tau)
       nsnap = nrank*(nstep + 1)
       
-      ! Set impulse
-      allocate(XTX(nsnap,nsnap)) ; XTX = 0.0_dp
-      allocate(X(nsnap), source=X0(1)) ; call zero_basis(X)
-
       ! Compute impulse response
+      allocate(X(nsnap), source=X0(1)) ; call zero_basis(X)
       k = 1
-      do j = 1, nrank ! for each initial condition
+      do j = 1, nrank ! one series for each initial condition
          call copy(X(k), X0(j))
          do i = 1, nstep ! for the chosen time horizon
             if (transpose) then
@@ -314,8 +311,9 @@ contains
          call rescale_snapshots(X((j-1)*nstep+1:j*nstep), tau, mode)
       end do
       
-      ! Compute POD
-      XTX = innerprod(X, X)
+      ! Compute cross-correlation
+      allocate(XTX(nsnap,nsnap))
+      XTX = gram(X)
       if (.not. present(svecs)) then
          ! Compute only the POD singular values
          svals = svdvals(XTX)
@@ -323,11 +321,11 @@ contains
          ! Compute POD singular values and vectors
          call svd(XTX, svals, U, VT)
          ! Project data matrix onto principal axes
-         call linear_combination(svecs, X(2:), U)
+         call linear_combination(svecs, X, U)
       end if
    end subroutine Proper_Orthogonal_Decomposition_Impulse_rdp
 
-   subroutine Proper_Orthogonal_Decomposition_Data_rdp(svals, X, tau, mode, svecs)
+   subroutine Proper_Orthogonal_Decomposition_Data_rdp(svals, X, tau, nseries, mode, svecs)
       !! Computes the Proper Orthogonal Decomposition (POD) of the input vector of data snapshots taken at constant time
       !! intervals tau
       !! 
@@ -353,6 +351,8 @@ contains
       !! Snapshots
       real(dp), intent(in) :: tau 
       !! Integration time between subsequent snapshots
+      integer, optional, intent(in) :: nseries
+      !! Number of independent time series in the data
       integer, optional, intent(in) :: mode
       !! Time integration mode
       class(abstract_vector_rdp), optional, allocatable, intent(out) :: svecs(:)
@@ -361,19 +361,28 @@ contains
       ! internals
       real(dp), allocatable :: XTX(:,:)  ! Inner product matrix
       real(dp), allocatable :: U(:,:), VT(:,:) ! singular vectors
-      integer :: i, j, k
+      integer :: j
       integer :: nsnap, nstep, nrank
+      character(len=128) :: msg
 
       ! Data sizes
-      nsnap = size(X)      
-      ! Set impulse
-      allocate(XTX(nsnap,nsnap)) ; XTX = 0.0_dp
+      nrank = optval(nseries, 1)
+      nsnap = size(X)
+      nstep = nsnap/nrank - 1
+      if (nsnap .ne. (nstep+1)*nrank) then
+         write(msg,'(2(A,I0,A))') "Input data of size ", nsnap, " cannot be partitioned into ", nrank, " series."
+         call stop_error(msg, this_module, 'Proper_Orthogonal_Decomposition_Data_rdp')
+      end if
 
       ! Rescale response for POD
-      call rescale_snapshots(X, tau, mode)
+      do j = 1, nrank
+         call rescale_snapshots(X((j-1)*nstep+1:j*nstep), tau, mode)
+      end do
       
+      ! Compute cross-correlation
+      allocate(XTX(nsnap,nsnap))
+      XTX = gram(X)
       ! Compute POD
-      XTX = innerprod(X, X)
       if (.not. present(svecs)) then
          ! Compute only the POD singular values
          svals = svdvals(XTX)
@@ -381,7 +390,7 @@ contains
          ! Compute POD singular values and vectors
          call svd(XTX, svals, U, VT)
          ! Project data matrix onto principal axes
-         call linear_combination(svecs, X(2:), U)
+         call linear_combination(svecs, X, U)
       end if
    end subroutine Proper_Orthogonal_Decomposition_Data_rdp
 
@@ -405,37 +414,21 @@ contains
          write(msg,'(A,F16.12)') "Invalid integration step tau= ", tau
          call stop_error(msg, this_module, 'rescale_snapshots')
       end if
-      if (mode_ == 3 .and. mod(n,2) == 1) then
-         msg = "The number of intervals needs to be even for Simpson's rule"
-         call stop_error(msg, this_module, 'rescale_snapshots')
-      end if
       select case (mode_)
       case (1)
          ! uniform weights
-         w = sqrt(tau)
+         w = tau
          do i = 1, n
-            call X(i)%scal(w)
+            call X(i)%scal(sqrt(w))
          end do
       case (2)
          ! Trapezoid rule
-         w = sqrt(tau)
-         call X(1)%scal(sqrt(0.5_dp)*w)
+         w = tau
+         call X(1)%scal(sqrt(0.5_dp*w))
          do i = 2, n - 1
-            call X(i)%scal(w)
+            call X(i)%scal(sqrt(w))
          end do
-         call X(n)%scal(sqrt(0.5_dp)*w)
-      case (3)
-         ! Composite Simpson's 1/3 rule
-         w = sqrt(tau/3.0_dp)
-         call X(1)%scal(w)
-         do i = 2, n-1
-            if (mod(i,2) == 0) then
-               call X(i)%scal(2.0_dp*w)
-            else
-               call X(i)%scal(sqrt(2.0_dp)*w)
-            end if
-         end do
-         call X(n)%scal(w)
+         call X(n)%scal(sqrt(0.5_dp*w))
       case default
          write(msg,'(A,I0)') "The selected integration method is not implemented: ", mode_
          call stop_error(msg, this_module, 'rescale_snapshots')
