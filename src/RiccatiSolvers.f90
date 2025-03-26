@@ -367,7 +367,7 @@ module LightROM_RiccatiSolvers
                Swrk0 = innerprod(X%U, Ut)
                call linear_combination(Xwrk, Tt, Swrk0); call copy(T0, Xwrk) ! overwrite T0 with Gamma
             end block
-            call axpby_basis(T0, 0.5_wp, QU, 0.5_wp)
+            call axpby_basis(0.5_wp, QU, 0.5_wp, T0)
             ! Update X to most recent value
             call copy(X%U, U1)
             ! reverse steps based on Gamma
@@ -451,10 +451,10 @@ module LightROM_RiccatiSolvers
       end if
       
       ! Combine to form G( K @ U.T ) @ U --> Uwrk0
-      call axpby_basis(Uwrk0, -1.0_wp, QU, 1.0_wp)
+      call axpby_basis(1.0_wp, QU, -1.0_wp, Uwrk0)
 
       ! Construct intermediate solution U1
-      call axpby_basis(U1, 1.0_wp, Uwrk0, tau)                   ! K0 + tau*Kdot
+      call axpby_basis(tau, Uwrk0, 1.0_wp, U1)                   ! K0 + tau*Kdot
 
       ! Orthonormalize in-place
       call qr(U1, Swrk0, info)
@@ -576,10 +576,10 @@ module LightROM_RiccatiSolvers
       end block
 
       ! Combine to form U1.T @ G( U1.T@L.T )
-      call axpby_basis(Uwrk0, 1.0_wp, X%U, -1.0_wp)
+      call axpby_basis(-1.0_wp, X%U, 1.0_wp, Uwrk0)
 
       ! Construct solution L1.T
-      call axpby_basis(Uwrk1, 1.0_wp, Uwrk0, tau)               ! L0.T + tau*Ldot.T
+      call axpby_basis(tau, Uwrk0, 1.0_wp, Uwrk1)               ! L0.T + tau*Ldot.T
 
       ! Update coefficient matrix
       X%S = innerprod(Uwrk1, U1)

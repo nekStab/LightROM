@@ -241,13 +241,13 @@ contains
         self%state = self%state * alpha
     end subroutine scal_state
 
-    subroutine axpby_state(self, alpha, vec, beta)
+    subroutine axpby_state(alpha, vec, beta, self)
         class(state_vector),        intent(inout) :: self
         class(abstract_vector_rdp), intent(in)    :: vec
         real(dp),                   intent(in)    :: alpha, beta
         select type(vec)
         type is(state_vector)
-            self%state = alpha*self%state + beta*vec%state
+            self%state = beta*self%state + alpha*vec%state
         class default
             call stop_error("The intent [IN] argument 'vec' must be of type 'state_vector'", this_module, 'axpby')
         end select

@@ -110,13 +110,13 @@ contains
       self%state = self%state * alpha
    end subroutine vector_scal
 
-   subroutine vector_axpby(self, alpha, vec, beta)
+   subroutine vector_axpby(alpha, vec, beta, self)
       class(state_vector)       , intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: vec
       real(wp)                  , intent(in)    :: alpha, beta
       select type(vec)
       type is (state_vector)
-         self%state = alpha*self%state + beta*vec%state
+         self%state = beta*self%state + alpha*vec%state
       class default
          call stop_error('vec must be a state_vector', this_module, 'axpby')
       end select
@@ -168,13 +168,13 @@ contains
       self%state = self%state * alpha
    end subroutine matrix_scal  
 
-   subroutine matrix_axpby(self, alpha, vec, beta)
+   subroutine matrix_axpby(alpha, vec, beta, self)
       class(state_matrix)       , intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: vec
       real(wp)                  , intent(in)    :: alpha, beta
       select type(vec)
       type is(state_matrix)
-          self%state = alpha*self%state + beta*vec%state
+          self%state = beta*self%state + alpha*vec%state
       class default
          call stop_error('vec must be a state_matrix', this_module, 'matrix_axpby')
       end select

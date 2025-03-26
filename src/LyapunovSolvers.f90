@@ -603,7 +603,7 @@ module LightROM_LyapunovSolvers
       call copy(U1, Uwrk)
       call apply_outerprod(BBTU, B, X%U(:rk))                ! Kdot
       ! Construct intermediate solution U1
-      call axpby_basis(U1, 1.0_wp, BBTU, tau)                ! K0 + tau*Kdot
+      call axpby_basis(tau, BBTU, 1.0_wp, U1)                ! K0 + tau*Kdot
       ! Orthonormalize in-place
       call qr(U1, X%S(:rk,:rk), info)
       call check_info(info, 'qr', module=this_module, procedure='K_step_lyapunov_rdp')
@@ -661,7 +661,7 @@ module LightROM_LyapunovSolvers
       ! Construct derivative
       call apply_outerprod(X%U(:rk), B, U1)       ! Ldot.T
       ! Construct solution L1.T
-      call axpby_basis(Uwrk, 1.0_wp, X%U(:rk), tau)
+      call axpby_basis(tau, X%U(:rk), 1.0_wp, Uwrk)
       ! Update coefficient matrix
       X%S(:rk,:rk) = innerprod(Uwrk, U1)
 
