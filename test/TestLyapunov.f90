@@ -144,7 +144,7 @@ contains
       ! Initialize problem
       call initialize_GL_parameters(X0, A, BBT)
       !call solve_lyapunov(Xref, A, BBT)
-      call load_npy('Xref.npy', Xref)
+      call load_npy('test/Xref.npy', Xref)
       res_norm = norm2(matmul(A, Xref) + matmul(Xref, transpose(A)) + BBT)
       !print *, ""
       !print *, 'Residual norm of reference solution: ', res_norm  
@@ -215,7 +215,7 @@ contains
       ! Initialize problem
       call initialize_GL_parameters(X0, A, BBT)
       !call solve_lyapunov(Xref, A, BBT)
-      call load_npy('Xref.npy', Xref)
+      call load_npy('test/Xref.npy', Xref)
       res_norm = norm2(matmul(A, Xref) + matmul(Xref, transpose(A)) + BBT)
       !print *, ""
       !print *, 'Residual norm of reference solution: ', res_norm  
