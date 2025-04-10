@@ -91,7 +91,7 @@ program demo
    !
    ! if_lyapunov = .false.: Solve the Riccati equation:    0 = A @ X + X @ A.T + X @ B @ @ R^{-1} @ B.T @ W @ X + Q
    !
-   logical, parameter :: adjoint = .false. !.false.
+   logical, parameter :: if_adj = .false.
    ! Only considered if if_lyapunov = .true.
    !
    ! Adjoint = .true.:      Solve the adjoint Lyapunov equation:  0 = A.T @ X + X @ A + C.T @ C @ W
@@ -148,7 +148,7 @@ program demo
 
    print *, 'Cases to be run:'
    print '(2X,A45,L4)', padr('if_lyapunov:',50), if_lyapunov
-   print '(2X,A45,L4)', padr('adjoint:',50), adjoint
+   print '(2X,A45,L4)', padr('if_adj:',50), if_adj
    print '(2X,A45,L4)', padr('main_run:',50), main_run
    print '(2X,A45,L4)', padr('short_test:',50), short_test
    print '(2X,A45,L4)', padr('run_fixed_rank_short_integration_time_test:',50), run_fixed_rank_short_integration_time_test
@@ -207,7 +207,7 @@ program demo
    call LTI%initialize_lti_system(A, prop, B, CT)
 
    print *, ''
-   if (adjoint) then
+   if (if_adj) then
       svals = svdvals(CTCW)
       print '(1X,A,*(F16.12,X))', 'SVD(1:3) CTCW:   ', svals(1:3)
    else
@@ -218,7 +218,7 @@ program demo
    print *, ''
    if (if_lyapunov) then
       print *, 'Check residual computation with Bartels-Stuart solution:'
-      if (adjoint) then
+      if (if_adj) then
          oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Observability_Yref_BS_W.npy'
       else
          oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Controllability_Xref_BS_W.npy'
@@ -233,9 +233,9 @@ program demo
    print *, ''
    print '(A,F16.12)', '  |  X_BS  |/N = ', norm2(Xref)/N
    if (if_lyapunov) then
-      print '(A,F16.12)', '  | res_BS |/N = ', norm2(CALE(Xref, adjoint))/N
+      print '(A,F16.12)', '  | res_BS |/N = ', norm2(CALE(Xref, if_adj))/N
    else
-      print '(A,F16.12)', '  | res_BS |/N = ', norm2(CARE(Xref, CTQcCW, BRinvBTW, adjoint))/N
+      print '(A,F16.12)', '  | res_BS |/N = ', norm2(CARE(Xref, CTQcCW, BRinvBTW, if_adj))/N
    end if
    print *, ''
    ! compute svd
@@ -255,7 +255,7 @@ program demo
    call reconstruct_solution(X_out, U0, S0)
    print *, ''
    print '(A,F16.12)', '  |  X_0  |/N = ', norm2(X_out)/N
-   print '(A,F16.12)', '  | res_0 |/N = ', norm2(CALE(X_out, adjoint))/N
+   print '(A,F16.12)', '  | res_0 |/N = ', norm2(CALE(X_out, if_adj))/N
    print *, ''
    ! compute svd
    svals = svdvals(X_out)
@@ -302,7 +302,7 @@ program demo
       print *, '#########################################################################'
       print *, ''
 
-      call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+      call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
 
       print *, ''
       print *, '#########################################################################'
@@ -312,7 +312,7 @@ program demo
       print *, '#########################################################################'
       print *, ''
 
-      call run_lyap_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
+      call run_lyap_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, if_adj, home, if_save_output)
 
       print *, ''
       print *, '#########################################################################'
@@ -332,12 +332,12 @@ program demo
          do irep = 1, size(dtv)
             tau = dtv(irep)
             prop = exponential_prop(tau)
-            if (adjoint) then
+            if (if_adj) then
                allocate(X0(rk_C), source=CT)
             else
                allocate(X0(rk_B), source=B)
             end if
-            call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, adjoint)
+            call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, if_adj)
             nprint = min(8, size(svals))
             do i = 1, ceiling(nprint*1.0_wp/irow)
                is = (i-1)*irow+1; ie = min(i*irow, nprint)
@@ -363,13 +363,13 @@ program demo
             nstep = 10
             iref  = 5
             ! Run RK integrator for the Lyapunov equation
-            call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+            call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
          else
             T_RK  = 0.01_wp
             nstep = 10
             iref  = 5
             ! Run RK integrator for the Riccati equation
-            call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+            call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
          end if
       else
          print *, 'Skip.'
@@ -402,7 +402,7 @@ program demo
             if_save_output = .false.
             
             ! DLRA with fixed rank
-            call run_lyap_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
+            call run_lyap_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, if_adj, home, if_save_output)
          else
             Tend = T_RK/nstep*iref
             rkv = [ 6, 10, 14 ]
@@ -417,7 +417,7 @@ program demo
             if_save_output = .false.
             
             ! DLRA with fixed rank
-            call run_ricc_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
+            call run_ricc_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, if_adj, home, if_save_output)
          end if
       else
          print *, 'Skip.'
@@ -450,7 +450,7 @@ program demo
             iref  = 20
 
             ! Run RK integrator for the Lyapunov equation
-            call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+            call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
             call reset_lyapsolver()
          else
             T_RK  = 50.0_wp
@@ -458,7 +458,7 @@ program demo
             iref  = 20
             
             ! Run RK integrator for the Lyapunov equation
-            call run_ricc_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+            call run_ricc_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
             !call reset_riccsolver()
          end if
       else
@@ -492,7 +492,7 @@ program demo
             if_save_output = .true.
             
             ! DLRA with fixed rank
-            call run_lyap_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
+            call run_lyap_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, if_adj, home, if_save_output)
             call reset_lyapsolver()
          else
             Tend = T_RK/nstep*iref
@@ -508,7 +508,7 @@ program demo
             if_save_output = .true.
             
             ! DLRA with fixed rank
-            call run_ricc_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
+            call run_ricc_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, if_adj, home, if_save_output)
             !call reset_riccsolver()
          end if
       else
@@ -542,7 +542,7 @@ program demo
             if_save_output = .true.
             
             ! DLRA with adaptive rank
-            call run_lyap_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
+            call run_lyap_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, if_adj, home, if_save_output)
             call reset_lyapsolver()
          else
             print *, 'Riccati rank-adaptive not implemented at this time'
@@ -560,7 +560,7 @@ program demo
             if_save_output = .true.
             
             ! DLRA with adaptive rank
-            !call run_ricc_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
+            !call run_ricc_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, if_adj, home, if_save_output)
             !call reset_riccsolver()
          end if
       else
