@@ -80,6 +80,7 @@ program demo
    integer                                   :: nprint
    logical                                   :: if_save_output
    character(len=128)                        :: msg
+   character(len=2)                          :: refid
    integer                                   :: nout
 
    !--------------------------------
@@ -160,13 +161,24 @@ program demo
    print *, '#                                                                       #'
    print *, '#########################################################################'
    print *, ''
-   print *, ' LYAPUNOV EQUATION FOR THE NON-PARALLEL LINEAR GINZBURG-LANDAU EQUATION:'
+   print *, '             THE NON-PARALLEL LINEAR GINZBURG-LANDAU EQUATION:'
    print *, ''
    print *, '                 A = mu(x) * I + nu * D_x + gamma * D2_x'
    print *, ''
    print *, '                   with mu(x) = mu_0 * x + mu_2 * x^2'
    print *, ''
    if (if_lyapunov) then
+      refid = 'BS'
+      print *, '                     Algebraic Lyapunov equation:'
+      print *, '                     0 = A @ X + X @ A.T + B @ B.T'
+      print *, '                                  or'               
+      print *, '                     0 = A.T @ X + X @ A + C.T @ C (adjoint)'
+      print *, ''               
+      print *, '                   Differential Lyapunov equation:'
+      print *, '                  \dot{X} = A @ X + X @ A.T + B @ B.T'
+      print *, '                                  or'               
+      print *, '                  \dot{X} = A.T @ X + X @ A + C.T @ C (adjoint)'
+      print *, ''
       print *, ''
       print '(13X,A,I4,"x",I4)', 'Complex problem size:          ', nx, nx
       print '(13X,A,I4,"x",I4)', 'Equivalent real problem size:  ', N, N
@@ -175,6 +187,7 @@ program demo
       print *, '            Inhomogeneity:     rank(B)   =', rk_B
       print *, '            Inhomogeneity:     rank(C.T) =', rk_C
    else
+      refid = 'SD'
       print *, '                     Algebraic Riccati equation:'
       print *, '     0 = A.T @ X + X @ A - X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
       print *, ''               
@@ -207,16 +220,20 @@ program demo
    call LTI%initialize_lti_system(A, prop, B, CT)
 
    print *, ''
-   if (if_adj) then
-      svals = svdvals(CTCW)
-      print '(1X,A,*(F16.12,X))', 'SVD(1:3) CTCW:   ', svals(1:3)
-   else
-      svals = svdvals(BBTW)
-      print '(1X,A,*(F16.12,X))', 'SVD(1:3) BBTW:   ', svals(1:3)
-   end if
-
-   print *, ''
    if (if_lyapunov) then
+      print '(4X,A,L2)', 'adjoint:', if_adj
+      if (if_adj) then
+         svals = svdvals(CTCW)
+         print '(1X,A)', 'Inhomogeneity: CTCW'
+         print '(1X,A,*(F16.12,X))', 'SVD(1:3)     = ', svals(1:3)
+         print '(1X,A,F16.12)',      '|  CTCW  |/N = ', norm2(CTCW)/N
+      else
+         svals = svdvals(BBTW)
+         print '(1X,A)', 'Inhomogeneity: BBTW'
+         print '(1X,A,*(F16.12,X))', 'SVD(1:3)     = ', svals(1:3)
+         print '(1X,A,F16.12)',      '|  BBTW  |/N = ', norm2(BBTW)/N
+      end if
+      print *, ''
       print *, 'Check residual computation with Bartels-Stuart solution:'
       if (if_adj) then
          oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Observability_Yref_BS_W.npy'
@@ -224,6 +241,16 @@ program demo
          oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Controllability_Xref_BS_W.npy'
       end if
    else
+      svals = svdvals(CTQcCW)
+      print '(1X,A)', 'Inhomogeneity: CTQcCW'
+      print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
+      print '(1X,A,F16.12)',      '|  CTQcCW  |/N   = ', norm2(CTQcCW)/N
+      prit *, ''
+      svals = svdvals(BRinvBTW)
+      print '(1X,A)', 'Nonlinearity: BRinvBTW'
+      print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
+      print '(1X,A,F16.12)',      '|  BRinvBTW  |/N = ', norm2(BRinvBTW)/N
+      print *, ''
       print *, 'Check residual computation with Schur decomposition method:'
       oname = './example/DLRA_ginzburg_landau/CGL_Riccati_Pref_Schur_W.npy'
    end if
@@ -231,16 +258,18 @@ program demo
    Xref = U_load
    
    print *, ''
-   print '(A,F16.12)', '  |  X_BS  |/N = ', norm2(Xref)/N
    if (if_lyapunov) then
-      print '(A,F16.12)', '  | res_BS |/N = ', norm2(CALE(Xref, if_adj))/N
+      print '(A,A,A,F16.12)', '  |  X_', refid, '  |/N = ', norm2(Xref)/N
+      print '(A,A,A,F16.12)', '  | res_', refid, ' |/N = ', norm2(CALE(Xref, if_adj))/N
    else
-      print '(A,F16.12)', '  | res_BS |/N = ', norm2(CARE(Xref, CTQcCW, BRinvBTW, if_adj))/N
+      print '(A,A,A,F16.12)', '  |  X_', refid, '  |/N = ', norm2(Xref)/N
+      print '(A,A,A,F16.12)', '  | res_', refid, ' |/N = ', norm2(CARE(Xref, CTQcCW, BRinvBTW))/N
    end if
+   
    print *, ''
    ! compute svd
    svals = svdvals(Xref)
-   print *, 'SVD X_BS:'
+   print *, 'SVD X_', refid, ':'
    do i = 1, ceiling(60.0/irow)
       is = (i-1)*irow+1; ie = i*irow
       print '(2X,I2,"-",I2,*(1X,F16.12))', is, ie, ( svals(j), j = is, ie )
@@ -369,7 +398,7 @@ program demo
             nstep = 10
             iref  = 5
             ! Run RK integrator for the Riccati equation
-            call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
+            call run_ricc_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
          end if
       else
          print *, 'Skip.'
@@ -417,16 +446,16 @@ program demo
             if_save_output = .false.
             
             ! DLRA with fixed rank
-            call run_ricc_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, if_adj, home, if_save_output)
+            call run_ricc_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, .true., home, if_save_output)
          end if
       else
          print *, 'Skip.'
          print *, ''
       end if
       if (if_lyapunov) then
-         call reset_lyapsolver()
-      !else
-      !   call reset_riccsolver()
+         call reset_lyapunov_solver()
+      else
+         call reset_riccati_solver()
       end if
 
       ! Reset timers
@@ -451,7 +480,7 @@ program demo
 
             ! Run RK integrator for the Lyapunov equation
             call run_lyap_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
-            call reset_lyapsolver()
+            call reset_lyapunov_solver()
          else
             T_RK  = 50.0_wp
             nstep = 20
@@ -459,7 +488,7 @@ program demo
             
             ! Run RK integrator for the Lyapunov equation
             call run_ricc_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
-            !call reset_riccsolver()
+            call reset_riccati_solver()
          end if
       else
          print *, 'Skip.'
@@ -493,7 +522,7 @@ program demo
             
             ! DLRA with fixed rank
             call run_lyap_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, if_adj, home, if_save_output)
-            call reset_lyapsolver()
+            call reset_lyapunov_solver()
          else
             Tend = T_RK/nstep*iref
             rkv = [ 10, 20, 40 ]
@@ -508,8 +537,8 @@ program demo
             if_save_output = .true.
             
             ! DLRA with fixed rank
-            call run_ricc_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, if_adj, home, if_save_output)
-            !call reset_riccsolver()
+            call run_ricc_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, .true., home, if_save_output)
+            call reset_riccati_solver()
          end if
       else
          print *, 'Skip.'
@@ -543,7 +572,7 @@ program demo
             
             ! DLRA with adaptive rank
             call run_lyap_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, if_adj, home, if_save_output)
-            call reset_lyapsolver()
+            call reset_lyapunov_solver()
          else
             print *, 'Riccati rank-adaptive not implemented at this time'
             STOP 87
@@ -561,7 +590,7 @@ program demo
             
             ! DLRA with adaptive rank
             !call run_ricc_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, if_adj, home, if_save_output)
-            !call reset_riccsolver()
+            !call reset_riccati_solver()
          end if
       else
          print *, 'Skip.'
