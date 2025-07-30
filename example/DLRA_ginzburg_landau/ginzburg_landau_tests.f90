@@ -380,7 +380,7 @@ contains
       ! Set initial condition for RK
       call reconstruct_solution(X_out, U0, S0)
       call set_state(X_mat(1:1), X_out, 'Set initial condition')
-      write(*,'(A7,A10,A19,A19,A19,A12)') ' RKlib:','Tend','| X_RK |/N', '| X_RK - X_BS |/N', '| res_RK |/N','etime'
+      write(*,'(A7,A10,A19,A19,A19,A12)') ' RKlib:','Tend','| X_RK |/N', '| X_RK - X_SD |/N', '| res_RK |/N','etime'
       write(*,*) '-------------------------------------------------------------------------------------'
       write(*,'(I7,F10.4,3(1X,E18.6),F10.4," s",A)') 0, 0.0, norm2(X_out)/N, norm2(X_out - Xref)/N, &
                                                             & norm2(CARE(X_out, CTQcCW, BRinvBTW))/N, 0.0, ''
@@ -501,7 +501,7 @@ contains
          svals = svdvals(Xref)
          do i = 1, ceiling(nprint*1.0_wp/irow)
             is = (i-1)*irow+1; ie = i*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_BS) ', is, '-', ie, ( svals(j), j = is, ie )
+            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_SD) ', is, '-', ie, ( svals(j), j = is, ie )
          end do
          print *, ''
          svals = svdvals(Xref_RK)
