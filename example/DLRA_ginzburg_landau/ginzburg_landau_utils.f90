@@ -312,27 +312,25 @@ contains
 
    end function CALE
 
-   function CARE(X, CTQcCW, BRinvBTW, adjoint) result(res)
+   function CARE(X, CTQcCW, BRinvBTW) result(res)
       ! solution
       real(wp)          :: X(N,N)
       ! inhomogeneity
       real(wp)          :: CTQcCW(N,N)
       ! inhomogeneity
       real(wp)          :: BRinvBTW(N,N)
-      ! adjoint
-      logical, optional :: adjoint
       ! residual
       real(wp)          :: res(N,N)
       
       ! internals
-      real(wp), dimension(N,N) :: AX, XAH
+      real(wp), dimension(N,N) :: AHX, XA
 
-      AX = 0.0_wp; XAH = 0.0_wp
-      call GL_mat(AX,  X,             adjoint = adjoint, transpose = .false.)
-      call GL_mat(XAH, transpose(X),  adjoint = adjoint, transpose = .true. )
+      AHX = 0.0_wp; XA = 0.0_wp
+      call GL_mat(AHX, X,            adjoint = .true., transpose = .false.)
+      call GL_mat(XA, transpose(X),  adjoint = .true., transpose = .true. )
 
       ! construct Lyapunov equation
-      res = AX + XAH + CTQcCW - matmul(X, matmul(BRinvBTW, X))
+      res = AHX + XA + CTQcCW - matmul(X, matmul(BRinvBTW, X))
 
    end function CARE
 end module Ginzburg_Landau_Utils
