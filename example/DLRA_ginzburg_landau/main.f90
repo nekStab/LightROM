@@ -245,7 +245,7 @@ program demo
       print '(1X,A)', 'Inhomogeneity: CTQcCW'
       print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
       print '(1X,A,F16.12)',      '|  CTQcCW  |/N   = ', norm2(CTQcCW)/N
-      prit *, ''
+      print *, ''
       svals = svdvals(BRinvBTW)
       print '(1X,A)', 'Nonlinearity: BRinvBTW'
       print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
