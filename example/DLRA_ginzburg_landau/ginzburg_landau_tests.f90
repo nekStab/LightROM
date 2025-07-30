@@ -383,7 +383,7 @@ contains
       write(*,'(A7,A10,A19,A19,A19,A12)') ' RKlib:','Tend','| X_RK |/N', '| X_RK - X_BS |/N', '| res_RK |/N','etime'
       write(*,*) '-------------------------------------------------------------------------------------'
       write(*,'(I7,F10.4,3(1X,E18.6),F10.4," s",A)') 0, 0.0, norm2(X_out)/N, norm2(X_out - Xref)/N, &
-                                                            & norm2(CARE(Xref, CTQcCW, BRinvBTW, adjoint))/N, 0.0, ''
+                                                            & norm2(CARE(X_out, CTQcCW, BRinvBTW))/N, 0.0, ''
       do irep = 1, nrep
          call system_clock(count=clock_start)     ! Start Timer
          ! integrate
@@ -405,12 +405,12 @@ contains
             write(note,*) ''
          end if
          write(*,'(I7,F10.4,3(1X,E18.6),F10.4," s",A)') irep, irep*Tstep, norm2(X_RK(:,:,irep))/N, &
-                     & norm2(X_RK(:,:,irep)-Xref)/N, norm2(CARE(Xref, CTQcCW, BRinvBTW, adjoint))/N, etime, trim(note) 
+                     & norm2(X_RK(:,:,irep)-Xref)/N, norm2(CARE(X_RK(:,:,irep), CTQcCW, BRinvBTW))/N, etime, trim(note) 
       enddo
       Xref_RK(:,:) = X_RK(:,:,iref)
       print *, ''
-      print '(A,F16.12)', '  |  X_RK  |/N = ', norm2(Xref)/N
-      print '(A,F16.12)', '  | res_RK |/N = ', norm2(CARE(Xref, CTQcCW, BRinvBTW, adjoint))/N
+      print '(A,F16.12)', '  |  X_RK  |/N = ', norm2(Xref_RK)/N
+      print '(A,F16.12)', '  | res_RK |/N = ', norm2(CARE(Xref_RK, CTQcCW, BRinvBTW))/N
    end subroutine run_ricc_reference_RK
 
    subroutine run_ricc_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
@@ -491,10 +491,10 @@ contains
                write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I8,F10.4,4(E19.8),F10.2," s")') 1, note, 'OUTPUT', &
                                  & rk, torder, tau, nsteps, Tend, &
                                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref)/N, &
-                                 & norm2(CARE(Xref, CTQcCW, BRinvBTW, adjoint))/N, etime
+                                 & norm2(CARE(X_out, CTQcCW, BRinvBTW))/N, etime
                deallocate(X%U); deallocate(X%S)
             end do
-            !print *, ''
+            print *, ''
          end do
       end do
       if (nprint > 0) then
