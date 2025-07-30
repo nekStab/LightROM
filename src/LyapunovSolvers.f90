@@ -30,12 +30,12 @@ module LightROM_LyapunovSolvers
    integer :: LyapSolver_counter = 0
 
    public :: projector_splitting_DLRA_lyapunov_integrator
-   public :: reset_lyapsolver
    public :: M_forward_map
    public :: G_forward_map_lyapunov
    public :: K_step_lyapunov
    public :: S_step_lyapunov
    public :: L_step_lyapunov
+   public :: reset_lyapunov_solver
 
    interface projector_splitting_DLRA_lyapunov_integrator
       module procedure projector_splitting_DLRA_lyapunov_integrator_rdp
@@ -830,13 +830,13 @@ module LightROM_LyapunovSolvers
       X%S(:rx,:rx) = Stmp
    end subroutine compute_splitting_error
 
-   subroutine reset_lyapsolver()
+   subroutine reset_lyapunov_solver()
       ! internal
       character(len=128) :: msg
       write(msg,'(A,I0,A)') 'Lyapunov solver called ', LyapSolver_counter, ' times. Resetting coutner to 0.'
       call log_message(msg, module=this_module, procedure='DLRA_main')
       LyapSolver_counter = 0
-      call reset_logfiles()
-   end subroutine reset_lyapsolver
+      call reset_logfiles(bname='Lyap_SVD')
+   end subroutine reset_lyapunov_solver
 
 end module LightROM_LyapunovSolvers

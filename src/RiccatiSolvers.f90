@@ -39,11 +39,15 @@ module LightROM_RiccatiSolvers
    ! module name
    private :: this_module
    character(len=*), parameter :: this_module = 'LR_RiccSolvers'
+   integer, parameter :: iline = 4
+   integer :: RiccSolver_counter = 0
+
    public :: projector_splitting_DLRA_riccati_integrator
    public :: G_forward_map_riccati
    public :: K_step_riccati
    public :: S_step_riccati
    public :: L_step_riccati
+   public :: reset_riccati_solver
 
    interface projector_splitting_DLRA_riccati_integrator
       module procedure projector_splitting_DLRA_riccati_integrator_rdp
@@ -586,5 +590,14 @@ module LightROM_RiccatiSolvers
 
       if (time_lightROM()) call lr_timer%stop('L_step_riccati_rdp')
    end subroutine L_step_riccati_rdp
+
+   subroutine reset_riccati_solver()
+      ! internal
+      character(len=128) :: msg
+      write(msg,'(A,I0,A)') 'Riccati solver called ', RiccSolver_counter, ' times. Resetting coutner to 0.'
+      call log_message(msg, module=this_module, procedure='DLRA_main')
+      RiccSolver_counter = 0
+      call reset_logfiles(bname='Riccati_SVD')
+   end subroutine reset_riccati_solver
 
 end module LightROM_RiccatiSolvers
