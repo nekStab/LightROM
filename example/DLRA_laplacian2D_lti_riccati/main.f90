@@ -91,7 +91,7 @@ program demo
    !--------------------------------
    ! Define which examples to run:
    !
-   logical, parameter :: short_test = .true.
+   logical, parameter :: short_test = .false.
    !
    ! Skip the computations with small dt/small tolerance to speed up test
    !
@@ -404,7 +404,6 @@ program demo
       print '(A)', '--------------------------------------------------------------'
       
       ! Choose input ranks and integration steps
-      Tend = 2.0_dp
       rkv = [ 4,  8 ]
       if (short_test) then
          dtv = logspace(-2.0_wp, -1.0_wp, 2, 10)
