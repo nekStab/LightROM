@@ -340,7 +340,7 @@ program demo
       svals = svdvals(X_out)
       print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR)[1-8]:', svals(:irow)
 
-      call reset_lyapsolver()
+      call reset_lyapunov_solver()
    else
       print *, 'Skip.'
    end if
@@ -473,7 +473,7 @@ program demo
       print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
       print *, ''
 
-      call reset_lyapsolver()
+      call reset_lyapunov_solver()
    else
       print *, 'Skip.'
       print *, ''
@@ -553,7 +553,7 @@ program demo
          print *, '#########################################################################'
          print *, ''
       end do
-      call reset_lyapsolver()
+      call reset_lyapunov_solver()
    else
       print *, 'Skip.'
       print *, ''
@@ -642,7 +642,7 @@ program demo
          print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
          print *, ''
       end do
-      call reset_lyapsolver()
+      call reset_lyapunov_solver()
    else
       print *, 'Skip.'
       print *, ''
