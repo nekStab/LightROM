@@ -17,7 +17,7 @@ program demo
    use LightROM_Timing
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
-   use LightROM_RiccatiSolvers, only : projector_splitting_DLRA_riccati_integrator
+   use LightROM_RiccatiSolvers
    ! Laplacian
    use Laplacian2D_LTI_Riccati_Base
    use Laplacian2D_LTI_Riccati_Operators
@@ -25,8 +25,8 @@ program demo
    use Laplacian2D_LTI_Riccati_Utils
    implicit none
 
-   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Riccati_Main'
-   character(len=128), parameter :: home = 'example/DLRA_laplacian2D_lti_riccati/local/'
+   character(len=*), parameter :: this_module = 'Laplacian2D_LTI_Riccati_Main'
+   character(len=*), parameter :: home = 'example/DLRA_laplacian2D_lti_riccati/local/'
 
    ! DLRA
    integer, parameter :: rkmax = 11
@@ -273,7 +273,11 @@ program demo
 
       ! Choose input ranks and integration steps
       rkv = [ 2, 3, 4 ]
-      dtv = logspace(-6.0_wp, -3.0_wp, 4, 10)
+      if (short_test) then
+         dtv = logspace(-4.0_wp, -3.0_wp, 2, 10)
+      else
+         dtv = logspace(-6.0_wp, -3.0_wp, 4, 10)
+      end if
       dtv = dtv(size(dtv):1:-1)
       TOv = [ 1 ]
 
@@ -291,18 +295,19 @@ program demo
                call X%init(U0, S0, rk)
 
                ! run step
-               opts = dlra_opts(mode=torder)
+               opts = dlra_opts(mode=torder, if_rank_adaptive=.false.)
                call system_clock(count=clock_start)     ! Start Timer
                call projector_splitting_DLRA_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
                                                                   & Tend, dt, info, &
-                                                                  & exptA=exptA, iftrans=.false., options=opts)
+                                                                  & exptA=exptA, iftrans=.true., options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
 
                ! Reconstruct solution
-               call get_state(U_out(:,:rk), X%U, 'Extract solution')
+               call get_state(U_out(:,:rk), X%U, 'Reconstruct solution')
                X_out = matmul(U_out(:,:rk), matmul(X%S, transpose(U_out(:,:rk))))
+               X0 = CARE(X_out, Adata, CTQcCdata, BRinvBTdata)
                print '(A10,I8," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")', &
-                                    &  'OUTPUT', rk, torder, dt, Tend, &
+                                    & 'OUTPUT', rk, torder, dt, Tend, &
                                     & norm2(X_RKlib_ref - X_out)/N, norm2(X_out - Xref)/N, &
                                     & norm2(X0)/N, real(clock_stop-clock_start)/real(clock_rate)
                deallocate(X%U, X%S)
@@ -318,10 +323,10 @@ program demo
       svals = svdvals(X_out)
       print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR)[1-8]:', svals(:irow)
 
+      call reset_riccati_solver()
    else
       print *, 'Skip.'
    end if
-   call reset_lyapsolver()
 
    call global_lightROM_timer%stop('Short time: DLRA')
    call A%reset_timer()
@@ -348,7 +353,7 @@ program demo
    allocate(X_RKlib(N, N, nrep))
    call get_state(U_out(:,:rk_X0), U0(:rk_X0), 'Get initial condition')
    X0 = matmul( U_out(:,:rk_X0), matmul(S0(:rk_X0,:rk_X0), transpose(U_out(:,:rk_X0))))
-   call set_state(X_mat_RKlib(1:1), X0, 'Set initial condition')
+   call set_state(X_mat_RKlib(1:1), X0, 'Set RK X0')
    write(*,'(A10,A26,A26,A20)') 'RKlib:','Tend','| X_RK - X_ref |/N', 'Elapsed time'
    write(*,*) '         ------------------------------------------------------------------------'
    do irep = 1, nrep
@@ -356,9 +361,9 @@ program demo
       ! integrate
       call RK_prop_ricc%matvec(X_mat_RKlib(1), X_mat_RKlib(2))
       ! recover output
-      call get_state(X_RKlib(:,:,irep), X_mat_RKlib(2:2), 'Extract RK solution')
+      call get_state(X_RKlib(:,:,irep), X_mat_RKlib(2:2), 'Get RK solution')
       ! replace input
-      call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,irep), 'Reset initial condition')
+      call set_state(X_mat_RKlib(1:1), X_RKlib(:,:,irep), 'Reset RK X0')
       call system_clock(count=clock_stop)      ! Stop Timer
       write(*,'(I10,F26.4,E26.8,F18.4," s")') irep, irep*Tstep, &
                      & norm2(CARE(X_RKlib(:,:,irep), Adata, CTQcCdata, BRinvBTdata))/N, &
@@ -399,8 +404,13 @@ program demo
       print '(A)', '--------------------------------------------------------------'
       
       ! Choose input ranks and integration steps
+      Tend = 2.0_dp
       rkv = [ 4,  8 ]
-      dtv = logspace(-4.0_wp, -1.0_wp, 4, 10)
+      if (short_test) then
+         dtv = logspace(-2.0_wp, -1.0_wp, 2, 10)
+      else
+         dtv = logspace(-4.0_wp, -1.0_wp, 4, 10)
+      end if
       dtv = dtv(size(dtv):1:-1)
       TOv = [ 1 ]
 
@@ -422,14 +432,15 @@ program demo
                call system_clock(count=clock_start)     ! Start Timer
                call projector_splitting_DLRA_riccati_integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
                                                                   & Tend, dt, info, &
-                                                                  & exptA=exptA, iftrans=.false., options=opts)
+                                                                  & exptA=exptA, iftrans=.true., options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
 
                ! Reconstruct solution
                call get_state(U_out(:,:rk), X%U, 'Extract solution')
                X_out = matmul(U_out(:,:rk), matmul(X%S, transpose(U_out(:,:rk))))
+               X0 = CARE(X_out, Adata, CTQcCdata, BRinvBTdata)
                print '(A10,I8," TO",I1,F10.6,F8.4,3(E20.8),F18.4," s")', &
-                                    &  'OUTPUT', rk, torder, dt, Tend, &
+                                    & 'OUTPUT', rk, torder, dt, Tend, &
                                     & norm2(X_RKlib_ref - X_out)/N, norm2(X_out - Xref)/N, &
                                     & norm2(X0)/N, real(clock_stop-clock_start)/real(clock_rate)
                deallocate(X%U, X%S)
@@ -445,10 +456,10 @@ program demo
       svals = svdvals(X_out)
       print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR)[1-8]:', svals(:irow)
 
+      call reset_riccati_solver()
    else
       print *, 'Skip.'
    end if
-   call reset_lyapsolver()
 
    ! Compute and print timer summary
    call finalize_timers()

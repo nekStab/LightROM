@@ -197,7 +197,7 @@ contains
 
    function CARE(X,A,Q,BRinvBT) result(res)
       real(wp), dimension(n,n) :: X, A, Q, BRinvBT, res
-      res = matmul(A, X) + matmul(X, transpose(A)) + Q - matmul(X, matmul(BRinvBT, X))
+      res = matmul(transpose(A), X) + matmul(X, A) + Q - matmul(X, matmul(BRinvBT, X))
    end function CARE
 
    subroutine solve_riccati(X, A, BRinvBT, CTQC)
