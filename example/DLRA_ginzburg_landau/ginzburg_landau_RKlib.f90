@@ -176,14 +176,15 @@ contains
       real(wp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(wp),        dimension(N,N)  :: AX, XAH
+      real(wp),        dimension(N,N) :: X, AX, XAH
 
       f_flat = 0.0_wp
       AX = 0.0_wp; XAH = 0.0_wp;
+      X = reshape(x_flat, [N,N])
       ! A @ X
-      call GL_mat( AX, reshape(x_flat, [N,N]),             adjoint = .false., transpose = .false.)
+      call GL_mat(AX, X,              adjoint = .false., transpose = .false.)
       ! build ( A @ X.T ).T = X @ A.T
-      call GL_mat(XAH, transpose(reshape(x_flat, [N,N])),  adjoint = .false., transpose = .true.)
+      call GL_mat(XAH, transpose(X),  adjoint = .false., transpose = .true.)
       ! construct Lyapunov equation
       f_flat = reshape(AX + XAH + BBTW, [ N**2 ])
 
@@ -200,16 +201,17 @@ contains
       real(wp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(wp),        dimension(N,N) ::  AHX, XA
+      real(wp),        dimension(N,N) :: X, AHX, XA
 
       f_flat = 0.0_wp
       AHX = 0.0_wp; XA = 0.0_wp;
+      X = reshape(x_flat, [N,N])
       ! A.T @ X
-      call GL_mat(AHX, reshape(x_flat, [N,N]),            adjoint = .true., transpose = .false.)
+      call GL_mat(AHX, X,            adjoint = .true., transpose = .false.)
       ! build ( A.T @ X.T ).T = X @ A
-      call GL_mat( XA, transpose(reshape(x_flat, [N,N])), adjoint = .true., transpose = .true.)
+      call GL_mat( XA, transpose(X), adjoint = .true., transpose = .true.)
       ! construct Lyapunov equation
-      f_flat = reshape(AHX + XA +  CTCW, [ N**2 ])
+      f_flat = reshape(AHX + XA + CTCW, [ N**2 ])
 
    end subroutine adjoint_rhs_lyap
 
@@ -224,17 +226,17 @@ contains
       real(wp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(wp),        dimension(N,N)  :: X, AX, XAH
+      real(wp),        dimension(N,N)  :: X, AHX, XA
 
       f_flat = 0.0_wp
-      AX = 0.0_wp; XAH = 0.0_wp;
+      AHX = 0.0_wp; XA = 0.0_wp;
       X = reshape(x_flat, [N,N])
-      ! A @ X
-      call GL_mat( AX, X,             adjoint = .false., transpose = .false.)
-      ! build ( A @ X.T ).T = X @ A.T
-      call GL_mat(XAH, transpose(X),  adjoint = .false., transpose = .true.)
+      ! A.T @ X
+      call GL_mat(AHX, X,             adjoint = .true., transpose = .false.)
+      ! build ( A.T @ X.T ).T = X @ A
+      call GL_mat( XA, transpose(X),  adjoint = .true., transpose = .true.)
       ! construct Lyapunov equation
-      f_flat = reshape(AX + XAH + CTQcCW - matmul(X, matmul(BRinvBTW, X)), [ N**2 ])
+      f_flat = reshape(AHX + XA + CTQcCW - matmul(X, matmul(BRinvBTW, X)), [ N**2 ])
 
    end subroutine rhs_ricc
 
