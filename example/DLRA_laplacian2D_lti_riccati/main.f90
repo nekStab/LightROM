@@ -475,6 +475,7 @@ program demo
    call global_lightROM_timer%stop('Steady-State: DLRA')
    call global_lightROM_timer%add_timer('Steady-State: rank-adaptive DLRA', start=.true.)
 
+   print *, ''
    print *, '#########################################################################'
    print *, '#                                                                       #'
    print *, '#    IIIc.  Solution using rank-adaptive DLRA                           #'
@@ -496,7 +497,7 @@ program demo
       end if
       dtv = dtv(size(dtv):1:-1)
       tolv = tolv(size(tolv):1:-1)
-      TOv  = [ 1, 2 ]
+      TOv  = [ 1 ]
 
       irep = 0
       X = LR_state()
