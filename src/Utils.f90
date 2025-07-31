@@ -18,14 +18,13 @@ module LightROM_Utils
 
    private :: this_module
    character(len=*), parameter :: this_module     = 'LR_Utils'
-   character(len=*), parameter :: logfile_SVD_abs = 'Lyap_SVD_abs.dat'
-   character(len=*), parameter :: logfile_SVD_rel = 'Lyap_SVD_rel.dat'
    logical :: if_overwrite = .true.
    integer :: rename_counter = 0
 
    public :: dlra_opts
    public :: coefficient_matrix_norm, increment_norm, low_rank_CALE_residual_norm
-   public :: is_converged
+   public :: find_rank, increase_rank, decrease_rank
+   public :: is_converged, print_svals
    public :: write_logfile_headers, reset_logfiles, stamp_logfiles, log_settings
    public :: project_onto_common_basis
    public :: Balancing_Transformation
@@ -584,6 +583,127 @@ contains
       return
    end function coefficient_matrix_norm
 
+   subroutine find_rank(found, irk, svals, tol)
+      logical, intent(out) :: found
+      !! Result of the check.
+      integer, intent(out) :: irk
+      !! Index of the first singular value below tolerance
+      real(wp), intent(in) :: svals(:)
+      !! Singular values to search
+      real(wp), intent(in) :: tol
+      !! Tolerance for the smallest resolved singular value
+
+      found = .false.
+      tol_chk: do irk = 1, size(svals)
+         if ( svals(irk) < tol ) then
+            found = .true.
+            exit tol_chk
+         end if
+      end do tol_chk
+   end subroutine find_rank
+
+   subroutine increase_rank(X)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+
+      ! internal
+      character(len=*), parameter :: this_procedure = 'increase_rank'
+      integer :: rk, rkmax, info
+      character(len=128) :: msg
+
+      rkmax = size(X%U)
+      if (rk == rkmax) then ! cannot increase rank without reallocating X%U and X%S
+         write(msg,'(A,I0,A,A)') 'Cannot increase rank, rkmax = ', rkmax, ' is reached. ', &
+                  & 'Increase rkmax and restart!'
+         call stop_error(msg, module=this_module, procedure=this_procedure)
+      else
+         
+         X%rk = X%rk + 1
+         rk = X%rk ! this is only to make the code more readable
+         ! set coefficients to zero (for redundancy)
+         X%S(:rk, rk) = 0.0_wp 
+         X%S( rk,:rk) = 0.0_wp
+         ! add random vector ...
+         call X%U(rk)%rand(.false.)
+         ! ... and orthonormalize
+         call orthogonalize_against_basis(X%U(rk), X%U(:rk-1), info, if_chk_orthonormal=.false.)
+         call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure=this_procedure)
+         call X%U(rk)%scal(1.0_wp / X%U(rk)%norm())
+
+      end if
+
+   end subroutine increase_rank
+
+   subroutine decrease_rank(X, U, svals, rk)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      real(wp), intent(in) :: U(:,:)
+      !! Left singular vectors of X
+      real(wp), intent(in) :: svals(:)
+      !! Singular values of S
+      integer, intent(in) :: rk
+      !! Desired output rank
+
+      ! internal
+      character(len=*), parameter :: this_procedure = 'decrease_rank'
+      character(len=128) :: msg
+
+      ! sanity check
+      if (rk > size(X%U)) then
+         write(msg,'(A,I0,1X,I0)') 'Invalid rank input: ', rk, size(X%U)
+         call stop_error(msg, module=this_module, procedure=this_procedure)
+      end if
+
+      ! rotate basis onto principal axes
+      block
+         class(abstract_vector_rdp), allocatable :: Xwrk(:)
+         call linear_combination(Xwrk, X%U(:rk), U(:rk,:rk))
+         call copy(X%U(:rk), Xwrk)
+      end block
+      X%S(:rk,:rk) = diag(svals(:rk))
+
+   end subroutine decrease_rank
+
+   subroutine print_svals(X, svals, svals_lag, istep, nsteps)
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
+      !! Low-Rank factors of the solution.
+      real(wp), dimension(:), intent(in) :: svals
+      !! Current singular values
+      real(wp), dimension(:), intent(in) :: svals_lag
+      !! Lagged singular values
+      integer, intent(in) :: istep
+      !! Current step
+      integer, intent(in) :: nsteps
+      !! Total number of steps
+
+      ! Internal variables
+      integer, parameter                  :: iline = 4       ! # data points per line
+      integer                             :: i, j, is, ie, irk, ifmt, irkfmt
+      character(len=128)                  :: msg, fmt_sval
+      real(wp), dimension(:), allocatable :: dsvals
+
+      ! Pretty output
+      ifmt = max(5,ceiling(log10(real(nsteps))))
+      irkfmt = max(3,ceiling(log10(real(size(X%U)))))
+      write(fmt_sval,'(A,5(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,1X,I', irkfmt, '" : ",A,"[",I', irkfmt, ',"-",I', irkfmt, ',"]",*(E12.5))'
+      
+      irk = min(size(svals), size(svals_lag))
+      allocate(dsvals(irk)); dsvals = 0.0_dp
+      do i = 1, irk
+         dsvals(i) = abs(svals(i)-svals_lag(i))/svals(i)
+      end do
+      do i = 1, ceiling(float(X%rk)/iline)
+         is = (i-1)*iline+1; ie = min(X%rk,i*iline)
+         write(msg,fmt_sval) istep, nsteps, X%tot_time, X%rk, " SVD abs", is, ie, ( svals(j), j = is, ie )
+         call log_information(msg, module=this_module, procedure='DLRA_main')
+      end do
+      do i = 1, ceiling(float(irk)/iline)
+         is = (i-1)*iline+1; ie = min(irk,i*iline)
+         write(msg,fmt_sval) istep, nsteps, X%tot_time, X%rk, "dSVD rel", is, ie, ( dsvals(j) , j = is, ie )
+         call log_information(msg, module=this_module, procedure='DLRA_main')
+      end do
+   end subroutine print_svals
+
    logical function is_converged(X, svals, svals_lag, opts, if_lastep) result(converged)
       !! This function checks the convergence of the solution based on the (relative) increment in the singular values
       class(abstract_sym_low_rank_state_rdp) :: X
@@ -661,25 +781,28 @@ contains
       return
    end subroutine check_options
 
-   subroutine write_logfile_headers(n0,nmax)
+   subroutine write_logfile_headers(bname, n0, nmax)
+      character(*), intent(in) :: bname
       integer, intent(in) :: n0
       integer, optional, intent(in) :: nmax
       ! internals
       integer :: i, nmax_, ndigits
-      character(len=128) :: fmt
+      character(len=128) :: fname, fmt
       nmax_ = optval(nmax, 100)
       ndigits = max(1,int(log10(real(nmax_))))
       write(fmt,'("(A",I0,",I",I0,".",I0,",1X)")') 15-ndigits, ndigits, ndigits
       if (io_rank() .and. if_overwrite) then
          ! SVD absolute
-         open (1234, file=logfile_SVD_abs, status='replace', action='write')
+         fname = trim(bname)//'_SVD_abs.dat'
+         open (1234, file=fname, status='replace', action='write')
          write (1234, '(A8,A8,2(A15,1X),A4)', ADVANCE='NO') 'icall', 'istep', 'time', 'lag', 'rk'
          do i = 1, n0
             write (1234, fmt, ADVANCE='NO') 's', i
          end do
          write (1234, *) ''; close (1234)
          ! dSVD relative
-         open (1234, file=logfile_SVD_rel, status='replace', action='write')
+         fname = trim(bname)//'_SVD_rel.dat'
+         open (1234, file=fname, status='replace', action='write')
          write (1234, '(A8,A8,2(A15,1X),A4)', ADVANCE='NO') 'icall', 'istep', 'time', 'lag', 'rk'
          do i = 1, n0
             write (1234, fmt, ADVANCE='NO') 'ds', i
@@ -690,20 +813,25 @@ contains
       return
    end subroutine write_logfile_headers
 
-   subroutine stamp_logfiles(X, lag, svals, dsvals, icall)
+   subroutine stamp_logfiles(bname, X, lag, svals, dsvals, icall)
+      character(*), intent(in) :: bname
       class(abstract_sym_low_rank_state_rdp),  intent(in) :: X
       real(dp), intent(in) :: lag
       real(dp), dimension(:), intent(in) :: svals
       real(dp), dimension(:), intent(in) :: dsvals
       integer, intent(in) :: icall
+      ! internal
+      character(len=128) :: fname
       if (io_rank()) then
          ! SVD absolute
-         open (1234, file=logfile_SVD_abs, status='old', action='write', position='append')
+         fname = trim(bname)//'_SVD_abs.dat'
+         open (1234, file=fname, status='old', action='write', position='append')
          write (1234, '(I8,1X,I7,2(1X,F15.9),I4)', ADVANCE='NO') icall, X%tot_step, X%tot_time, lag, X%rk
          write (1234, '(*(1X,F15.9))') svals
          close (1234)
          ! dSVD relative
-         open (1234, file=logfile_SVD_rel, status='old', action='write', position='append')
+         fname = trim(bname)//'_SVD_rel.dat'
+         open (1234, file=fname, status='old', action='write', position='append')
          write (1234, '(I8,1X,I7,2(1X,F15.9),I4)', ADVANCE='NO') icall, X%tot_step, X%tot_time, lag, X%rk
          write (1234, '(*(1X,F15.9))') dsvals
          close (1234)
@@ -711,31 +839,35 @@ contains
       return
    end subroutine stamp_logfiles
 
-   subroutine reset_logfiles(if_rename, bname)
+   subroutine reset_logfiles(bname, if_rename)
+      character(*), intent(in) :: bname
       logical, optional, intent(in) :: if_rename
-      character(*), optional, intent(in) :: bname
       ! internal
+      integer :: i
       logical :: rename_logfiles, exist_origin
-      character(len=128) :: fname, basename, msg
+      character(len=128) :: fname, fname_new, suffix, msg
       if_overwrite = .true.
       rename_logfiles = optval(if_rename, .true.)
-      basename = optval('Lyap_SVD', bname)
       if (rename_logfiles) then
          rename_counter = rename_counter + 1
-         write(fname,'(A,I3.3,A)') trim(basename), rename_counter, '_abs.dat'
-         inquire(file=logfile_SVD_abs, exist=exist_origin)
-         if (exist_origin) then
-            msg = 'Renaming Lyap_SVD_abs.dat --> '//trim(fname)
-            call log_message(msg, module=this_module, procedure='reset_logfiles')
-            call rename(logfile_SVD_abs, fname)
-         end if
-         write(fname,'(A,I3.3,A)') trim(basename), rename_counter, '_rel.dat'
-         inquire(file=logfile_SVD_rel, exist=exist_origin)
-         if (exist_origin) then
-            msg = 'Renaming Lyap_SVD_rel.dat --> '//trim(fname)
-            call log_message(msg, module=this_module, procedure='reset_logfiles')
-            call rename(logfile_SVD_rel, fname)
-         end if
+         do i = 1, 2
+            select case (i)
+            case (1)
+               suffix = '_SVD_abs.dat'
+            case (2)
+               suffix = '_SVD_rel.dat'
+            end select
+            
+            fname = trim(bname)//trim(suffix)
+            write(fname_new,'(A,I3.3,A)') trim(bname), rename_counter, trim(suffix)
+            inquire(file=fname, exist=exist_origin)
+      
+            if (exist_origin) then
+               msg = 'Renaming '//trim(fname)//' --> '//trim(fname_new)
+               call log_message(msg, module=this_module, procedure='reset_logfiles')
+               call rename(fname, fname_new)
+            end if
+         end do
       else
          msg = 'Logfiles not renamed. Files may be overwritten.'
          call log_warning(msg, module=this_module, procedure='reset_logfiles')
