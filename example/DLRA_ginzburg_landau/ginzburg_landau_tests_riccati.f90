@@ -1,4 +1,4 @@
-module Ginzburg_Landau_Tests_Lyapunov
+module Ginzburg_Landau_Tests_Riccati
    ! Standard Library.
    use stdlib_optval, only : optval
    use stdlib_linalg, only : diag, svd, svdvals
@@ -10,9 +10,9 @@ module Ginzburg_Landau_Tests_Lyapunov
    use LightKrylov_Utils ! svd, sqrtm
    ! LightROM
    use LightROM_Utils ! Balancing_Transformation
-   ! Lyapunov Solver
-   use LightROM_LyapunovSolvers
-   use LightROM_LyapunovUtils
+   ! Riccati Solver
+   use LightROM_RiccatiSolvers
+   use LightROM_RiccatiUtils
    ! Ginzburg Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators
@@ -21,25 +21,25 @@ module Ginzburg_Landau_Tests_Lyapunov
    implicit none
 
    integer,       parameter :: rkmax = 80
-   integer,       parameter :: rk_X0_lyapunov = 10
+   integer,       parameter :: rk_X0_riccati = 10
 
    private :: this_module
-   public  :: rkmax, rk_X0_lyapunov
+   public  :: rkmax, rk_X0_riccati
 
-   character(len=*), parameter :: this_module = 'Ginzburg_Landau_Tests_Lyapunov'
+   character(len=*), parameter :: this_module = 'Ginzburg_Landau_Tests_Riccati'
 
 contains
 
    !-------------------------------------------------------------------------------------------
    !
-   ! LYAPUNOV EQUATION
+   ! RICCATI EQUATION
    !
    !-------------------------------------------------------------------------------------------
 
-   subroutine run_lyapunov_reference_RK(LTI, Xref, Xref_RK, U0, S0, Tend, nrep, iref, adjoint)
+   subroutine run_riccati_reference_RK(LTI, Xref, Xref_RK, U0, S0, Tend, nrep, iref)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
-      ! Reference solution (BS)
+      ! Reference solution (SD)
       real(wp),                      intent(in)    :: Xref(N,N)
       ! Reference solution (RK)
       real(wp),                      intent(out)   :: Xref_RK(N,N)
@@ -49,10 +49,9 @@ contains
       real(wp),                      intent(in)    :: Tend
       integer,                       intent(in)    :: nrep
       integer,                       intent(in)    :: iref
-      logical,                       intent(in)    :: adjoint
 
       ! Internals
-      type(rk_lyapunov),             allocatable   :: RK_propagator
+      type(rk_riccati) ,             allocatable   :: RK_propagator
       type(state_matrix)                           :: X_mat(2)
       real(wp),                      allocatable   :: X_RK(:,:,:)
       real(wp)                                     :: U0_mat(N,N)
@@ -69,22 +68,18 @@ contains
       Tstep = Tend/nrep
       allocate(X_RK(N, N, nrep))
       ! initialize exponential propagator
-      RK_propagator = RK_lyapunov(Tstep)
+      RK_propagator = RK_riccati(Tstep)
       ! Set initial condition for RK
       call reconstruct_solution(X_out, U0, S0)
       call set_state(X_mat(1:1), X_out, 'Set initial condition')
-      write(*,'(A7,A10,A19,A19,A19,A12)') ' RKlib:','Tend','| X_RK |/N', '| X_RK - X_BS |/N', '| res_RK |/N','etime'
+      write(*,'(A7,A10,A19,A19,A19,A12)') ' RKlib:','Tend','| X_RK |/N', '| X_RK - X_SD |/N', '| res_RK |/N','etime'
       write(*,*) '-------------------------------------------------------------------------------------'
       write(*,'(I7,F10.4,3(1X,E18.6),F10.4," s",A)') 0, 0.0, norm2(X_out)/N, norm2(X_out - Xref)/N, &
-                                                            & norm2(CALE(X_out, adjoint))/N, 0.0, ''
+                                                            & norm2(CARE(X_out, CTQcCW, BRinvBTW))/N, 0.0, ''
       do irep = 1, nrep
          call system_clock(count=clock_start)     ! Start Timer
          ! integrate
-         if (adjoint) then
-            call RK_propagator%rmatvec(X_mat(1), X_mat(2))
-         else
-            call RK_propagator%matvec(X_mat(1), X_mat(2))
-         end if
+         call RK_propagator%matvec(X_mat(1), X_mat(2))
          call system_clock(count=clock_stop)      ! Stop Timer
          etime = real(clock_stop-clock_start)/real(clock_rate)
          ! recover output
@@ -98,16 +93,15 @@ contains
             write(note,*) ''
          end if
          write(*,'(I7,F10.4,3(1X,E18.6),F10.4," s",A)') irep, irep*Tstep, norm2(X_RK(:,:,irep))/N, &
-                     & norm2(X_RK(:,:,irep)-Xref)/N, norm2(CALE(X_RK(:,:,irep), adjoint))/N, etime, trim(note) 
+                     & norm2(X_RK(:,:,irep)-Xref)/N, norm2(CARE(X_RK(:,:,irep), CTQcCW, BRinvBTW))/N, etime, trim(note) 
       enddo
       Xref_RK(:,:) = X_RK(:,:,iref)
       print *, ''
       print '(A,F16.12)', '  |  X_RK  |/N = ', norm2(Xref_RK)/N
-      print '(A,F16.12)', '  | res_RK |/N = ', norm2(CALE(Xref_RK, adjoint))/N
-      return
-   end subroutine run_lyapunov_reference_RK
+      print '(A,F16.12)', '  | res_RK |/N = ', norm2(CARE(Xref_RK, CTQcCW, BRinvBTW))/N
+   end subroutine run_riccati_reference_RK
 
-   subroutine run_lyapunov_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
+   subroutine run_riccati_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, home, if_save_output)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Reference solution (BS)
@@ -126,7 +120,6 @@ contains
       integer,                       intent(in)    :: TOv(:)
       ! number of singular values to print
       integer,                       intent(in)    :: nprint
-      logical,                       intent(in)    :: adjoint
       character(len=128),            intent(in)    :: home
       logical,                       intent(in)    :: if_save_output
 
@@ -150,11 +143,7 @@ contains
       
       Tstep = 1.0_wp
 
-      if (adjoint) then
-         note = 'Yobs'
-      else
-         note = 'Xctl'
-      end if
+      note = 'P'
 
       ! basic opts
       opts = dlra_opts(chktime=1.0_wp, inc_tol=atol_dp, if_rank_adaptive=.false.)
@@ -162,7 +151,7 @@ contains
       call system_clock(count_rate=clock_rate)
 
       print '(A16,A8,A4,A10,A8,A10,4(A19),A12)', 'DLRA:','  rk',' TO','dt','steps','Tend', &
-                     & '| X_D |/N', '| X_D - X_RK |/N', '| X_D - X_BS |/N', '| res_D |/N', 'etime'
+                     & '| X_D |/N', '| X_D - X_RK |/N', '| X_D - X_SD |/N', '| res_D |/N', 'etime'
       X = LR_state()
       do i = 1, size(rkv)
          rk = rkv(i)
@@ -180,21 +169,16 @@ contains
 
                ! run integrator
                call system_clock(count=clock_start)     ! Start Timer
-               if (adjoint) then
-                  call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%CT, Tend, tau, info, &
+               call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
                                                             & exptA=exptA, iftrans=.true., options=opts)
-               else
-                  call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
-                                                            & exptA=exptA, iftrans=.false., options=opts)
-               end if
                call system_clock(count=clock_stop)      ! Stop Timer
                etime = real(clock_stop-clock_start)/real(clock_rate)
                ! Reconstruct solution
                call reconstruct_solution(X_out, X)
                write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I8,F10.4,4(E19.8),F10.2," s")') 1, note, 'OUTPUT', &
-                                 & rk, torder, tau, nsteps, Tend, &
-                                 & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref)/N, &
-                                 & norm2(CALE(X_out, adjoint))/N, etime
+               & rk, torder, tau, nsteps, Tend, &
+               & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref)/N, &
+               & norm2(CARE(X_out, CTQcCW, BRinvBTW))/N, etime
                deallocate(X%U); deallocate(X%S)
             end do
             print *, ''
@@ -204,7 +188,7 @@ contains
          svals = svdvals(Xref)
          do i = 1, ceiling(nprint*1.0_wp/irow)
             is = (i-1)*irow+1; ie = i*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_BS) ', is, '-', ie, ( svals(j), j = is, ie )
+            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_SD) ', is, '-', ie, ( svals(j), j = is, ie )
          end do
          print *, ''
          svals = svdvals(Xref_RK)
@@ -219,10 +203,9 @@ contains
             print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_D ) ', is, '-', ie, ( svals(j), j = is, ie )
          end do
       end if
+   end subroutine run_riccati_DLRA_test
 
-   end subroutine run_lyapunov_DLRA_test
-
-   subroutine run_lyapunov_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
+   subroutine run_riccati_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, home, if_save_output)
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Reference solution (BS)
@@ -241,7 +224,6 @@ contains
       real(wp),                      intent(in)    :: tolv(:)
       ! number of singular values to print
       integer,                       intent(in)    :: nprint
-      logical,                       intent(in)    :: adjoint
       character(len=128),            intent(in)    :: home
       logical,                       intent(in)    :: if_save_output
 
@@ -267,15 +249,11 @@ contains
 
       call system_clock(count_rate=clock_rate)
 
-      if (adjoint) then
-         note = 'Yobs'
-      else
-         note = 'Xctl'
-      end if
- 
+      note = 'P'
+    
       print '(A16,A8,A4,A10,A8,A10,4(A19),A12)', 'DLRA:','rk_end',' TO','dt','steps','Tend', &
-               & '| X_D |/N', '| X_D - X_RK |/N', '| X_D - X_BS |/N', '| res_D |/N', 'etime'
-      rk = rk_X0_lyapunov
+               & '| X_D |/N', '| X_D - X_RK |/N', '| X_D - X_SD |/N', '| res_D |/N', 'etime'
+      rk = rk_X0_riccati
       X = LR_state()
       do i = 1, size(tolv)
          opts%tol = tolv(i)
@@ -298,13 +276,8 @@ contains
 
                ! run integrator
                call system_clock(count=clock_start)     ! Start Timer
-               if (adjoint) then
-                  call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%CT, Tend, tau, info, &
+               call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
                                                                & exptA=exptA, iftrans=.true., options=opts)
-               else
-                  call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
-                                                               & exptA=exptA, iftrans=.false., options=opts)
-               end if
                call system_clock(count=clock_stop)      ! Stop Timer
                etime = real(clock_stop-clock_start)/real(clock_rate)
                ! Reconstruct solution
@@ -312,7 +285,7 @@ contains
                write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I8,F10.4,4(E19.8),F10.2," s")') 1, note, 'OUTPUT', &
                                  & X%rk, torder, tau, nsteps, Tend, &
                                  & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref)/N, &
-                                 & norm2(CALE(X_out, adjoint))/N, etime
+                                 & norm2(CARE(X_out, CTQcCW, BRinvBTW))/N, etime
                deallocate(X%U); deallocate(X%S)
             end do
             print *, ''
@@ -336,6 +309,6 @@ contains
          end do
       end do
 
-   end subroutine run_lyapunov_DLRArk_test
+   end subroutine run_riccati_DLRArk_test
 
-end module Ginzburg_Landau_Tests_Lyapunov
+end module Ginzburg_Landau_Tests_Riccati

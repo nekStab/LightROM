@@ -26,7 +26,7 @@ module LightROM_LyapunovSolvers
    ! module name
    private :: this_module
    character(len=*), parameter :: this_module = 'LR_LyapSolvers'
-   integer, parameter :: iline = 4
+   character(len=*), parameter :: lyapunov_bname = 'Lyapunov'
    integer :: LyapSolver_counter = 0
 
    public :: projector_splitting_DLRA_lyapunov_integrator
@@ -159,16 +159,16 @@ module LightROM_LyapunovSolvers
       !! Options for solver configuration
 
       ! Internal variables
-      integer                             :: i, j, is, ie, istep, nsteps, irk, chkstep, ifmt, irkfmt
+      integer                             :: i, j, istep, nsteps, irk, chkstep, ifmt, irkfmt
       integer                             :: rk_reduction_lock   ! 'timer' to disable rank reduction
       real(wp)                            :: inc_nrm, nrmX       ! increment and solution norm
       real(wp)                            :: El                  ! aggregate error estimate
       real(wp)                            :: err_est             ! current error estimate
       real(wp)                            :: tol                 ! current tolerance
-      character(len=128)                  :: msg, fmt_sval, fmt_step
+      character(len=128)                  :: msg, fmt_step
       integer                             :: rkmax
       logical                             :: if_lastep
-      real(wp), dimension(:), allocatable :: svals, dsvals, svals_lag
+      real(wp), dimension(:), allocatable :: svals, svals_lag
 
       if (time_lightROM()) call lr_timer%start('DLRA_lyapunov_integrator_rdp')
       LyapSolver_counter = LyapSolver_counter + 1
@@ -197,7 +197,9 @@ module LightROM_LyapunovSolvers
 
       rkmax = size(X%U)
       ! Allocate memory for SVD & lagged fields
-      allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
+      if (.not. allocated(Usvd))  allocate(Usvd(rkmax,rkmax))
+      if (.not. allocated(ssvd))  allocate(ssvd(rkmax))
+      if (.not. allocated(VTsvd)) allocate(VTsvd(rkmax,rkmax))
 
       call log_message('Initializing Lyapunov solver', module=this_module, procedure='DLRA_main')
 
@@ -209,10 +211,9 @@ module LightROM_LyapunovSolvers
       ! Pretty output
       ifmt = max(5,ceiling(log10(real(nsteps))))
       irkfmt = max(3,ceiling(log10(real(rkmax))))
-      write(fmt_sval,'(A,5(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,1X,I', irkfmt, '" : ",A,"[",I', irkfmt, ',"-",I', irkfmt, ',"]",*(E12.5))'
       write(fmt_step,'(A,2(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,", Ttot= ",F10.4)'
       ! Prepare logfile
-      call write_logfile_headers(X%rk, rkmax)
+      call write_logfile_headers(lyapunov_bname, X%rk, rkmax)
 
       if ( opts%mode > 2 ) then
          write(msg,'(A)') "Time-integration order for the operator splitting of d > 2 &
@@ -227,7 +228,7 @@ module LightROM_LyapunovSolvers
       if (opts%if_rank_adaptive) then
          if (.not. X%rank_is_initialised) then
             call log_message('Determine initial rank:', module=this_module, procedure='DLRA_main')
-            call set_initial_rank(X, A, B, tau, opts%mode, exptA, trans, tol)
+            call set_initial_rank_lyapunov(X, A, B, tau, opts%mode, exptA, trans, tol)
          end if
          if (opts%use_err_est) then
             err_est = 0.0_wp
@@ -281,22 +282,7 @@ module LightROM_LyapunovSolvers
          if (mod(istep, chkstep) == 0 .or. istep == nsteps) then
             svals = svdvals(X%S(:X%rk,:X%rk))
             irk = min(size(svals), size(svals_lag))
-            allocate(dsvals(irk)); dsvals = 0.0_dp
-            do i = 1, irk
-               dsvals(i) = abs(svals(i)-svals_lag(i))/svals(i)
-            end do
-            call stamp_logfiles(X, tau, svals, dsvals, LyapSolver_counter)
-            do i = 1, ceiling(float(X%rk)/iline)
-               is = (i-1)*iline+1; ie = min(X%rk,i*iline)
-               write(msg,fmt_sval) istep, nsteps, X%tot_time, X%rk, " SVD abs", is, ie, ( svals(j), j = is, ie )
-               call log_information(msg, module=this_module, procedure='DLRA_main')
-            end do
-            do i = 1, ceiling(float(irk)/iline)
-               is = (i-1)*iline+1; ie = min(irk,i*iline)
-               write(msg,fmt_sval) istep, nsteps, X%tot_time, X%rk, "dSVD rel", is, ie, ( dsvals(j) , j = is, ie )
-               call log_information(msg, module=this_module, procedure='DLRA_main')
-            end do
-            deallocate(dsvals)
+            call print_svals(X, svals, svals_lag, istep, nsteps)
             ! Check convergence
             if (istep == nsteps) if_lastep = .true.
             X%is_converged = is_converged(X, svals(:irk), svals_lag(:irk), opts, if_lastep)
@@ -313,8 +299,7 @@ module LightROM_LyapunovSolvers
          endif
       enddo dlra
       call log_message('Exiting Lyapunov solver', module=this_module, procedure='DLRA_main')
-      ! Clean up scratch space
-      deallocate(Usvd, ssvd, VTsvd)
+      
       if (time_lightROM()) call lr_timer%stop('DLRA_lyapunov_integrator_rdp')
    end subroutine projector_splitting_DLRA_lyapunov_integrator_rdp
 
@@ -407,6 +392,7 @@ module LightROM_LyapunovSolvers
       rk = X%rk ! this is only to make the code more readable
       rkmax = size(X%U)
       ndigits = max(1,ceiling(log10(real(rkmax))))
+      write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8)")') ndigits, ndigits
       
       accept_step = .false.
       istep = 1
@@ -414,63 +400,30 @@ module LightROM_LyapunovSolvers
          ! run a regular step
          call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans)
          ! compute singular values of X%S
-         Usvd = 0.0_wp; ssvd = 0.0_wp; VTsvd = 0.0_wp
          call svd(X%S(:rk,:rk), ssvd(:rk), Usvd(:rk,:rk), VTsvd(:rk,:rk))
-         found = .false.
-         tol_chk: do irk = 1, rk
-            if ( ssvd(irk) < tol ) then
-               found = .true.
-               exit tol_chk
-            end if
-         end do tol_chk
-         !if (.not. found) irk = irk - 1
+         call find_rank(found, irk, ssvd, tol)
          
          ! choose action
          if (.not. found) then ! none of the singular values is below tolerance
             ! increase rank and run another step
-            if (rk == rkmax) then ! cannot increase rank without reallocating X%U and X%S
-               write(msg,'(A,I0,A,A)') 'Cannot increase rank, rkmax = ', rkmax, ' is reached. ', &
-                        & 'Increase rkmax and restart!'
-               call stop_error(msg, module=this_module, procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
-            else
-               write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8)")') ndigits, ndigits
-               write(msg,fmt) 'rk= ', rk, ', s_', rk,' = ', ssvd(rk)
-               call log_information(msg, module=this_module, procedure='DLRA_main')
-               write(msg,'(A,I0)') 'Rank increased to rk= ', rk + 1
-               call log_message(msg, module=this_module, procedure='DLRA_main')
-               
-               X%rk = X%rk + 1
-               rk = X%rk ! this is only to make the code more readable
-               ! set coefficients to zero (for redundancy)
-               X%S(:rk, rk) = 0.0_wp 
-               X%S( rk,:rk) = 0.0_wp
-               ! add random vector ...
-               call X%U(rk)%rand(.false.)
-               ! ... and orthonormalize
-               call orthogonalize_against_basis(X%U(rk), X%U(:rk-1), info, if_chk_orthonormal=.false.)
-               call check_info(info, 'orthogonalize_against_basis', module=this_module, &
-                                 & procedure='rank_adaptive_PS_DLRA_lyapunov_step_rdp')
-               call X%U(rk)%scal(1.0_wp / X%U(rk)%norm())
+            call increase_rank(X)
 
-               rk_reduction_lock = 10 ! avoid rank oscillations
+            rk = X%rk
+            write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8)")') ndigits, ndigits
+            write(msg,fmt) 'rk= ', rk, ', s_', rk,' = ', ssvd(rk)
+            call log_information(msg, module=this_module, procedure='DLRA_main')
+            write(msg,'(A,I0)') 'Rank increased to rk= ', rk + 1
+            call log_message(msg, module=this_module, procedure='DLRA_main')
+            
+            rk_reduction_lock = 10 ! avoid rank oscillations
 
-            end if
          else ! the rank of the solution is sufficient
             accept_step = .true.
 
             if (irk /= rk .and. rk_reduction_lock == 0) then ! we should decrease the rank
                ! decrease rank
-               
-               ! rotate basis onto principal axes
-               block
-                  class(abstract_vector_rdp), allocatable :: Xwrk(:)
-                  call linear_combination(Xwrk, X%U(:rk), Usvd(:rk,:rk))
-                  call copy(X%U(:rk), Xwrk)
-               end block
-               X%S(:rk,:rk) = diag(ssvd(:rk))
-
                rk = max(irk, rk - 2)  ! reduce by at most 2
-
+               call decrease_rank(X, Usvd, ssvd, rk)
                write(msg, '(A,I0)') 'Rank decreased to rk= ', rk
                call log_message(msg, module=this_module, procedure='DLRA_main')
             end if
@@ -479,7 +432,7 @@ module LightROM_LyapunovSolvers
          istep = istep + 1
       end do ! while .not. accept_step
 
-      if (.not. accept_step .and. istep == max_step) then
+      if (istep >= max_step) then
          write(msg,'(A,I0,A,2(A,E11.4))') 'Rank increased ', max_step, ' times in a single step without ', &
                & 'reaching the desired tolerance on the singular values. s_{k+1} = ', ssvd(irk), ' > ', tol
          call stop_error(msg, module=this_module, procedure='DLRA_main')
@@ -668,7 +621,7 @@ module LightROM_LyapunovSolvers
       if (time_lightROM()) call lr_timer%stop('L_step_lyapunov_rdp')
    end subroutine L_step_lyapunov_rdp
 
-   subroutine set_initial_rank(X, A, B, tau, mode, exptA, trans, tol, rk_init, nsteps)
+   subroutine set_initial_rank_lyapunov(X, A, B, tau, mode, exptA, trans, tol, rk_init, nsteps)
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
       class(abstract_linop_rdp),              intent(inout) :: A
@@ -712,8 +665,8 @@ module LightROM_LyapunovSolvers
 
       do while (.not. accept_rank .and. X%rk <= rkmax)
          write(msg,'(4X,A,I0)') 'Test r = ', X%rk
-         call log_message(msg, module=this_module, procedure='set_initial_rank')
-         svals = svdvals(X%S(:X%rk,:X%rk))
+         call log_message(msg, module=this_module, procedure='set_initial_rank_lyapunov')
+
          ! run integrator
          do i = 1,n
             call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, mode, info, exptA, trans)
@@ -721,21 +674,16 @@ module LightROM_LyapunovSolvers
 
          ! check if singular values are resolved
          svals = svdvals(X%S(:X%rk,:X%rk))
-         found = .false.
-         tol_chk: do irk = 1, X%rk
-            if ( svals(irk) < tol ) then
-               found = .true.
-               exit tol_chk
-            end if
-         end do tol_chk
+         call find_rank(found, irk, svals, tol)
          if (.not. found) irk = irk - 1
+
          write(msg,'(4X,A,I2,A,E8.2)') 'rk = ', X%rk, ' s_r =', svals(X%rk)
-         call log_debug(msg, module=this_module, procedure='set_initial_rank')
+         call log_debug(msg, module=this_module, procedure='set_initial_rank_lyapunov')
          if (found) then
             accept_rank = .true.
             X%rk = irk
             write(msg,'(4X,A,I2,A,E10.4)') 'Accpeted rank: r = ', X%rk-1, ',     s_{r+1} = ', svals(X%rk)
-            call log_message(msg, module=this_module, procedure='set_initial_rank')
+            call log_message(msg, module=this_module, procedure='set_initial_rank_lyapunov')
          else
             X%rk = 2*X%rk
          end if
@@ -747,13 +695,13 @@ module LightROM_LyapunovSolvers
 
       if (X%rk > rkmax) then
          write(msg, *) 'Maximum rank reached but singular values are not converged. Increase rkmax and restart.'
-         call stop_error(msg, module=this_module, procedure='set_initial_rank')
+         call stop_error(msg, module=this_module, procedure='set_initial_rank_lyapunov')
       end if
 
       ! reset to the rank of the approximation which we use outside of the integrator & mark rank as initialized
       X%rk = X%rk - 1
       X%rank_is_initialised = .true.
-   end subroutine set_initial_rank
+   end subroutine set_initial_rank_lyapunov
 
    subroutine compute_splitting_error(err_est, X, A, B, tau, mode, exptA, trans)
       !! This function estimates the splitting error of the integrator as a function of the chosen timestep.

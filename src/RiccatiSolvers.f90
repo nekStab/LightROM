@@ -34,12 +34,15 @@ module LightROM_RiccatiSolvers
    class(abstract_vector_rdp),  allocatable   :: Ut(:)
    class(abstract_vector_rdp),  allocatable   :: Tt(:)
    real(wp),                    allocatable   :: S0(:,:)
+   ! global scratch arrays SVD
+   real(wp),                    allocatable   :: ssvd(:)
+   real(wp),                    allocatable   :: Usvd(:,:), VTsvd(:,:)
 
    private 
    ! module name
    private :: this_module
    character(len=*), parameter :: this_module = 'LR_RiccSolvers'
-   integer, parameter :: iline = 4
+   character(len=*), parameter :: riccati_bname = 'Riccati'
    integer :: RiccSolver_counter = 0
 
    public :: projector_splitting_DLRA_riccati_integrator
@@ -174,12 +177,17 @@ module LightROM_RiccatiSolvers
       !! Options for solver configuration
 
       ! Internal variables   
-      integer                                                :: istep, nsteps
-      logical                                                :: converged
-      real(wp)                                               :: T
-      character(len=128)                                     :: msg
+      integer                             :: i, j, istep, nsteps, irk, chkstep, ifmt, irkfmt
+      integer                             :: rk_reduction_lock   ! 'timer' to disable rank reduction
+      real(wp)                            :: inc_nrm, nrmX       ! increment and solution norm
+      real(wp)                            :: tol                 ! current tolerance
+      character(len=128)                  :: msg, fmt_step
+      integer                             :: rkmax
+      logical                             :: if_lastep
+      real(wp), dimension(:), allocatable :: svals, svals_lag
 
       if (time_lightROM()) call lr_timer%start('DLRA_riccati_integrator_rdp')
+      RiccSolver_counter = RiccSolver_counter + 1
 
       ! Optional arguments
       trans = optval(iftrans, .false.)
@@ -191,33 +199,108 @@ module LightROM_RiccatiSolvers
          opts = dlra_opts()
       end if
 
+      ! Set tolerance
+      tol = opts%tol
+
+      ! Check compatibility of options and determine chk/IO step
+      call check_options(chkstep, tau, X, opts)
+
       ! Initialize
-      T         = 0.0_wp
-      converged = .false.
+      X%is_converged = .false.
+      X%time = 0.0_wp
+      X%step = 0
+
+      rkmax = size(X%U)
+      ! Allocate memory for SVD & lagged fields
+      if (.not. allocated(Usvd))  allocate(Usvd(rkmax,rkmax))
+      if (.not. allocated(ssvd))  allocate(ssvd(rkmax))
+      if (.not. allocated(VTsvd)) allocate(VTsvd(rkmax,rkmax))
+
+      call log_message('Initializing Riccati solver', module=this_module, procedure='DLRA_main')
 
       ! Compute number of steps
-      nsteps = floor(Tend/tau)
+      if_lastep = .false.
+      nsteps = nint(Tend/tau)
+      write(msg,'(A,I0,A,F10.8)') 'Integration over ', nsteps, ' steps with dt= ', tau
+      call log_information(msg, module=this_module, procedure='DLRA_main')
+      ! Pretty output
+      ifmt = max(5,ceiling(log10(real(nsteps))))
+      irkfmt = max(3,ceiling(log10(real(rkmax))))
+      write(fmt_step,'(A,2(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,", Ttot= ",F10.4)'
+      ! Prepare logfile
+      call write_logfile_headers(riccati_bname, X%rk, rkmax)
 
       if ( opts%mode > 2 ) then
          write(msg, *) "Time-integration order for the operator splitting of d > 2 &
                       & requires adjoint solves and is not implemented. Resetting torder = 2." 
          call log_message(msg, module=this_module, procedure='DLRA_main')
+      else if ( opts%mode == 2 ) then
+         write(msg, *) "Second-order time integration currently not implemented for the Riccati equation"
+         call stop_error(msg, module=this_module, procedure='DLRA_main')
       else if ( opts%mode < 1 ) then
          write(msg, *) "Invalid time-integration order specified: ", opts%mode
          call stop_error(msg, module=this_module, procedure='DLRA_main')
       endif
 
+      ! determine initial rank if rank-adaptive
+      if (opts%if_rank_adaptive) then
+         rk_reduction_lock = 10  ! initialize rank reduction lock
+         if (.not. X%rank_is_initialised) then
+            call log_message('Determine initial rank:', module=this_module, procedure='DLRA_main')
+            call set_initial_rank_riccati(X, A, B, CT, Qc, Rinv, tau, opts%mode, exptA, trans, tol)
+         end if
+      end if
+
+      call log_settings(X, Tend, tau, nsteps, opts)
+      call log_message('Starting DLRA integration', module=this_module, procedure='DLRA_main')
+      
       dlra : do istep = 1, nsteps
+
+         write(msg,fmt_step) istep, nsteps, X%time, X%tot_time
+         call log_information(msg, module=this_module, procedure='DLRA_main')
+
+         ! save lag data defore the timestep
+         if (mod(istep, chkstep) == 0 .or. istep == nsteps ) then
+            svals_lag = svdvals(X%S(:X%rk,:X%rk))
+         end if
+
          ! dynamical low-rank approximation solver
-         call projector_splitting_DLRA_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, opts%mode, info, exptA, trans)
-         T = T + tau
-         !> here we can do some checks such as whether we have reached steady state
-         if ( mod(istep,opts%chkstep) .eq. 0 ) then
-            write(msg,'(I0,A,E15.8)') istep, ' steps of DLRA computed. T= ',T
-            call log_information(msg, module=this_module, procedure='DLRA')
+         if (opts%if_rank_adaptive) then
+            call rank_adaptive_PS_DLRA_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, opts%mode, info, rk_reduction_lock, & 
+                                                         & exptA, trans, tol)
+         else
+            call projector_splitting_DLRA_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, opts%mode, info, exptA, trans)
+         end if
+
+         ! update time & step counters
+         X%time = X%time + tau
+         X%step = X%step + 1
+         X%tot_time = X%tot_time + tau
+         X%tot_step = X%tot_step + 1
+
+         ! here we can do some checks such as whether we have reached steady state
+         if (mod(istep, chkstep) == 0 .or. istep == nsteps) then
+            svals = svdvals(X%S(:X%rk,:X%rk))
+            irk = min(size(svals), size(svals_lag))
+            call print_svals(X, svals, svals_lag, istep, nsteps)
+            ! Check convergence
+            if (istep == nsteps) if_lastep = .true.
+            X%is_converged = is_converged(X, svals(:irk), svals_lag(:irk), opts, if_lastep)
+            if (X%is_converged) then
+               write(msg,'(A,I0,A)') "Step ", istep, ": Solution converged!"
+               call log_information(msg, module=this_module, procedure='DLRA_main')
+               exit dlra
+            else ! if final step
+               if (if_lastep) then
+                  write(msg,'(A,I0,A)') "Step ", istep, ": Solution not converged!"
+                  call log_information(msg, module=this_module, procedure='DLRA_main')
+               end if
+            end if
          endif
       enddo dlra
-      deallocate(Uwrk0,Uwrk1,U1,QU,Swrk0,Swrk1)
+      call log_message('Exiting Riccati solver', module=this_module, procedure='DLRA_main')
+      ! Clean up scratch space
+      !deallocate(Uwrk0,Uwrk1,U1,QU,Swrk0,Swrk1,Usvd,Ssvd,VTsvd)
       if (time_lightROM()) call lr_timer%stop('DLRA_riccati_integrator_rdp')
    end subroutine projector_splitting_DLRA_riccati_integrator_rdp
 
@@ -240,7 +323,7 @@ module LightROM_RiccatiSolvers
       !! Measurement weights.
       real(wp),                               intent(in)    :: Rinv(:,:)
       !! Inverse of the actuation weights.
-      real(wp),                               intent(inout) :: tau
+      real(wp),                               intent(in)    :: tau
       !! Time step.
       integer,                                intent(in)    :: mode
       !! Order of time integration. Only 1st (Lie splitting) and 2nd (Strang splitting) 
@@ -312,6 +395,112 @@ module LightROM_RiccatiSolvers
 
       if (time_lightROM()) call lr_timer%stop('DLRA_riccati_step_rdp')
    end subroutine projector_splitting_DLRA_riccati_step_rdp
+
+   !-----------------------------
+   !
+   !     RANK-ADAPTIVE PSI 
+   !
+   !-----------------------------
+
+   subroutine rank_adaptive_PS_DLRA_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, mode, info, rk_reduction_lock, exptA, trans, tol)
+      !! Wrapper for projector_splitting_DLRA_riccati_step_rdp adding the logic for rank-adaptivity
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_linop_rdp),              intent(inout) :: A
+      !! Linear operator
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
+      !! System input.
+      class(abstract_vector_rdp),             intent(in)    :: CT(:)
+      !! System output.
+      real(wp),                               intent(in)    :: Qc(:,:)
+      !! Measurement weights.
+      real(wp),                               intent(in)    :: Rinv(:,:)
+      !! Inverse of the actuation weights.
+      real(wp),                               intent(in)    :: tau
+      !! Time step.
+      integer,                                intent(in)    :: mode
+      !! Time integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) 
+      !! orders are implemented.
+      integer,                                intent(out)   :: info
+      !! Information flag
+      integer,                                intent(inout) :: rk_reduction_lock
+      !! 'timer' to disable rank reduction
+      procedure(abstract_exptA_rdp)                         :: exptA
+      !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
+      logical,                                intent(in)    :: trans
+      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      real(wp),                               intent(in)    :: tol
+      
+      ! Internal variables
+      integer                                               :: istep, rk, irk, rkmax, ndigits
+      logical                                               :: accept_step, found
+      real(wp),                               allocatable   :: coef(:)
+      real(wp)                                              :: norm
+      character(len=256)                                    :: msg, fmt
+
+      integer, parameter                                    :: max_step = 40  ! might not be needed
+
+      ! ensure that we are integrating one more rank than we use for approximation
+      X%rk = X%rk + 1
+      rk = X%rk ! this is only to make the code more readable
+      rkmax = size(X%U)
+      ndigits = max(1,ceiling(log10(real(rkmax))))
+      
+      accept_step = .false.
+      istep = 1
+      do while ( .not. accept_step .and. istep < max_step )
+         ! run a regular step
+         call projector_splitting_DLRA_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, mode, info, exptA, trans)
+         ! compute singular values of X%S
+         call svd(X%S(:rk,:rk), ssvd(:rk), Usvd(:rk,:rk), VTsvd(:rk,:rk))
+         call find_rank(found, irk, ssvd, tol)
+         
+         ! choose action
+         if (.not. found) then ! none of the singular values is below tolerance
+            ! increase rank and run another step
+            call increase_rank(X)
+
+            rk = X%rk
+            write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8)")') ndigits, ndigits
+            write(msg,fmt) 'rk= ', rk, ', s_', rk,' = ', ssvd(rk)
+            call log_information(msg, module=this_module, procedure='DLRA_main')
+            write(msg,'(A,I0)') 'Rank increased to rk= ', rk + 1
+            call log_message(msg, module=this_module, procedure='DLRA_main')
+            
+            rk_reduction_lock = 10 ! avoid rank oscillations
+
+         else ! the rank of the solution is sufficient
+            accept_step = .true.
+
+            if (irk /= rk .and. rk_reduction_lock == 0) then ! we should decrease the rank
+               ! decrease rank
+               rk = max(irk, rk - 2)  ! reduce by at most 2
+               call decrease_rank(X, Usvd, ssvd, rk)
+               write(msg, '(A,I0)') 'Rank decreased to rk= ', rk
+               call log_message(msg, module=this_module, procedure='DLRA_main')
+            end if
+            
+         end if ! found
+         istep = istep + 1
+      end do ! while .not. accept_step
+
+      if (.not. accept_step .and. istep == max_step) then
+         write(msg,'(A,I0,A,2(A,E11.4))') 'Rank increased ', max_step, ' times in a single step without ', &
+               & 'reaching the desired tolerance on the singular values. s_{k+1} = ', ssvd(irk), ' > ', tol
+         call stop_error(msg, module=this_module, procedure='DLRA_main')
+      end if
+
+      write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8,A,I2)")') ndigits, ndigits
+      write(msg,fmt) 'rk = ', rk-1, ':     s_', irk,' = ', &
+               & ssvd(irk), ',     lock: ', rk_reduction_lock
+      call log_information(msg, module=this_module, procedure='DLRA_main')
+
+      ! decrease rk_reduction_lock
+      if (rk_reduction_lock > 0) rk_reduction_lock = rk_reduction_lock - 1
+      
+      ! reset to the rank of the approximation which we use outside of the integrator
+      X%rk = rk - 1      
+   end subroutine rank_adaptive_PS_DLRA_riccati_step_rdp
 
    subroutine G_forward_map_riccati_rdp(X, B, CT, Qc, Rinv, tau, info, ifpred, T0, Tt, U0, Ut)
       !! This subroutine computes the solution of the non-stiff non-linear part of the 
@@ -590,6 +779,94 @@ module LightROM_RiccatiSolvers
 
       if (time_lightROM()) call lr_timer%stop('L_step_riccati_rdp')
    end subroutine L_step_riccati_rdp
+
+   subroutine set_initial_rank_riccati(X, A, B, CT, Qc, Rinv, tau, mode, exptA, trans, tol, rk_init, nsteps)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_linop_rdp),              intent(inout) :: A
+      !! Linear operator
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
+      !! System input.
+      class(abstract_vector_rdp),             intent(in)    :: CT(:)
+      !! System output.
+      real(wp),                               intent(in)    :: Qc(:,:)
+      !! Measurement weights.
+      real(wp),                               intent(in)    :: Rinv(:,:)
+      !! Inverse of the actuation weights.
+      real(wp),                               intent(in)    :: tau
+      !! Time step.
+      integer,                                intent(in)    :: mode
+      !! TIme integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) orders are implemented.
+      procedure(abstract_exptA_rdp)                         :: exptA
+      !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
+      logical,                                intent(in)    :: trans
+      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      real(wp),                               intent(in)    :: tol
+      !! Tolerance on the last singular value to determine rank
+      integer,                      optional, intent(in)    :: rk_init
+      !! Smallest tested rank
+      integer,                      optional, intent(in)    :: nsteps
+      integer                                               :: n
+      !! Number of steps to run before checking the singular values
+
+      ! internal
+      integer                                               :: i, irk, info, rkmax
+      class(abstract_vector_rdp),               allocatable :: Utmp(:)
+      real(wp),                                 allocatable :: Stmp(:,:), svals(:)
+      logical                                               :: found, accept_rank
+      character(len=512)                                    :: msg, fmt
+
+      ! optional arguments
+      X%rk = optval(rk_init, 1)
+      n = optval(nsteps, 5)
+      rkmax = size(X%U)
+
+      info = 0
+      accept_rank = .false.
+
+      ! save initial condition
+      allocate(Utmp(rkmax), source=X%U)
+      allocate(Stmp(rkmax,rkmax)); Stmp = X%S
+
+      do while (.not. accept_rank .and. X%rk <= rkmax)
+         write(msg,'(4X,A,I0)') 'Test r = ', X%rk
+         call log_message(msg, module=this_module, procedure='set_initial_rank_riccati')
+
+         ! run integrator
+         do i = 1,n
+            call projector_splitting_DLRA_riccati_step_rdp(X, A, B, CT, Qc, Rinv, tau, mode, info, exptA, trans)
+         end do
+
+         ! check if singular values are resolved
+         svals = svdvals(X%S(:X%rk,:X%rk))
+         call find_rank(found, irk, svals, tol)
+         if (.not. found) irk = irk - 1
+         
+         write(msg,'(4X,A,I2,A,E8.2)') 'rk = ', X%rk, ' s_r =', svals(X%rk)
+         call log_debug(msg, module=this_module, procedure='set_initial_rank_riccati')
+         if (found) then
+            accept_rank = .true.
+            X%rk = irk
+            write(msg,'(4X,A,I2,A,E10.4)') 'Accpeted rank: r = ', X%rk-1, ',     s_{r+1} = ', svals(X%rk)
+            call log_message(msg, module=this_module, procedure='set_initial_rank_riccati')
+         else
+            X%rk = 2*X%rk
+         end if
+         
+         ! reset initial conditions
+         call copy(X%U, Utmp)
+         X%S = Stmp
+      end do
+
+      if (X%rk > rkmax) then
+         write(msg, *) 'Maximum rank reached but singular values are not converged. Increase rkmax and restart.'
+         call stop_error(msg, module=this_module, procedure='set_initial_rank_riccati')
+      end if
+
+      ! reset to the rank of the approximation which we use outside of the integrator & mark rank as initialized
+      X%rk = X%rk - 1
+      X%rank_is_initialised = .true.
+   end subroutine set_initial_rank_riccati
 
    subroutine reset_riccati_solver()
       ! internal
