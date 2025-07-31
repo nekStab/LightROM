@@ -161,9 +161,6 @@ module LightROM_LyapunovSolvers
       ! Internal variables
       integer                             :: i, j, istep, nsteps, irk, chkstep, ifmt, irkfmt
       integer                             :: rk_reduction_lock   ! 'timer' to disable rank reduction
-      real(wp)                            :: inc_nrm, nrmX       ! increment and solution norm
-      real(wp)                            :: El                  ! aggregate error estimate
-      real(wp)                            :: err_est             ! current error estimate
       real(wp)                            :: tol                 ! current tolerance
       character(len=128)                  :: msg, fmt_step
       integer                             :: rkmax
@@ -190,16 +187,13 @@ module LightROM_LyapunovSolvers
       call check_options(chkstep, tau, X, opts)
 
       ! Initialize
-      rk_reduction_lock = 10
       X%is_converged = .false.
       X%time = 0.0_wp
       X%step = 0
 
       rkmax = size(X%U)
       ! Allocate memory for SVD & lagged fields
-      if (.not. allocated(Usvd))  allocate(Usvd(rkmax,rkmax))
-      if (.not. allocated(ssvd))  allocate(ssvd(rkmax))
-      if (.not. allocated(VTsvd)) allocate(VTsvd(rkmax,rkmax))
+      allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
 
       call log_message('Initializing Lyapunov solver', module=this_module, procedure='DLRA_main')
 
@@ -226,17 +220,10 @@ module LightROM_LyapunovSolvers
 
       ! determine initial rank if rank-adaptive
       if (opts%if_rank_adaptive) then
+         rk_reduction_lock = 10  ! initialize rank reduction lock
          if (.not. X%rank_is_initialised) then
             call log_message('Determine initial rank:', module=this_module, procedure='DLRA_main')
             call set_initial_rank_lyapunov(X, A, B, tau, opts%mode, exptA, trans, tol)
-         end if
-         if (opts%use_err_est) then
-            err_est = 0.0_wp
-            El      = 0.0_wp
-            call compute_splitting_error(err_est, X, A, B, tau, opts%mode, exptA, trans)
-            tol = err_est / sqrt(X%U(1)%get_size() - real(X%rk + 1))
-            write(msg, *) 'Initialization complete: rk = ', X%rk, ', local error estimate: ', tol
-            call log_information(msg, module=this_module, procedure='DLRA_main')
          end if
       end if
 
@@ -256,18 +243,7 @@ module LightROM_LyapunovSolvers
          ! dynamical low-rank approximation solver
          if (opts%if_rank_adaptive) then
             call rank_adaptive_PS_DLRA_lyapunov_step_rdp(X, A, B, tau, opts%mode, info, rk_reduction_lock, & 
-                                                         & exptA, trans, tol)  
-            if ( opts%use_err_est ) then
-               if ( mod(istep, opts%err_est_step) == 0 ) then
-                  call compute_splitting_error(err_est, X, A, B, tau, opts%mode, exptA, trans)
-                  El = El + err_est
-                  tol = El / sqrt(256_wp - real(X%rk + 1))
-                  write(msg,'(3X,I3,A,E8.2)') istep, ': recomputed error estimate: ', tol
-                  call log_information(msg, module=this_module, procedure='DLRA_main')
-               else
-                  El = El + err_est
-               end if
-            end if
+                                                         & exptA, trans, tol)
          else
             call projector_splitting_DLRA_lyapunov_step_rdp(X, A, B, tau, opts%mode, info, exptA, trans)
          end if
@@ -299,7 +275,8 @@ module LightROM_LyapunovSolvers
          endif
       enddo dlra
       call log_message('Exiting Lyapunov solver', module=this_module, procedure='DLRA_main')
-      
+      ! Clean up scratch space
+      deallocate(Usvd, ssvd, VTsvd)
       if (time_lightROM()) call lr_timer%stop('DLRA_lyapunov_integrator_rdp')
    end subroutine projector_splitting_DLRA_lyapunov_integrator_rdp
 
@@ -392,7 +369,6 @@ module LightROM_LyapunovSolvers
       rk = X%rk ! this is only to make the code more readable
       rkmax = size(X%U)
       ndigits = max(1,ceiling(log10(real(rkmax))))
-      write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8)")') ndigits, ndigits
       
       accept_step = .false.
       istep = 1
@@ -422,8 +398,8 @@ module LightROM_LyapunovSolvers
 
             if (irk /= rk .and. rk_reduction_lock == 0) then ! we should decrease the rank
                ! decrease rank
-               rk = max(irk, rk - 2)  ! reduce by at most 2
                call decrease_rank(X, Usvd, ssvd, rk)
+               rk = max(irk, rk - 2)  ! reduce by at most 2
                write(msg, '(A,I0)') 'Rank decreased to rk= ', rk
                call log_message(msg, module=this_module, procedure='DLRA_main')
             end if

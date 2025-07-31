@@ -316,7 +316,9 @@ program demo
                ! run step
                opts = dlra_opts(mode=torder, if_rank_adaptive=.false.)
                call system_clock(count=clock_start)     ! Start Timer
-               call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, info, exptA=exptA, options=opts)
+               call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, &
+                                                                  & Tend, dt, info, &
+                                                                  & exptA=exptA, options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
 
                ! Reconstruct solution
@@ -447,7 +449,9 @@ program demo
                ! run step
                opts = dlra_opts(mode=torder, if_rank_adaptive=.false.)
                call system_clock(count=clock_start)     ! Start Timer
-               call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, info, exptA=exptA, options=opts)
+               call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, &
+                                                                  & Tend, dt, info, &
+                                                                  & exptA=exptA, options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
 
                ! Reconstruct solution
@@ -476,7 +480,6 @@ program demo
       call reset_lyapunov_solver()
    else
       print *, 'Skip.'
-      print *, ''
    end if
 
    call global_lightROM_timer%stop('Steady-State: DLRA')
@@ -527,7 +530,9 @@ program demo
                ! run step
                opts = dlra_opts(mode=torder, if_rank_adaptive=.true., tol=tol)
                call system_clock(count=clock_start)     ! Start Timer
-               call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, info, exptA=exptA, options=opts)
+               call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, &
+                                                                  & Tend, dt, info, &
+                                                                  & exptA=exptA, options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
                rk = X%rk
 
@@ -556,7 +561,6 @@ program demo
       call reset_lyapunov_solver()
    else
       print *, 'Skip.'
-      print *, ''
    end if
 
    ! Reset timers
@@ -614,7 +618,9 @@ program demo
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, Tend, dt, info, exptA=exptA, options=opts)
+            call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, &
+                                                                  & Tend, dt, info, &
+                                                                  & exptA=exptA, options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution
