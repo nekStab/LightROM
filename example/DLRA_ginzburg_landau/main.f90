@@ -444,7 +444,7 @@ program demo
             if (short_test) then
                dtv = logspace(-3.0_wp, -3.0_wp, 1, 10)
             else
-               dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
+               dtv = logspace(-6.0_wp, -3.0_wp, 4, 10)
             end if
             dtv = dtv(size(dtv):1:-1) ! reverse vector
             TOv  = [ 1 ] 
