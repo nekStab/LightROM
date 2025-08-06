@@ -310,7 +310,10 @@ module LightROM_RiccatiSolvers
             end if
          endif
       enddo dlra
+      call log_message('Exiting Riccati solver', module=this_module, procedure='DLRA_main')
+      ! Clean up scratch space
       deallocate(Uwrk0,Uwrk1,U1,QU,Swrk0,Swrk1)
+      deallocate(Usvd, ssvd, VTsvd)
       if (time_lightROM()) call lr_timer%stop('DLRA_riccati_integrator_rdp')
    end subroutine projector_splitting_DLRA_riccati_integrator_rdp
 
