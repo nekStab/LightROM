@@ -193,6 +193,7 @@ contains
       ifmt = max(5,ceiling(log10(real(nsteps))))
       write(fmt,'(A,2(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,", Ttot= ",F10.4)'
       write(msg,fmt) istep, nsteps, X%time, X%tot_time
+      call log_information(msg, this_module, 'DLRA_main')
    end subroutine log_step
 
    subroutine log_svals(basename, X, lag, svals, svals_lag, icall, istep, nsteps)

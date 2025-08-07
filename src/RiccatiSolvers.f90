@@ -250,7 +250,6 @@ module LightROM_RiccatiSolvers
       dlra : do istep = 1, nsteps
 
          call log_step(X, istep, nsteps)
-         call log_information(msg, this_module, 'DLRA_main')
 
          ! save lag data defore the timestep
          if (mod(istep, chkstep) == 0 .or. istep == nsteps ) then
