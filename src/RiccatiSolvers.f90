@@ -729,12 +729,12 @@ module LightROM_RiccatiSolvers
       ! Non-linear part --> Swrk1
       if (.not.present(NL)) then
          call apply_premult_outerprod_w(Swrk1, X%U, U1, B, Rinv) !       U0.T @ B @ R^(-1) @ B.T @ U1
-         Swrk1 = matmul(X%S, matmul(Swrk1, X%S))                 ! S0 @ (U0.T @ B @ R^(-1) @ B.T @ U1) @ S0
+         Swrk1 = matmul(X%S, matmul(Swrk1, X%S))                 ! Sh @ (U0.T @ B @ R^(-1) @ B.T @ U1) @ Sh
       else ! Non-linear term precomputed
          Swrk1 = innerprod(U1, NL)
       end if
 
-      ! Combine to form -U1.T @ G( U1 @ S @ U0.T ) @ U0
+      ! Combine to form -U1.T @ G( U1 @ Sh @ U0.T ) @ U0
       Swrk0 = Swrk1 - Swrk0
 
       ! Construct intermediate coefficient matrix
@@ -776,14 +776,14 @@ module LightROM_RiccatiSolvers
 
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, X%U, transpose(X%S))  ! L0.T                                    U0 @ S.T
+         call linear_combination(Xwrk, X%U, transpose(X%S))  ! L0.T                             U0 @ S.T
          call copy(Uwrk1, Xwrk)
       end block
       ! Constant part --> Uwrk0
       call apply_outerprod_w(Uwrk0, U1, CT, Qc)
 
       ! Non-linear part --> U
-      call apply_premult_outerprod_w(Swrk0, U1, Uwrk1, B, Rinv)  !               U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T
+      call apply_premult_outerprod_w(Swrk0, U1, Uwrk1, B, Rinv)  !    U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, Uwrk1, Swrk0)  ! (U0 @ S.T) @ (U1.T @ B @ R^(-1) @ B.T @ U0 @ S.T)
