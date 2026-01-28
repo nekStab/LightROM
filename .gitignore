@@ -44,6 +44,8 @@ doc
 **.dat
 **/local
 lightkrylov.log
+lightkrylov_timer.log
+lightrom_timer.log
 
 # swap & tmp files
 *~
