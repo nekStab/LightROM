@@ -252,7 +252,7 @@ module LightROM_RiccatiSolvers
          call log_step(X, istep, nsteps)
 
          ! save lag data defore the timestep
-         if (mod(istep, chkstep) == 0 .or. istep == nsteps ) then
+         if ( X%rk > 0 .and. (mod(istep, chkstep) == 0 .or. istep == nsteps) ) then
             svals_lag = svdvals(X%S(:X%rk,:X%rk))
          end if
 
@@ -271,7 +271,7 @@ module LightROM_RiccatiSolvers
          X%tot_step = X%tot_step + 1
 
          ! here we can do some checks such as whether we have reached steady state
-         if (mod(istep, chkstep) == 0 .or. istep == nsteps) then
+         if ( X%rk > 0 .and. (mod(istep, chkstep) == 0 .or. istep == nsteps) ) then
             svals = svdvals(X%S(:X%rk,:X%rk))
             irk = min(size(svals), size(svals_lag))
             call log_svals(logfile_basename, X, tau, svals, svals_lag, RiccSolver_counter, istep, nsteps)
