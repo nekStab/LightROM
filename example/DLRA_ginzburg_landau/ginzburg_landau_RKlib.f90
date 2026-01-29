@@ -6,7 +6,6 @@ module Ginzburg_Landau_RKlib
    use rklib_module
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov, only : wp => dp
    ! Ginzburg Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators
@@ -22,7 +21,7 @@ module Ginzburg_Landau_RKlib
    !-------------------------------------------
 
    type, extends(abstract_vector_rdp), public :: state_matrix
-      real(wp) :: state(N**2) = 0.0_wp
+      real(dp) :: state(N**2) = 0.0_dp
    contains
       private
       procedure, pass(self), public :: zero => matrix_zero
@@ -38,7 +37,7 @@ module Ginzburg_Landau_RKlib
    !-------------------------------
 
    type, extends(abstract_linop_rdp), public :: RK_lyapunov
-      real(wp) :: tau ! Integration time.
+      real(dp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec => direct_solver_lyap
@@ -50,7 +49,7 @@ module Ginzburg_Landau_RKlib
    !------------------------------
 
    type, extends(abstract_linop_rdp), public :: RK_riccati
-      real(wp) :: tau ! Integration time.
+      real(dp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec => direct_solver_ricc
@@ -63,10 +62,10 @@ contains
 
    subroutine matrix_zero(self)
       class(state_matrix), intent(inout) :: self
-      self%state = 0.0_wp
+      self%state = 0.0_dp
    end subroutine matrix_zero
 
-   real(wp) function matrix_dot(self, vec) result(alpha)
+   real(dp) function matrix_dot(self, vec) result(alpha)
       class(state_matrix),        intent(in) :: self
       class(abstract_vector_rdp), intent(in) :: vec
       select type(vec)
@@ -84,14 +83,14 @@ contains
 
    subroutine matrix_scal(self, alpha)
       class(state_matrix), intent(inout) :: self
-      real(wp),            intent(in)    :: alpha
+      real(dp),            intent(in)    :: alpha
       self%state = self%state * alpha
    end subroutine matrix_scal  
 
    subroutine matrix_axpby(alpha, vec, beta, self)
       class(state_matrix),        intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: vec
-      real(wp)         , intent(in)    :: alpha, beta
+      real(dp)         , intent(in)    :: alpha, beta
       select type(vec)
       type is(state_matrix)
          self%state = beta*self%state + alpha*vec%state
@@ -105,11 +104,11 @@ contains
       logical, optional,   intent(in)    :: ifnorm
       ! internals
       logical :: normalize
-      real(wp) :: alpha
-      real(wp), dimension(N**2) :: mean, std
+      real(dp) :: alpha
+      real(dp), dimension(N**2) :: mean, std
       normalize = optval(ifnorm, .true.)
-      mean = 0.0_wp
-      std  = 1.0_wp
+      mean = 0.0_dp
+      std  = 1.0_dp
       self%state = normal(mean,std)
       if (normalize) then
          alpha = self%norm()
@@ -120,9 +119,9 @@ contains
    subroutine GL_mat(mat_out, mat_in, adjoint, transpose)
       
       ! State vector.
-      real(wp), dimension(:,:), intent(in)  :: mat_in
+      real(dp), dimension(:,:), intent(in)  :: mat_in
       ! Time-derivative.
-      real(wp), dimension(:,:), intent(out) :: mat_out
+      real(dp), dimension(:,:), intent(out) :: mat_out
       ! Adjoint
       logical, optional :: adjoint
       logical           :: adj
@@ -136,7 +135,7 @@ contains
       adj   = optval(  adjoint,.false.)
       trans = optval(transpose,.false.)
       
-      mat_out = 0.0_wp
+      mat_out = 0.0_dp
       if (adj) then
          if (trans) then
             do j = 1,N
@@ -169,17 +168,17 @@ contains
       ! Time-integrator.
       class(rk_class), intent(inout)             :: me
       ! Current time.
-      real(wp),        intent(in)                :: t
+      real(dp),        intent(in)                :: t
       ! State vector.
-      real(wp),        dimension(:), intent(in)  :: x_flat
+      real(dp),        dimension(:), intent(in)  :: x_flat
       ! Time-derivative.
-      real(wp),        dimension(:), intent(out) :: f_flat
+      real(dp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(wp),        dimension(N,N) :: X, AX, XAH
+      real(dp),        dimension(N,N) :: X, AX, XAH
 
-      f_flat = 0.0_wp
-      AX = 0.0_wp; XAH = 0.0_wp;
+      f_flat = 0.0_dp
+      AX = 0.0_dp; XAH = 0.0_dp;
       X = reshape(x_flat, [N,N])
       ! A @ X
       call GL_mat(AX, X,              adjoint = .false., transpose = .false.)
@@ -194,17 +193,17 @@ contains
       ! Time-integrator.
       class(rk_class), intent(inout)             :: me
       ! Current time.
-      real(wp),        intent(in)                :: t
+      real(dp),        intent(in)                :: t
       ! State vector.
-      real(wp),        dimension(:), intent(in)  :: x_flat
+      real(dp),        dimension(:), intent(in)  :: x_flat
       ! Time-derivative.
-      real(wp),        dimension(:), intent(out) :: f_flat
+      real(dp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(wp),        dimension(N,N) :: X, AHX, XA
+      real(dp),        dimension(N,N) :: X, AHX, XA
 
-      f_flat = 0.0_wp
-      AHX = 0.0_wp; XA = 0.0_wp;
+      f_flat = 0.0_dp
+      AHX = 0.0_dp; XA = 0.0_dp;
       X = reshape(x_flat, [N,N])
       ! A.T @ X
       call GL_mat(AHX, X,            adjoint = .true., transpose = .false.)
@@ -219,17 +218,17 @@ contains
       ! Time-integrator.
       class(rk_class), intent(inout)             :: me
       ! Current time.
-      real(wp),        intent(in)                :: t
+      real(dp),        intent(in)                :: t
       ! State vector.
-      real(wp),        dimension(:), intent(in)  :: x_flat
+      real(dp),        dimension(:), intent(in)  :: x_flat
       ! Time-derivative.
-      real(wp),        dimension(:), intent(out) :: f_flat
+      real(dp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(wp),        dimension(N,N)  :: X, AHX, XA
+      real(dp),        dimension(N,N)  :: X, AHX, XA
 
-      f_flat = 0.0_wp
-      AHX = 0.0_wp; XA = 0.0_wp;
+      f_flat = 0.0_dp
+      AHX = 0.0_dp; XA = 0.0_dp;
       X = reshape(x_flat, [N,N])
       ! A.T @ X
       call GL_mat(AHX, X,             adjoint = .true., transpose = .false.)
@@ -253,8 +252,9 @@ contains
       class(abstract_vector_rdp),  intent(out) :: vec_out
 
       ! Time-integrator.
+      character(len=*), parameter :: this_procedure = 'direct_solver_lyap'
       type(rks54_class) :: prop
-      real(kind=wp)     :: dt = 1.0_wp
+      real(kind=dp)     :: dt = 1.0_dp
 
       select type(vec_in)
       type is(state_matrix)
@@ -263,12 +263,12 @@ contains
             ! Initialize propagator.
             call prop%initialize(n=N**2, f=rhs_lyap)
             ! Integrate forward in time.
-            call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+            call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
          class default
-            call stop_error('vec_out must be a state_matrix', this_module, 'direct_solver_lyap')
+            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
          end select
       class default
-         call stop_error('vec_in must be a state_matrix', this_module, 'direct_solver_lyap')
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
       end select
    end subroutine direct_solver_lyap
 
@@ -281,8 +281,9 @@ contains
       class(abstract_vector_rdp),  intent(out) :: vec_out
 
       ! Time-integrator.
+      character(len=*), parameter :: this_procedure = 'adjoint_solver_lyap'
       type(rks54_class) :: prop
-      real(kind=wp)     :: dt = 1.0_wp
+      real(kind=dp)     :: dt = 1.0_dp
 
       select type(vec_in)
       type is(state_matrix)
@@ -291,12 +292,12 @@ contains
             ! Initialize propagator.
             call prop%initialize(n=N**2, f=adjoint_rhs_lyap)
             ! Integrate forward in time.
-            call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+            call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
          class default
-            call stop_error('vec_out must be a state_matrix', this_module, 'adjoint_solver_lyap')
+            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
          end select
       class default
-         call stop_error('vec_in must be a state_matrix', this_module, 'adjoint_solver_lyap')
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
       end select
    end subroutine adjoint_solver_lyap
 
@@ -309,8 +310,9 @@ contains
       class(abstract_vector_rdp),  intent(out) :: vec_out
 
       ! Time-integrator.
+      character(len=*), parameter :: this_procedure = 'adjoint_solver_ricc'
       type(rks54_class) :: prop
-      real(kind=wp)     :: dt = 1.0_wp
+      real(kind=dp)     :: dt = 1.0_dp
 
       select type(vec_in)
       type is(state_matrix)
@@ -319,12 +321,12 @@ contains
             ! Initialize propagator.
             call prop%initialize(n=N**2, f=rhs_ricc)
             ! Integrate forward in time.
-            call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+            call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
          class default
-            call stop_error('vec_out must be a state_matrix', this_module, 'direct_solver_ricc')
+            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
          end select
       class default
-         call stop_error('vec_in must be a state_matrix', this_module, 'direct_solver_ricc')
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
       end select
       return
    end subroutine direct_solver_ricc

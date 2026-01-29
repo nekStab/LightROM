@@ -5,7 +5,6 @@ module Ginzburg_Landau_Tests_Riccati
    use stdlib_io_npy, only : save_npy, load_npy
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov, only : wp => dp
    use LightKrylov_AbstractVectors ! linear_combination
    use LightKrylov_Utils ! svd, sqrtm
    ! LightROM
@@ -40,25 +39,25 @@ contains
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Reference solution (SD)
-      real(wp),                      intent(in)    :: Xref(N,N)
+      real(dp),                      intent(in)    :: Xref(N,N)
       ! Reference solution (RK)
-      real(wp),                      intent(out)   :: Xref_RK(N,N)
+      real(dp),                      intent(out)   :: Xref_RK(N,N)
       ! Initial condition
       type(state_vector),            intent(inout) :: U0(:)
-      real(wp),                      intent(inout) :: S0(:,:)
-      real(wp),                      intent(in)    :: Tend
+      real(dp),                      intent(inout) :: S0(:,:)
+      real(dp),                      intent(in)    :: Tend
       integer,                       intent(in)    :: nrep
       integer,                       intent(in)    :: iref
 
       ! Internals
       type(rk_riccati) ,             allocatable   :: RK_propagator
       type(state_matrix)                           :: X_mat(2)
-      real(wp),                      allocatable   :: X_RK(:,:,:)
-      real(wp)                                     :: U0_mat(N,N)
+      real(dp),                      allocatable   :: X_RK(:,:,:)
+      real(dp)                                     :: U0_mat(N,N)
       integer                                      :: irep
-      real(wp)                                     :: etime, Tstep
+      real(dp)                                     :: etime, Tstep
       ! OUTPUT
-      real(wp)                                     :: X_out(N,N)
+      real(dp)                                     :: X_out(N,N)
       character(len=128)                           :: note
       ! timer
       integer :: clock_rate, clock_start, clock_stop
@@ -105,15 +104,15 @@ contains
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Reference solution (BS)
-      real(wp),                      intent(in)    :: Xref(N,N)
+      real(dp),                      intent(in)    :: Xref(N,N)
       ! Reference solution (RK)
-      real(wp),                      intent(in)    :: Xref_RK(N,N)
+      real(dp),                      intent(in)    :: Xref_RK(N,N)
       ! Initial condition
       type(state_vector),            intent(inout) :: U0(:)
-      real(wp),                      intent(inout) :: S0(:,:)
-      real(wp),                      intent(in)    :: Tend
+      real(dp),                      intent(inout) :: S0(:,:)
+      real(dp),                      intent(in)    :: Tend
       ! vector of dt values
-      real(wp),                      intent(in)    :: dtv(:)
+      real(dp),                      intent(in)    :: dtv(:)
       ! vector of rank values
       integer,                       intent(in)    :: rkv(:)
       ! vector of torders
@@ -127,26 +126,26 @@ contains
       type(LR_state),                allocatable   :: X
       type(state_matrix)                           :: X_mat(2)
       integer                                      :: info, i, j, k, rk, torder, irep, nrep, nsteps
-      real(wp)                                     :: etime, tau, Tstep, Ttot
+      real(dp)                                     :: etime, tau, Tstep, Ttot
       ! OUTPUT
-      real(wp)                                     :: X_out(N,N)
+      real(dp)                                     :: X_out(N,N)
 
       ! SVD                         
       integer                                      :: is, ie
       integer,                         parameter   :: irow = 8
-      real(wp),                        allocatable :: svals(:)
+      real(dp),                        allocatable :: svals(:)
       character(len=128)                           :: note
       ! DLRA options
       type(dlra_opts)                              :: opts
       ! timer
       integer                                      :: clock_rate, clock_start, clock_stop
       
-      Tstep = 1.0_wp
+      Tstep = one_rdp
 
       note = 'P'
 
       ! basic opts
-      opts = dlra_opts(chktime=1.0_wp, inc_tol=atol_dp, if_rank_adaptive=.false.)
+      opts = dlra_opts(chktime=one_rdp, inc_tol=atol_dp, if_rank_adaptive=.false.)
 
       call system_clock(count_rate=clock_rate)
 
@@ -186,19 +185,19 @@ contains
       end do
       if (nprint > 0) then
          svals = svdvals(Xref)
-         do i = 1, ceiling(nprint*1.0_wp/irow)
+         do i = 1, ceiling(nprint*one_rdp/irow)
             is = (i-1)*irow+1; ie = i*irow
             print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_SD) ', is, '-', ie, ( svals(j), j = is, ie )
          end do
          print *, ''
          svals = svdvals(Xref_RK)
-         do i = 1, ceiling(nprint*1.0_wp/irow)
+         do i = 1, ceiling(nprint*one_rdp/irow)
             is = (i-1)*irow+1; ie = i*irow
             print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_RK) ', is, '-', ie, ( svals(j), j = is, ie )
          end do
          print *, ''
          svals = svdvals(X_out)
-         do i = 1, ceiling(nprint*1.0_wp/irow)
+         do i = 1, ceiling(nprint*one_rdp/irow)
             is = (i-1)*irow+1; ie = i*irow
             print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_D ) ', is, '-', ie, ( svals(j), j = is, ie )
          end do
@@ -209,19 +208,19 @@ contains
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Reference solution (BS)
-      real(wp),                      intent(in)    :: Xref(N,N)
+      real(dp),                      intent(in)    :: Xref(N,N)
       ! Reference solution (RK)
-      real(wp),                      intent(in)    :: Xref_RK(N,N)
+      real(dp),                      intent(in)    :: Xref_RK(N,N)
       ! Initial condition
       type(state_vector),            intent(inout) :: U0(:)
-      real(wp),                      intent(inout) :: S0(:,:)
-      real(wp),                      intent(in)    :: Tend
+      real(dp),                      intent(inout) :: S0(:,:)
+      real(dp),                      intent(in)    :: Tend
       ! vector of dt values
-      real(wp),                      intent(in)    :: dtv(:)
+      real(dp),                      intent(in)    :: dtv(:)
       ! vector of torders
       integer,                       intent(in)    :: TOv(:)
       ! vector of adaptation tolerance
-      real(wp),                      intent(in)    :: tolv(:)
+      real(dp),                      intent(in)    :: tolv(:)
       ! number of singular values to print
       integer,                       intent(in)    :: nprint
       character(len=128),            intent(in)    :: home
@@ -231,13 +230,13 @@ contains
       type(LR_state),                allocatable   :: X
       type(state_matrix)                           :: X_mat(2)
       integer                                      :: info, i, j, k, rk, torder, irep, nsteps
-      real(wp)                                     :: etime, tau
+      real(dp)                                     :: etime, tau
       ! OUTPUT
-      real(wp)                                     :: X_out(N,N)
+      real(dp)                                     :: X_out(N,N)
       ! timer
       integer                                      :: is, ie
       integer,                         parameter   :: irow = 8
-      real(wp),                        allocatable :: svals(:)
+      real(dp),                        allocatable :: svals(:)
       character(len=128)                           :: note
       ! DLRA options
       type(dlra_opts)                              :: opts
@@ -245,7 +244,7 @@ contains
       integer                                      :: clock_rate, clock_start, clock_stop
 
       ! basic opts
-      opts = dlra_opts(chktime=1.0_wp, inc_tol=atol_dp, if_rank_adaptive=.true.)
+      opts = dlra_opts(chktime=one_rdp, inc_tol=atol_dp, if_rank_adaptive=.true.)
 
       call system_clock(count_rate=clock_rate)
 
@@ -291,19 +290,19 @@ contains
             print *, ''
          end do
          svals = svdvals(Xref)
-         do k = 1, ceiling(nprint*1.0_wp/irow)
+         do k = 1, ceiling(nprint*one_rdp/irow)
             is = (k-1)*irow+1; ie = k*irow
             print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_BS) ', is, '-', ie, ( svals(j), j = is, ie )
          end do
          print *, ''
          svals = svdvals(Xref_RK)
-         do k = 1, ceiling(nprint*1.0_wp/irow)
+         do k = 1, ceiling(nprint*one_rdp/irow)
             is = (k-1)*irow+1; ie = k*irow
             print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_RK) ', is, '-', ie, ( svals(j), j = is, ie )
          end do
          print *, ''
          svals = svdvals(X_out)
-         do k = 1, ceiling(nprint*1.0_wp/irow)
+         do k = 1, ceiling(nprint*one_rdp/irow)
             is = (k-1)*irow+1; ie = k*irow
             print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_D ) ', is, '-', ie, ( svals(j), j = is, ie )
          end do

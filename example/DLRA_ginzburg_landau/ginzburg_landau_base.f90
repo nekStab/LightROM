@@ -8,9 +8,9 @@ module Ginzburg_Landau_Base
    use stdlib_linalg, only: svdvals, eye
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov, only: wp => dp
    use LightKrylov_Logger
    use LightKrylov_Utils, only : assert_shape
+   use LightKrylov_Constants, only : one_rdp, zero_rdp
    use LightKrylov_AbstractVectors
    ! LightROM
    use LightROM_AbstractLTIsystems ! LR_state
@@ -31,16 +31,16 @@ module Ginzburg_Landau_Base
    !-------------------------------
 
    ! Mesh related parameters.
-   real(wp), parameter :: L  = 50.0_wp ! Domain length
+   real(dp), parameter :: L  = 50.0_dp ! Domain length
    integer,  parameter :: nx = 128     ! Number of grid points (excluding boundaries).
-   real(wp)            :: dx           ! Grid size.
+   real(dp)            :: dx           ! Grid size.
 
    !-------------------------------------------
    !-----     LIGHTKRYLOV VECTOR TYPE     -----
    !-------------------------------------------
 
    type, extends(abstract_vector_rdp), public :: state_vector
-      real(wp) :: state(2*nx) = 0.0_wp
+      real(dp) :: state(2*nx) = 0.0_dp
    contains
       private
       procedure, pass(self), public :: zero
@@ -66,35 +66,35 @@ module Ginzburg_Landau_Base
    !-------------------------------
 
    ! Physical parameters.
-   complex(wp), parameter :: nu    = cmplx(2.0_wp, 0.2_wp, wp)
-   complex(wp), parameter :: gamma = cmplx(1.0_wp, -1.0_wp, wp)
-   real(wp),    parameter :: mu_0  = 0.38_wp
-   real(wp),    parameter :: c_mu  = 0.2_wp
-   real(wp),    parameter :: mu_2  = -0.01_wp
-   real(wp)               :: mu(nx)
+   complex(dp), parameter :: nu    = cmplx(2.0_dp, 0.2_dp, dp)
+   complex(dp), parameter :: gamma = cmplx(1.0_dp, -1.0_dp, dp)
+   real(dp),    parameter :: mu_0  = 0.38_dp
+   real(dp),    parameter :: c_mu  = 0.2_dp
+   real(dp),    parameter :: mu_2  = -0.01_dp
+   real(dp)               :: mu(nx)
 
    ! Input-Output system parameters
-   real(wp)               :: weight(2*nx)       ! integration weights
+   real(dp)               :: weight(2*nx)       ! integration weights
    integer,  parameter    :: rk_b = 2           ! number of inputs to the system
-   real(wp), parameter    :: x_b = -11.0_wp     ! location of input Gaussian
-   real(wp), parameter    :: s_b = 1.0_wp       ! variance of input Gaussian
+   real(dp), parameter    :: x_b = -11.0_dp     ! location of input Gaussian
+   real(dp), parameter    :: s_b = 1.0_dp       ! variance of input Gaussian
    type(state_vector)     :: B(rk_b)
-   real(wp), parameter    :: x_c = sqrt(-2.0_wp*(mu_0 - c_mu**2)/mu_2) ! location of input Gaussian
-   real(wp), parameter    :: s_c = 1.0_wp       ! variance of input Gaussian
+   real(dp), parameter    :: x_c = sqrt(-2.0_dp*(mu_0 - c_mu**2)/mu_2) ! location of input Gaussian
+   real(dp), parameter    :: s_c = 1.0_dp       ! variance of input Gaussian
    integer,  parameter    :: rk_c = 2           ! number of outputs to the system
    type(state_vector)     :: CT(rk_c)
-   real(wp)               :: Qc(rk_c,rk_c)
-   real(wp)               :: Rinv(rk_b,rk_b)
+   real(dp)               :: Qc(rk_c,rk_c)
+   real(dp)               :: Rinv(rk_b,rk_b)
 
    ! Data matrices for RK lyap
    integer,  parameter    :: N = 2*nx           ! Number of grid points (excluding boundaries).
-   real(wp)               :: weight_mat(N,N)    ! integration weights matrix
-   real(wp)               :: weight_flat(N**2)    ! integration weights flat
-   real(wp)               :: BBTW(N,N)
-   real(wp)               :: CTCW(N,N)
+   real(dp)               :: weight_mat(N,N)    ! integration weights matrix
+   real(dp)               :: weight_flat(N**2)    ! integration weights flat
+   real(dp)               :: BBTW(N,N)
+   real(dp)               :: CTCW(N,N)
    ! Data matrices for Riccati
-   real(wp)               :: CTQcCW(N,N)
-   real(wp)               :: BRinvBTW(N,N)
+   real(dp)               :: CTQcCW(N,N)
+   real(dp)               :: BRinvBTW(N,N)
 
 contains
 
@@ -112,10 +112,10 @@ contains
 
    subroutine zero(self)
       class(state_vector), intent(inout) :: self
-      self%state = 0.0_wp
+      self%state = 0.0_dp
    end subroutine zero
 
-   real(wp) function dot(self, vec) result(alpha)
+   real(dp) function dot(self, vec) result(alpha)
       ! weighted inner product
       class(state_vector),        intent(in) :: self
       class(abstract_vector_rdp), intent(in) :: vec
@@ -134,14 +134,14 @@ contains
 
    subroutine scal(self, alpha)
       class(state_vector), intent(inout) :: self
-      real(wp),            intent(in)    :: alpha
+      real(dp),            intent(in)    :: alpha
       self%state = self%state * alpha
    end subroutine scal
 
    subroutine axpby(alpha, vec, beta, self)
       class(state_vector),        intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: vec
-      real(wp),                   intent(in)    :: alpha, beta
+      real(dp),                   intent(in)    :: alpha, beta
       select type(vec)
       type is(state_vector)
          self%state = beta*self%state + alpha*vec%state
@@ -155,11 +155,11 @@ contains
       logical, optional,   intent(in)    :: ifnorm
       ! internals
       logical :: normalize
-      real(wp) :: alpha
-      real(wp), dimension(2*nx) :: mean, std
+      real(dp) :: alpha
+      real(dp), dimension(2*nx) :: mean, std
       normalize = optval(ifnorm,.true.)
-      mean = 0.0_wp
-      std  = 1.0_wp
+      mean = 0.0_dp
+      std  = 1.0_dp
       self%state = normal(mean,std)
       if (normalize) then
          alpha = self%norm()
@@ -174,16 +174,16 @@ contains
    subroutine initialize_LR_state(self, U, S, rk, rkmax, if_rank_adaptive)
       class(LR_state),            intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: U(:)
-      real(wp),                   intent(in)    :: S(:,:)
+      real(dp),                   intent(in)    :: S(:,:)
       integer,                    intent(in)    :: rk
       integer, optional,          intent(in)    :: rkmax
       logical, optional,          intent(in)    :: if_rank_adaptive
       logical                                   :: ifrk
 
       ! internals
+      character(len=*), parameter :: this_procedure = 'initialize_LR_state'
       class(abstract_vector_rdp), allocatable   :: Utmp(:)
-      real(wp), allocatable :: R(:, :)
-      integer :: i, m, rka, info
+      integer :: i, m, rka, info, n_rem, m_init
       character(len=128) :: msg
 
       ifrk = optval(if_rank_adaptive, .false.)
@@ -191,23 +191,23 @@ contains
       select type (U)
       type is (state_vector)
          ! set time and optional args
-         self%time = 0.0_wp
-      
+         self%time = 0.0_dp
+
          m = size(U)
-         call assert_shape(S, [m,m], 'S', this_module, 'initialize_LR_state')
+         call assert_shape(S, [m,m], 'S', this_module, this_procedure)
          ! optional size argument
          if (present(rkmax)) then
             if (rkmax < rk) then
-               call stop_error('rkmax < rk!', this_module, 'initialize_LR_state')
+               call stop_error('rkmax < rk!', this_module, this_procedure)
             end if
             self%rk = rk
             rka = rkmax
             if (ifrk) then
                if (rkmax==rk) then
-                  call stop_error('rkmax must be larger than rk for rank-adaptive DLRA!', this_module, 'initialize_LR_state')
+                  call stop_error('rkmax must be larger than rk for rank-adaptive DLRA!', this_module, this_procedure)
                end if
                write(msg,'(A,I0,A)') 'Rank-adaptivity enabled. Computation will begin with X%rk = ', self%rk+1, '.'
-               call logger%log_information(msg, this_module, 'initialize_LR_state')
+               call logger%log_information(msg, this_module, this_procedure)
             end if
          else
             self%rk = rk
@@ -217,42 +217,38 @@ contains
                rka = rk
             end if
          end if
-
+         
          ! allocate & initialize
          allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
-         allocate(self%S(rka,rka)); self%S = 0.0_wp
+         allocate(self%S(rka,rka)); self%S = 0.0_dp
          write(msg,'(3(A,I0),A)') 'size(X%U) = [ ', rka,' ], X%rk = ', self%rk, ', size(U0) = [ ', m,' ]'
-         call logger%log_information(msg, this_module, 'initialize_LR_state')
+         call logger%log_information(msg, this_module, this_procedure)
          ! copy inputs
          if (self%rk > m) then   ! copy the full IC into self%U
             call copy(self%U(:m), U)
             self%S(:m,:m) = S
-            write(msg,'(4X,A,I0,A)') 'Transfer the first ', m, ' columns of U0 to X%U.'
-            call logger%log_information(msg, this_module, 'initialize_LR_state')
+            write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
+            call logger%log_information(msg, this_module, this_procedure)
          else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
             call copy(self%U(:self%rk), U(:self%rk))
             self%S(:self%rk,:self%rk) = S(:self%rk,:self%rk)
-            write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
-            call logger%log_information(msg, this_module, 'initialize_LR_state')
-         end if
+            write(msg,'(4X,A,I0,A)') 'Transfer the first ', self%rk, ' columns of U0 to X%U.'
+            call logger%log_information(msg, this_module, this_procedure)
+         end if        
+
          ! top up basis (to rka for rank-adaptivity) with orthonormal columns if needed
-         if (rka > m) then
-            write(msg,'(4X,A,I0,A)') 'Fill remaining ', rka-m, ' columns with orthonormal noise orthonormal to U0.'
-            call logger%log_information(msg, this_module, 'initialize_LR_state')
-            allocate(Utmp(rka-m), source=U(1))
-            !do i = 1, rka-m
-            !   call Utmp(i)%rand()
-            !end do
-            call rand_basis(Utmp)
-            allocate(R(rka-m,rka-m)); R = 0.0_wp
-            call orthogonalize_against_basis(Utmp, self%U, info)
-            call check_info(info, 'orthogonalize_against_basis', this_module, 'initialize_LR_state')
-            call qr(Utmp, R, info)
-            call check_info(info, 'qr', this_module, 'initialize_LR_state')
-            call copy(self%U(m+1:), Utmp)
+         m_init = min(self%rk, m)
+         n_rem = rka - m_init
+         if (m > 0) then
+            write(msg,'(4X,A,I0,A)') 'Fill remaining ', n_rem, ' columns with orthonormal noise orthonormal to X%U.'
+            call logger%log_information(msg, this_module, this_procedure)
+            allocate(Utmp(n_rem), source=U(1))
+            call initialize_random_orthonormal_basis(Utmp)
+            call orthogonalize_against_basis(Utmp, self%U(:m_init), info)
+            call copy(self%U(m_init+1:), Utmp)
          end if
       class default
-         call stop_error('U must be a state_vector', this_module, 'initialize_LR_state')
+         call stop_error('U must be a state_vector', this_module, this_procedure)
       end select
    end subroutine initialize_LR_state
 

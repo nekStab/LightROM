@@ -1,11 +1,13 @@
 module Ginzburg_Landau_Utils
    ! Standard Library.
+   use stdlib_stats_distribution_normal, only: normal => rvs_normal
    use stdlib_optval, only : optval
    use stdlib_linalg, only : eye, diag, svd
    !use fortime
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov, only : wp => dp
+   use LightKrylov, only : dp
+   use LightKrylov_Constants, only : zero_rdp
    use LightKrylov_AbstractVectors
    use LightKrylov_Utils, only : assert_shape
    ! LightROM
@@ -49,10 +51,11 @@ contains
 
    subroutine initialize_parameters()
       implicit none
+      character(len=*), parameter :: this_procedure = 'initialize_parameters'
       ! Mesh array.
-      real(wp), allocatable :: x(:)
-      real(wp)              :: x2(1:2*nx)
-      real(wp), allocatable :: mat(:,:), matW(:,:)
+      real(dp), allocatable :: x(:)
+      real(dp)              :: x2(1:2*nx)
+      real(dp), allocatable :: mat(:,:), matW(:,:)
       integer               :: i
 
       ! Construct mesh.
@@ -60,7 +63,7 @@ contains
       dx = x(2)-x(1)
 
       ! Construct mu(x)
-      mu(:) = (mu_0 - c_mu**2) + (mu_2 / 2.0_wp) * x(2:nx+1)**2
+      mu(:) = (mu_0 - c_mu**2) + (mu_2 / 2.0_dp) * x(2:nx+1)**2
 
       ! Define integration weights
       weight          = dx
@@ -74,21 +77,21 @@ contains
 
       ! actuator is a Guassian centered just upstream of branch I
       ! column 1
-      x2       = 0.0_wp
+      x2       = 0.0_dp
       x2(1:nx) = x(2:nx+1)
       B(1)%state = exp(-((x2 - x_b)/s_b)**2)
       ! column 2
-      x2            = 0.0_wp
+      x2            = 0.0_dp
       x2(nx+1:2*nx) = x(2:nx+1)
       B(2)%state = exp(-((x2 - x_b)/s_b)**2)
 
       ! the sensor is a Gaussian centered at branch II
       ! column 1
-      x2       = 0.0_wp
+      x2       = 0.0_dp
       x2(1:nx) = x(2:nx+1)
       CT(1)%state = exp(-((x2 - x_c)/s_c)**2)
       ! column 2
-      x2            = 0.0_wp
+      x2            = 0.0_dp
       x2(nx+1:2*nx) = x(2:nx+1)
       CT(2)%state = exp(-((x2 - x_c)/s_c)**2)
 
@@ -97,14 +100,14 @@ contains
       Rinv = eye(rk_b)
 
       allocate(mat(N, rk_b), matW(N, rk_b))
-      call get_state(mat(:,:rk_b), B(:rk_b), 'initialize_parameters')
+      call get_state(mat(:,:rk_b), B(:rk_b), this_procedure)
       matW = matmul(mat, weight_mat(:rk_b,:rk_b)) ! incorporate weights
       BBTW = matmul(mat, transpose(matW))
       BRinvBTW  = matmul(mat, matmul(Rinv, transpose(matW)))
       deallocate(mat, matW)
 
       allocate(mat(N, rk_c), matW(N, rk_c))
-      call get_state(mat(:,:rk_c), CT(:rk_c), 'initialize_parameters')
+      call get_state(mat(:,:rk_c), CT(:rk_c), this_procedure)
       matW = matmul(mat, weight_mat(:rk_c,:rk_c)) ! incorporate weights
       CTCW = matmul(mat, transpose(matW))
       CTQcCW =  matmul(mat, matmul(Qc, transpose(matW)))
@@ -138,48 +141,50 @@ contains
 
    subroutine get_state(mat_out, state_in, procedure)
       !! Utility function to transfer data from a state vector to a real array
-      real(wp),                   intent(out) :: mat_out(:,:)
+      real(dp),                   intent(out) :: mat_out(:,:)
       class(abstract_vector_rdp), intent(in)  :: state_in(:)
       character(len=*),           intent(in)  :: procedure
+      character(len=*), parameter :: this_procedure = 'get_state'
       ! internal variables
       integer :: k, kdim
-      mat_out = 0.0_wp
+      mat_out = 0.0_dp
       select type (state_in)
       type is (state_vector)
          kdim = size(state_in)
-         call assert_shape(mat_out, [ N, kdim ], 'mat_out', this_module, 'get_state:'//trim(procedure))
+         call assert_shape(mat_out, [ N, kdim ], 'mat_out', this_module, this_procedure//': '//trim(procedure))
          do k = 1, kdim
             mat_out(:,k) = state_in(k)%state
          end do
       type is (state_matrix)
-         call assert_shape(mat_out, [ N, N ], 'mat_out', this_module, 'get_state:'//trim(procedure))
+         call assert_shape(mat_out, [ N, N ], 'mat_out', this_module, this_procedure//': '//trim(procedure))
          mat_out = reshape(state_in(1)%state, [ N, N ])
       class default
-         call stop_error('state_in must be a state_vector or a state_matrix', this_module, 'get_state')
+         call stop_error('state_in must be a state_vector or a state_matrix', this_module, this_procedure)
       end select
    end subroutine get_state
 
    subroutine set_state(state_out, mat_in, procedure)
       !! Utility function to transfer data from a real array to a state vector
       class(abstract_vector_rdp), intent(out) :: state_out(:)
-      real(wp),                   intent(in)  :: mat_in(:,:)
+      real(dp),                   intent(in)  :: mat_in(:,:)
       character(len=*),           intent(in)  :: procedure
       ! internal variables
+      character(len=*), parameter :: this_procedure = 'set_state'
       integer       :: k, kdim
       select type (state_out)
       type is (state_vector)
          kdim = size(state_out)
-         call assert_shape(mat_in, [ N, kdim ], 'mat_in', this_module, 'set_state:'//trim(procedure))
+         call assert_shape(mat_in, [ N, kdim ], 'mat_in', this_module, this_procedure//': '//trim(procedure))
          call zero_basis(state_out)
          do k = 1, kdim
             state_out(k)%state = mat_in(:,k)
          end do
       type is (state_matrix)
-         call assert_shape(mat_in, [ N, N ], 'mat_in', this_module, 'set_state:'//trim(procedure))
+         call assert_shape(mat_in, [ N, N ], 'mat_in', this_module, this_procedure//': '//trim(procedure))
          call zero_basis(state_out)
          state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
       class default
-         call stop_error('state_out must be a state_vector or a state_matrix', this_module, 'set_state')
+         call stop_error('state_out must be a state_vector or a state_matrix', this_module, this_procedure)
       end select
    end subroutine set_state
 
@@ -188,6 +193,7 @@ contains
       class(abstract_vector_rdp), intent(inout)  :: state(:)
       logical, optional,          intent(in)     :: ifnorm
       ! internal variables
+      character(len=*), parameter :: this_procedure = 'init_rand'
       integer :: k, kdim
       logical :: normalize
       normalize = optval(ifnorm,.true.)
@@ -203,36 +209,38 @@ contains
             call state(k)%rand(ifnorm = normalize)
          end do
       class default
-         call stop_error('state must be a state_vector or a state_matrix', this_module, 'init_rand')
+         call stop_error('state must be a state_vector or a state_matrix', this_module, this_procedure)
       end select
    end subroutine init_rand
 
    subroutine reconstruct_solution_X(X, LR_X)
-      real(wp),          intent(out) :: X(:,:)
+      real(dp),          intent(out) :: X(:,:)
       type(LR_state),    intent(in)  :: LR_X
       
       ! internals
-      real(wp) :: Uwrk(N, LR_X%rk)
+      character(len=*), parameter :: this_procedure = 'reconstruct_solution_X'
+      real(dp) :: Uwrk(N, LR_X%rk)
 
-      call assert_shape(X, [ N, N ], 'X', this_module, 'reconstruct_solution_X')
-      call get_state(Uwrk, LR_X%U(1:LR_X%rk), 'reconstruct_solution_X')
+      call assert_shape(X, [ N, N ], 'X', this_module, this_procedure)
+      call get_state(Uwrk, LR_X%U(1:LR_X%rk), this_procedure)
       X = matmul(matmul(Uwrk, matmul(LR_X%S(1:LR_X%rk,1:LR_X%rk), transpose(Uwrk))), weight_mat)
 
    end subroutine reconstruct_solution_X
 
    subroutine reconstruct_solution_US(X, U, S)
-      real(wp),           intent(out) :: X(:,:)
+      real(dp),           intent(out) :: X(:,:)
       type(state_vector), intent(in)  :: U(:)
-      real(wp),           intent(in)  :: S(:,:)
+      real(dp),           intent(in)  :: S(:,:)
       
       ! internals
+      character(len=*), parameter :: this_procedure = 'reconstruct_solution_US'
       integer  :: rk
-      real(wp) :: Uwrk(N, size(U))
+      real(dp) :: Uwrk(N, size(U))
 
       rk = size(U)
-      call assert_shape(X, [ N, N ], 'X', this_module, 'reconstruct_solution_US')
-      call assert_shape(S, [ rk, rk ], 'S', this_module, 'reconstruct_solution_US')
-      call get_state(Uwrk, U, 'reconstruct_solution_US')
+      call assert_shape(X, [ N, N ], 'X', this_module, this_procedure)
+      call assert_shape(S, [ rk, rk ], 'S', this_module, this_procedure)
+      call get_state(Uwrk, U, this_procedure)
       X = matmul(matmul(Uwrk, matmul(S, transpose(Uwrk))), weight_mat)
 
    end subroutine reconstruct_solution_US
@@ -243,44 +251,31 @@ contains
 
    subroutine generate_random_initial_condition(U, S, rk)
       class(state_vector),   intent(out) :: U(:)
-      real(wp),              intent(out) :: S(:,:)
+      real(dp),              intent(out) :: S(:,:)
       integer,               intent(in)  :: rk
       ! internals
-      class(state_vector),   allocatable :: Utmp(:)
-      ! SVD
-      real(wp)                           :: U_svd(rk,rk)
-      real(wp)                           :: S_svd(rk)
-      real(wp)                           :: V_svd(rk,rk)
-      integer                            :: i, info
+      character(len=*), parameter :: this_procedure = 'generate_random_initial_condition'
+      integer                            :: i
+      real(dp)                           :: mean, std
       character(len=128) :: msg
 
+      ! sanity check
       if (size(U) < rk) then
          write(msg,'(A,I0)') 'Input krylov basis size incompatible with requested rank ', rk
-         call stop_error(msg, this_module, 'generate_random_initial_condition')
-         STOP 1
-      else
-         call zero_basis(U)
-         do i = 1,rk
-            call U(i)%rand(.false.)
-         end do
+         call stop_error(msg, this_module, this_procedure)
       end if
-      call assert_shape(S, [ rk,rk ], 'S', this_module, 'generate_random_initial_condition')
-      S = 0.0_wp
-      
-      ! perform QR
-      allocate(Utmp(rk), source=U(:rk))
-      call qr(Utmp, S, info)
-      call check_info(info, 'qr', this_module, 'generate_random_initial_condition')
-      ! perform SVD
-      call svd(S(:rk,:rk), S_svd, U_svd, V_svd)
-      S(:rk,:rk) = diag(S_svd)
-      block
-         class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, Utmp, U_svd)
-         call copy(U, Xwrk)
-      end block
-      write(msg,'(A,I0,A,I0,A)') 'size(U) = [ ', size(U),' ]: filling the first ', rk, ' columns with noise.'
-      call logger%log_information(msg, this_module, 'generate_random_initial_condition')
+
+      call zero_basis(U)
+      call initialize_random_orthonormal_basis(U(:rk))
+      call assert_shape(S, [ rk,rk ], 'S', this_module, this_procedure)
+      S = zero_rdp
+      mean = zero_rdp
+      std  = one_rdp
+      do i = 1, rk
+         S(i,i) = normal(mean,std)
+      end do
+      write(msg,'(A,I0,A,I0,A)') 'size(U) = [ ', size(U),' ]: filling the first ', rk, ' columns with orthonormal noise.'
+      call logger%log_information(msg, this_module, this_procedure)
    end subroutine
 
    !-------------------------
@@ -288,18 +283,17 @@ contains
    !-------------------------
 
    function CALE(X, adjoint) result(res)
-      
       ! solution
-      real(wp)          :: X(N,N)
+      real(dp)          :: X(N,N)
       ! adjoint
       logical, optional :: adjoint
       ! residual
-      real(wp)          :: res(N,N)
+      real(dp)          :: res(N,N)
 
       ! internals
-      real(wp), dimension(N,N) :: AX, XAH
+      real(dp), dimension(N,N) :: AX, XAH
 
-      AX = 0.0_wp; XAH = 0.0_wp
+      AX = 0.0_dp; XAH = 0.0_dp
       call GL_mat(AX,  X,             adjoint = adjoint, transpose = .false.)
       call GL_mat(XAH, transpose(X),  adjoint = adjoint, transpose = .true. )
 
@@ -314,18 +308,18 @@ contains
 
    function CARE(X, CTQcCW, BRinvBTW) result(res)
       ! solution
-      real(wp)          :: X(N,N)
+      real(dp)          :: X(N,N)
       ! inhomogeneity
-      real(wp)          :: CTQcCW(N,N)
+      real(dp)          :: CTQcCW(N,N)
       ! inhomogeneity
-      real(wp)          :: BRinvBTW(N,N)
+      real(dp)          :: BRinvBTW(N,N)
       ! residual
-      real(wp)          :: res(N,N)
+      real(dp)          :: res(N,N)
       
       ! internals
-      real(wp), dimension(N,N) :: AHX, XA
+      real(dp), dimension(N,N) :: AHX, XA
 
-      AHX = 0.0_wp; XA = 0.0_wp
+      AHX = 0.0_dp; XA = 0.0_dp
       call GL_mat(AHX, X,            adjoint = .true., transpose = .false.)
       call GL_mat(XA, transpose(X),  adjoint = .true., transpose = .true. )
 

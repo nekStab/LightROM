@@ -22,6 +22,7 @@ program demo
    ! GInzburg-Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators
+   use Ginzburg_Landau_Control
    use Ginzburg_Landau_Utils
    use Ginzburg_Landau_Tests_Lyapunov
    use Ginzburg_Landau_Tests_Riccati
