@@ -23,12 +23,17 @@ module LightROM_Utils
    public :: is_converged
    public :: project_onto_common_basis
    public :: Balancing_Transformation
+   public :: LQR_gain
    public :: ROM_Petrov_Galerkin_Projection
    public :: ROM_Galerkin_Projection
    public :: Proper_Orthogonal_Decomposition
 
    interface Balancing_Transformation
       module procedure Balancing_Transformation_rdp
+   end interface
+
+   interface LQR_gain
+      module procedure LQR_gain_rdp
    end interface
 
    interface ROM_Petrov_Galerkin_Projection
@@ -143,8 +148,26 @@ contains
          call copy(Tinv(1:rkmin), Xwrk)
       end block
          
-      return
    end subroutine Balancing_Transformation_rdp
+
+   subroutine LQR_gain_rdp(KT, X, B, Rinv)
+      class(abstract_vector_rdp), allocatable, intent(out) :: KT(:)
+      !! LGR gains
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
+      !! Low rank solution of current solution
+      class(abstract_vector_rdp), intent(in) :: B(:)
+      !! System inputs
+      real(wp), intent(in) :: Rinv(:,:)
+      !! Inverse control cost
+
+      ! internal variables
+      real(wp), allocatable :: proj(:,:), wrk(:,:)
+
+      proj = innerprod(B, X%U(:X%rk))
+      wrk  = matmul(Rinv, matmul(proj, X%S(:X%rk,:X%rk)))
+      call linear_combination(KT, X%U(:X%rk), wrk)
+      
+   end subroutine LQR_gain_rdp
 
    subroutine ROM_Petrov_Galerkin_Projection_rdp(Ahat, Bhat, Chat, D, LTI, T, Tinv)
       !! Computes the Reduced-Order Model of the input LTI dynamical system via Petrov-Galerkin projection 
@@ -228,7 +251,6 @@ contains
 
       call ROM_Petrov_Galerkin_Projection(Ahat, Bhat, Chat, D, LTI, T, T)
 
-      return
    end subroutine ROM_Galerkin_Projection_rdp
 
    subroutine Proper_Orthogonal_Decomposition_Impulse_rdp(svals, prop, X0, tau, Tend, trans, mode, svecs)
@@ -472,7 +494,6 @@ contains
       ! compute inner product between second basis and its orthonormalized version
       VpTV = innerprod(Vp, V)
 
-      return
    end subroutine project_onto_common_basis_rdp
 
    real(dp) function increment_norm(X, U_lag, S_lag, ifnorm) result(inc_norm)

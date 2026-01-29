@@ -70,7 +70,7 @@ contains
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, A, wrk)
-         call copy(C, Xwrk)
+         call copy(c, Xwrk)
       end block
    end subroutine apply_outerprod_basis_rdp
 
