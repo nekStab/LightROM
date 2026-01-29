@@ -390,7 +390,7 @@ contains
                   call A%matvec(vec_in, vec_out)
                end if 
             class default
-               call type_error('A', 'exponential_prop', this_module, this_procedure)
+               call type_error('A', 'exponential_prop', 'INOUT', this_module, this_procedure)
             end select
          class default
             call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)

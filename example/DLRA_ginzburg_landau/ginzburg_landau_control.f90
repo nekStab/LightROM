@@ -5,7 +5,6 @@ module Ginzburg_Landau_Control
    use rklib_module
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov, only : wp => dp
    use LightKrylov_utils, only : assert_shape
    use LightKrylov_Constants, only : zero_rdp
    ! LightROM
@@ -25,9 +24,9 @@ module Ginzburg_Landau_Control
    !----------------------------------------------------------
 
     type, extends(rks54_class) :: controlled_rks54_class
-        real(wp), allocatable :: K(:,:)
-        real(wp), allocatable :: B(:,:)
-        real(wp), allocatable :: u_control(:)
+        real(dp), allocatable :: K(:,:)
+        real(dp), allocatable :: B(:,:)
+        real(dp), allocatable :: u_control(:)
         logical :: control_enabled = .false.
         logical, private :: initialised = .false.
     contains
@@ -42,7 +41,7 @@ module Ginzburg_Landau_Control
     !---------------------------------------------------------------
 
     type, extends(abstract_linop_rdp), public :: feedback_exponential_prop
-        real(wp) :: tau ! Integration time.
+        real(dp) :: tau ! Integration time.
     contains
         private
         procedure, pass(self), public :: matvec => direct_solver_with_control
@@ -64,11 +63,11 @@ contains
         !! Riccati matrix representation
         class(abstract_vector_rdp), intent(in) :: B(:)
         !! Input matrix
-        real(wp), intent(in) :: Rinv(:, :)
+        real(dp), intent(in) :: Rinv(:, :)
         ! internals
         character(len=*), parameter :: this_procedure = 'setup_controller'
         class(abstract_vector_rdp), allocatable :: KT(:)
-        real(wp), allocatable :: wrk(:,:)
+        real(dp), allocatable :: wrk(:,:)
         select type (X)
         type is (LR_state)
             select type (B)
@@ -97,9 +96,9 @@ contains
         !! Evaluate the LQR control law on a state
         class(controlled_rks54_class), intent(inout) :: self
         !! Controller
-        real(wp), intent(out) :: u(:)
+        real(dp), intent(out) :: u(:)
         !! Control action
-        real(wp), intent(in)  :: x(:)
+        real(dp), intent(in)  :: x(:)
         !! Current state
         ! internals
         character(len=*), parameter :: this_procedure = 'eval_controller'
@@ -111,12 +110,12 @@ contains
 
     subroutine rhs_with_control(me, t, x, f)
         class(rk_class), intent(inout) :: me
-        real(wp),        intent(in)    :: t
-        real(wp),        intent(in)    :: x(:)
-        real(wp),        intent(out)   :: f(:)
+        real(dp),        intent(in)    :: t
+        real(dp),        intent(in)    :: x(:)
+        real(dp),        intent(out)   :: f(:)
         ! internala
         character(len=*), parameter :: this_procedure = 'rhs_with_control'
-        real(wp), allocatable :: f_control(:)
+        real(dp), allocatable :: f_control(:)
         select type(me)
         type is(controlled_rks54_class)
             f = zero_rdp
@@ -142,8 +141,9 @@ contains
         class(abstract_vector_rdp),  intent(out) :: vec_out
   
         ! Time-integrator.
+        character(len=*), parameter :: this_procedure = 'direct_solver_with_control'
         type(controlled_rks54_class) :: prop
-        real(wp)               :: dt = 1.0_wp
+        real(dp)               :: dt = 1.0_dp
   
         select type(vec_in)
         type is(state_vector)
@@ -154,13 +154,13 @@ contains
                 call prop%initialize(n=2*nx, f=rhs_with_control)
              
                 ! Integrate forward in time.
-                call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+                call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
         
             class default
-                call stop_error('vec_out must be a state_vector', this_module, 'direct_solver')
+                call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
             end select
         class default
-            call stop_error('vec_in must be a state_vector', this_module, 'direct_solver')
+            call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
         end select
      end subroutine direct_solver_with_control
      

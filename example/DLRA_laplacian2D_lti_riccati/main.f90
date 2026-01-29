@@ -7,7 +7,7 @@ program demo
    use stdlib_logger, only : information_level, warning_level, debug_level, error_level, none_level
    ! LightKrylov for Linear Algebra
    use LightKrylov
-   use LightKrylov, only : wp => dp
+   use LightKrylov, only : dp => dp
    use LightKrylov_AbstractVectors
    use LightKrylov_ExpmLib
    use LightKrylov_Utils
@@ -39,13 +39,13 @@ program demo
    type(dlra_opts) :: opts
 
    integer  :: rk, torder
-   real(wp) :: dt, tol, Tend, Tstep
+   real(dp) :: dt, tol, Tend, Tstep
    ! vector of dt values
-   real(wp), allocatable :: dtv(:)
+   real(dp), allocatable :: dtv(:)
    ! vector of rank values
    integer,  allocatable :: rkv(:)
    ! vector of tolerances
-   real(wp), allocatable :: tolv(:)
+   real(dp), allocatable :: tolv(:)
    ! vector of temporal orders
    integer, allocatable :: TOv(:)
 
@@ -61,32 +61,32 @@ program demo
    ! LR representation
    type(LR_state)                  :: X
    type(state_vector), allocatable :: U(:)
-   real(wp),           allocatable :: S(:,:)
+   real(dp),           allocatable :: S(:,:)
    
    ! STATE MATRIX (RKlib)
    type(state_matrix)              :: X_mat_RKlib(2)
-   real(wp),           allocatable :: X_RKlib(:,:,:)
-   real(wp)                        :: X_RKlib_ref(N,N)
+   real(dp),           allocatable :: X_RKlib(:,:,:)
+   real(dp)                        :: X_RKlib_ref(N,N)
 
     ! Initial condition
    type(state_vector)              :: U0(rkmax)
-   real(wp)                        :: S0(rkmax,rkmax)
+   real(dp)                        :: S0(rkmax,rkmax)
    ! matrix
-   real(wp)                        :: X0(N,N)
+   real(dp)                        :: X0(N,N)
 
    ! OUTPUT
-   real(wp)                        :: U_out(N,rkmax)
-   real(wp)                        :: X_out(N,N)
+   real(dp)                        :: U_out(N,rkmax)
+   real(dp)                        :: X_out(N,N)
 
    !> Information flag.
    integer                         :: info, i, j, k, irep, nrep
 
    ! PROBLEM DEFINITION
-   real(wp)  :: Adata(N,N)
+   real(dp)  :: Adata(N,N)
 
    ! LAPACK SOLUTION
-   real(wp)  :: Xref(N,N)
-   real(wp)  :: svals(N)
+   real(dp)  :: Xref(N,N)
+   real(dp)  :: svals(N)
 
    ! timer
    integer   :: clock_rate, clock_start, clock_stop
@@ -170,7 +170,7 @@ program demo
    print *, ''
 
    ! Set up problem
-   call initialize_problem(1.0_wp, 1.0_wp)
+   call initialize_problem(1.0_dp, 1.0_dp)
 
    ! Define LTI system
    LTI = lti_system()
@@ -231,7 +231,7 @@ program demo
    print *, '#########################################################################'
    print *, ''
    ! initialize exponential propagator
-   Tend = 0.001_wp
+   Tend = 0.001_dp
    RK_propagator_riccati = rklib_riccati_mat(Tend)
 
    allocate(X_RKlib(N, N, 1))
@@ -286,9 +286,9 @@ program demo
       ! Choose input ranks and integration steps
       rkv = [ 2, 3, 4 ]
       if (short_test) then
-         dtv = logspace(-4.0_wp, -3.0_wp, 2, 10)
+         dtv = logspace(-4.0_dp, -3.0_dp, 2, 10)
       else
-         dtv = logspace(-6.0_wp, -3.0_wp, 4, 10)
+         dtv = logspace(-6.0_dp, -3.0_dp, 4, 10)
       end if
       dtv = dtv(size(dtv):1:-1)
       TOv = [ 1 ]
@@ -358,7 +358,7 @@ program demo
    print *, ''
    ! initialize exponential propagator
    nrep  = 10
-   Tstep = 0.1_wp
+   Tstep = 0.1_dp
    RK_propagator_riccati = rklib_riccati_mat(Tstep)
    Tend = nrep*Tstep
 
@@ -418,9 +418,9 @@ program demo
       ! Choose input ranks and integration steps
       rkv = [ 4,  8 ]
       if (short_test) then
-         dtv = logspace(-2.0_wp, -1.0_wp, 2, 10)
+         dtv = logspace(-2.0_dp, -1.0_dp, 2, 10)
       else
-         dtv = logspace(-4.0_wp, -1.0_wp, 4, 10)
+         dtv = logspace(-4.0_dp, -1.0_dp, 4, 10)
       end if
       dtv = dtv(size(dtv):1:-1)
       TOv = [ 1 ]
@@ -489,11 +489,11 @@ program demo
       ! Choose input ranks and integration step
       rk = 8 ! This is for initialisation, but the algorithm will choose the appropriate rank automatically
       if (short_test) then
-         dtv = logspace(-2.0_wp, -1.0_wp, 2, 10)
-         tolv = logspace(-8.0_wp, -4.0_wp, 2, 10)
+         dtv = logspace(-2.0_dp, -1.0_dp, 2, 10)
+         tolv = logspace(-8.0_dp, -4.0_dp, 2, 10)
       else
-         dtv = logspace(-4.0_wp, -1.0_wp, 4, 10)
-         tolv = logspace(-12.0_wp, -4.0_wp, 3, 10)
+         dtv = logspace(-4.0_dp, -1.0_dp, 4, 10)
+         tolv = logspace(-12.0_dp, -4.0_dp, 3, 10)
       end if
       dtv = dtv(size(dtv):1:-1)
       tolv = tolv(size(tolv):1:-1)

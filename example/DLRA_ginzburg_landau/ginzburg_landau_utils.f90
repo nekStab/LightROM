@@ -6,7 +6,6 @@ module Ginzburg_Landau_Utils
    !use fortime
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov, only : dp
    use LightKrylov_Constants, only : zero_rdp
    use LightKrylov_AbstractVectors
    use LightKrylov_Utils, only : assert_shape
@@ -144,8 +143,8 @@ contains
       real(dp),                   intent(out) :: mat_out(:,:)
       class(abstract_vector_rdp), intent(in)  :: state_in(:)
       character(len=*),           intent(in)  :: procedure
-      character(len=*), parameter :: this_procedure = 'get_state'
       ! internal variables
+      character(len=*), parameter :: this_procedure = 'get_state'
       integer :: k, kdim
       mat_out = 0.0_dp
       select type (state_in)
@@ -159,7 +158,7 @@ contains
          call assert_shape(mat_out, [ N, N ], 'mat_out', this_module, this_procedure//': '//trim(procedure))
          mat_out = reshape(state_in(1)%state, [ N, N ])
       class default
-         call stop_error('state_in must be a state_vector or a state_matrix', this_module, this_procedure)
+         call type_error('state', 'state_vector or state_matrix', 'IN', this_module, this_procedure)
       end select
    end subroutine get_state
 
@@ -184,7 +183,7 @@ contains
          call zero_basis(state_out)
          state_out(1)%state = reshape(mat_in, shape(state_out(1)%state))
       class default
-         call stop_error('state_out must be a state_vector or a state_matrix', this_module, this_procedure)
+         call type_error('state', 'state_vector or state_matrix', 'IN', this_module, this_procedure)
       end select
    end subroutine set_state
 
@@ -209,7 +208,7 @@ contains
             call state(k)%rand(ifnorm = normalize)
          end do
       class default
-         call stop_error('state must be a state_vector or a state_matrix', this_module, this_procedure)
+         call type_error('state', 'state_vector or state_matrix', 'INOUT', this_module, this_procedure)
       end select
    end subroutine init_rand
 

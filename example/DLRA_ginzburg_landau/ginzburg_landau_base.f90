@@ -248,7 +248,7 @@ contains
             call copy(self%U(m_init+1:), Utmp)
          end if
       class default
-         call stop_error('U must be a state_vector', this_module, this_procedure)
+         call type_error('U', 'state_vector', 'IN', this_module, this_procedure)
       end select
    end subroutine initialize_LR_state
 
