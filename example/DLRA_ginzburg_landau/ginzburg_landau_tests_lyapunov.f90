@@ -63,6 +63,9 @@ contains
       ! timer
       integer :: clock_rate, clock_start, clock_stop
 
+      character(len=*), parameter :: case = 'RKLIB'
+      character(len=*), parameter :: eq   = 'lyap'
+
       call system_clock(count_rate=clock_rate)
 
       Tstep = Tend/nrep
@@ -72,10 +75,10 @@ contains
       ! Set initial condition for RK
       call reconstruct_solution(X_out, U0, S0)
       call set_state(X_mat(1:1), X_out, 'Set initial condition')
-      write(*,'(A7,A10,A19,A19,A19,A12)') ' RKlib:','Tend','| X_RK |/N', '| X_RK - X_BS |/N', '| res_RK |/N','etime'
-      write(*,*) '-------------------------------------------------------------------------------------'
+      call print_header(case, eq)
       write(*,'(I7,F10.4,3(1X,E18.6),F10.4," s",A)') 0, 0.0, norm2(X_out)/N, norm2(X_out - Xref)/N, &
-                                                            & norm2(CALE(X_out, adjoint))/N, 0.0, ''
+                                 & norm2(CALE(X_out, adjoint))/N, 0.0, ''
+
       do irep = 1, nrep
          call system_clock(count=clock_start)     ! Start Timer
          ! integrate
@@ -90,14 +93,9 @@ contains
          call get_state(X_RK(:,:,irep), X_mat(2:2), 'Extract RK solution')
          ! replace input
          call set_state(X_mat(1:1), X_RK(:,:,irep), 'Reset initial condition')
-         ! compute residual
-         if (irep == iref) then
-            write(note,*) '   < reference'
-         else
-            write(note,*) ''
-         end if
-         write(*,'(I7,F10.4,3(1X,E18.6),F10.4," s",A)') irep, irep*Tstep, norm2(X_RK(:,:,irep))/N, &
-                     & norm2(X_RK(:,:,irep)-Xref)/N, norm2(CALE(X_RK(:,:,irep), adjoint))/N, etime, trim(note) 
+         ! print information
+         write(note,*) merge('   < reference', '              ', irep == iref)
+         call print_rklib_output(eq, irep, Tstep, X_RK, Xref, etime, note, adjoint)
       enddo
       Xref_RK(:,:) = X_RK(:,:,iref)
       print *, ''
@@ -128,8 +126,9 @@ contains
       logical,                       intent(in)    :: adjoint
       character(len=128),            intent(in)    :: home
       logical,                       intent(in)    :: if_save_output
-
+      
       ! Internals
+      character(len=256)                           :: fname
       type(LR_state),                allocatable   :: X
       type(state_matrix)                           :: X_mat(2)
       integer                                      :: info, i, j, k, rk, torder, irep, nrep, nsteps
@@ -146,22 +145,20 @@ contains
       type(dlra_opts)                              :: opts
       ! timer
       integer                                      :: clock_rate, clock_start, clock_stop
+
+      character(len=*), parameter :: case = 'DLRA_FIXED'
+      character(len=*), parameter :: eq   = 'lyap'
       
       Tstep = one_rdp
 
-      if (adjoint) then
-         note = 'Yobs'
-      else
-         note = 'Xctl'
-      end if
+      write(note,*) merge('Yobs', 'Xctl', adjoint)
 
       ! basic opts
       opts = dlra_opts(chktime=one_rdp, inc_tol=atol_dp, if_rank_adaptive=.false.)
 
       call system_clock(count_rate=clock_rate)
 
-      print '(A16,A8,A4,A10,A8,A10,4(A19),A12)', 'DLRA:','  rk',' TO','dt','steps','Tend', &
-                     & '| X_D |/N', '| X_D - X_RK |/N', '| X_D - X_BS |/N', '| res_D |/N', 'etime'
+      call print_header(case, eq)
       X = LR_state()
       do i = 1, size(rkv)
          rk = rkv(i)
@@ -190,33 +187,22 @@ contains
                etime = real(clock_stop-clock_start)/real(clock_rate)
                ! Reconstruct solution
                call reconstruct_solution(X_out, X)
-               write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I8,F10.4,4(E19.8),F10.2," s")') 1, note, 'OUTPUT', &
-                                 & rk, torder, tau, nsteps, Tend, &
-                                 & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref)/N, &
-                                 & norm2(CALE(X_out, adjoint))/N, etime
+               ! print information
+               call print_dlra_output(eq, rk, torder, tau, nsteps, Tend, X_out, Xref_RK, Xref, etime, note, adjoint)
+               ! save output
+               if ((k == size(dtv)) .and. if_save_output) then
+                  fname = make_filename(home, case, note, rk, torder, tau, Tend)
+                  call save_LR_state_npy(fname, X, weight_mat)
+               end if
                deallocate(X%U); deallocate(X%S)
             end do
             print *, ''
          end do
       end do
       if (nprint > 0) then
-         svals = svdvals(Xref)
-         do i = 1, ceiling(nprint*one_rdp/irow)
-            is = (i-1)*irow+1; ie = i*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_BS) ', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-         print *, ''
-         svals = svdvals(Xref_RK)
-         do i = 1, ceiling(nprint*one_rdp/irow)
-            is = (i-1)*irow+1; ie = i*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_RK) ', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-         print *, ''
-         svals = svdvals(X_out)
-         do i = 1, ceiling(nprint*one_rdp/irow)
-            is = (i-1)*irow+1; ie = i*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_D ) ', is, '-', ie, ( svals(j), j = is, ie )
-         end do
+         call print_svdvals(Xref,     'X_BS', nprint, irow)
+         call print_svdvals(Xref_RK,  'X_RK', nprint, irow)
+         call print_svdvals(X_out,    'X_D ', nprint, irow)
       end if
 
    end subroutine run_lyapunov_DLRA_test
@@ -245,6 +231,7 @@ contains
       logical,                       intent(in)    :: if_save_output
 
       ! Internals
+      character(len=256)                           :: fname
       type(LR_state),                allocatable   :: X
       type(state_matrix)                           :: X_mat(2)
       integer                                      :: info, i, j, k, rk, torder, irep, nsteps
@@ -261,19 +248,17 @@ contains
       ! timer
       integer                                      :: clock_rate, clock_start, clock_stop
 
+      character(len=*), parameter :: case = 'DLRA_ADAPT'
+      character(len=*), parameter :: eq   = 'lyap'
+
       ! basic opts
       opts = dlra_opts(chktime=one_rdp, inc_tol=atol_dp, if_rank_adaptive=.true.)
 
       call system_clock(count_rate=clock_rate)
 
-      if (adjoint) then
-         note = 'Yobs'
-      else
-         note = 'Xctl'
-      end if
+      write(note,*) merge('Yobs', 'Xctl', adjoint)
  
-      print '(A16,A8,A4,A10,A8,A10,4(A19),A12)', 'DLRA:','rk_end',' TO','dt','steps','Tend', &
-               & '| X_D |/N', '| X_D - X_RK |/N', '| X_D - X_BS |/N', '| res_D |/N', 'etime'
+      call print_header(case, eq)
       rk = rk_X0_lyapunov
       X = LR_state()
       do i = 1, size(tolv)
@@ -308,31 +293,20 @@ contains
                etime = real(clock_stop-clock_start)/real(clock_rate)
                ! Reconstruct solution
                call reconstruct_solution(X_out, X)
-               write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I8,F10.4,4(E19.8),F10.2," s")') 1, note, 'OUTPUT', &
-                                 & X%rk, torder, tau, nsteps, Tend, &
-                                 & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref)/N, &
-                                 & norm2(CALE(X_out, adjoint))/N, etime
+               ! print information
+               call print_dlra_output(eq, X%rk, torder, tau, nsteps, Tend, X_out, Xref_RK, Xref, etime, note, adjoint)
+               ! save output
+               if ((k == size(dtv)) .and. if_save_output) then
+                  fname = make_filename(home, case, note, rk, torder, tau, Tend, opts%tol)
+                  call save_LR_state_npy(fname, X, weight_mat)
+               end if
                deallocate(X%U); deallocate(X%S)
             end do
             print *, ''
          end do
-         svals = svdvals(Xref)
-         do k = 1, ceiling(nprint*one_rdp/irow)
-            is = (k-1)*irow+1; ie = k*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_BS) ', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-         print *, ''
-         svals = svdvals(Xref_RK)
-         do k = 1, ceiling(nprint*one_rdp/irow)
-            is = (k-1)*irow+1; ie = k*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_RK) ', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-         print *, ''
-         svals = svdvals(X_out)
-         do k = 1, ceiling(nprint*one_rdp/irow)
-            is = (k-1)*irow+1; ie = k*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_D ) ', is, '-', ie, ( svals(j), j = is, ie )
-         end do
+         call print_svdvals(Xref,     'X_BS', nprint, irow)
+         call print_svdvals(Xref_RK,  'X_RK', nprint, irow)
+         call print_svdvals(X_out,    'X_D ', nprint, irow)
       end do
 
    end subroutine run_lyapunov_DLRArk_test

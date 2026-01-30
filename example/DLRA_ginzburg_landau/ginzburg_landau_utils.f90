@@ -1,6 +1,8 @@
 module Ginzburg_Landau_Utils
    ! Standard Library.
    use stdlib_stats_distribution_normal, only: normal => rvs_normal
+   use stdlib_io_npy, only: save_npy
+   use stdlib_strings, only: replace_all
    use stdlib_optval, only : optval
    use stdlib_linalg, only : eye, diag, svd
    !use fortime
@@ -25,17 +27,22 @@ module Ginzburg_Landau_Utils
 
    implicit none
 
-   private :: this_module
-   ! initialize mesh
-   public  :: initialize_parameters
-   ! utilities for state_vectors
-   public  :: set_state, get_state, init_rand, reconstruct_solution
-   ! initial conditions
-   public  :: generate_random_initial_condition
-   ! misc
-   public  :: CALE, CARE
+   character(len=*), parameter, private :: this_module = 'Ginzburg_Landau_Utils'
 
-   character(len=*), parameter :: this_module = 'Ginzburg_Landau_Utils'
+   ! initialize mesh
+   public :: initialize_parameters
+   ! utilities for state_vectors
+   public :: set_state, get_state, init_rand, reconstruct_solution
+   ! initial conditions
+   public :: generate_random_initial_condition
+   ! misc
+   public :: CALE, CARE
+   ! printing helpers
+   public :: print_header, print_rklib_output, print_dlra_output, print_svdvals
+   ! saving helpers
+   public :: save_LR_state_npy, make_filename
+
+   
 
    interface reconstruct_solution
       module procedure reconstruct_solution_X
@@ -131,7 +138,6 @@ contains
       print '(4X,A,F10.6,A)', 's_c   = ', s_c,  '     ! std dev of gaussian distribution'
       print '(A)', ' ----------------------------------------'
 
-      return
    end subroutine initialize_parameters
 
    !--------------------------------------------------------------------
@@ -326,4 +332,183 @@ contains
       res = AHX + XA + CTQcCW - matmul(X, matmul(BRinvBTW, X))
 
    end function CARE
+
+   !-------------------------------------
+   !-----      Printing helpers     -----
+   !-------------------------------------
+
+   subroutine print_header(case, eq)
+      character(len=*), intent(in) :: case
+      character(len=*), intent(in) :: eq
+      ! internal
+      character(len=4) :: ref
+      ref = merge('X_BS', 'X_SD', eq=='lyap')
+      select case (trim(case))
+      case ('RKLIB')
+         write(*,'(A7,A10,A19,A19,A19,A12)') &
+              ' RKlib:', 'Tend', '| X_RK |/N', '| X_RK - '//trim(ref)//' |/N', '| res_RK |/N', 'etime'
+         write(*,*) repeat('-', 85)
+      case ('DLRA_FIXED')
+         print '(A16,A8,A4,A10,A8,A10,4(A19),A12)', &
+         'DLRA:', '  rk', ' TO', 'dt', 'steps', 'Tend', &
+         '| X_D |/N', '| X_D - X_RK |/N', '| X_D - '//trim(ref)//' |/N', '| res_D |/N', 'etime'
+         write(*,*) repeat('-', 144)
+      case ('DLRA_ADAPT')
+         print '(A16,A8,A4,A10,A8,A10,4(A19),A12)', &
+         'DLRA:', 'rk_end', ' TO', 'dt', 'steps', 'Tend', &
+         '| X_D |/N', '| X_D - X_RK |/N', '| X_D - '//trim(ref)//' |/N', '| res_D |/N', 'etime'
+         write(*,*) repeat('-', 144)
+      case default
+         error stop 'Unknown header case in print_header'
+      end select
+   end subroutine print_header
+
+   subroutine print_rklib_output(eq, irep, Tstep, X_RK, Xref, etime, note, adjoint)
+      character(len=*),  intent(in) :: eq
+      integer,           intent(in) :: irep
+      real(dp),          intent(in) :: Tstep, etime
+      real(dp),          intent(in) :: X_RK(:,:,:)
+      real(dp),          intent(in) :: Xref(:,:)
+      character(len=*),  intent(in) :: note
+      logical, optional, intent(in) :: adjoint
+      ! internal
+      integer :: N
+      real(dp) :: nrm_x, nrm_diff, nrm_res
+
+      N = size(Xref,1)
+
+      nrm_x    = norm2(X_RK(:,:,irep)) / N
+      nrm_diff = norm2(X_RK(:,:,irep) - Xref) / N
+      if (trim(eq) == 'lyap') then
+         nrm_res  = norm2(CALE(X_RK(:,:,irep), adjoint)) / N
+      else
+         nrm_res  = norm2(CARE(X_RK(:,:,irep), CTQcCW, BRinvBTW)) / N
+      end if
+
+      write(*,'(I7,F10.4,3(1X,E18.6),F10.4," s",A)') &
+           irep, irep*Tstep, nrm_x, nrm_diff, nrm_res, etime, trim(note)
+
+   end subroutine print_rklib_output
+
+   subroutine print_dlra_output(eq, rk, torder, tau, nsteps, tend, X_out, Xref_RK, Xref, etime, note, adjoint)
+      character(len=*),  intent(in) :: eq
+      integer,           intent(in) :: rk, torder, nsteps
+      real(dp),          intent(in) :: tau, tend, etime
+      real(dp),          intent(in) :: X_out(:,:), Xref_RK(:,:), Xref(:,:)
+      character(len=*),  intent(in) :: note
+      logical, optional, intent(in) :: adjoint
+      ! internal
+      integer :: N
+      real(dp) :: nrm_x, nrm_rk, nrm_bs, nrm_res
+
+      N = size(X_out,1)
+
+      nrm_x   = norm2(X_out) / N
+      nrm_rk  = norm2(X_out - Xref_RK) / N
+      nrm_bs  = norm2(X_out - Xref) / N
+      if (trim(eq) == 'lyap') then
+         nrm_res = norm2(CALE(X_out, adjoint)) / N
+      else
+         nrm_res = norm2(CARE(X_out, CTQcCW, BRinvBTW)) / N
+      end if
+
+      write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I8,F10.4,4(E19.8),F10.2," s")') &
+         1, note, 'OUTPUT', rk, torder, tau, nsteps, tend, &
+         nrm_x, nrm_rk, nrm_bs, nrm_res, etime
+
+   end subroutine print_dlra_output
+
+   subroutine print_svdvals(A, label, nprint, irow)
+      real(dp),          intent(in) :: A(:,:)
+      character(len=*),  intent(in) :: label
+      integer,           intent(in) :: nprint, irow
+      ! internal
+      real(dp), allocatable :: svals(:)
+      integer :: k, j, is, ie, nblocks
+      real(dp), parameter :: one_rdp = 1.0_dp
+   
+      svals = svdvals(A)
+   
+      nblocks = ceiling(nprint * one_rdp / irow)
+   
+      do k = 1, nblocks
+         is = (k-1)*irow + 1
+         ie = min(k*irow, size(svals))
+         print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD('//trim(label)//') ', is, '-', ie, ( svals(j), j = is, ie )
+      end do
+      print *, ''
+   
+   end subroutine print_svdvals
+
+   !-----------------------------------
+   !-----      Saving helpers     -----
+   !-----------------------------------
+
+   subroutine save_LR_state_npy(filename, X, weight_mat)
+      
+      implicit none
+   
+      character(len=*), intent(in) :: filename
+      type(LR_state),   intent(in) :: X
+      real(dp),         intent(in) :: weight_mat(:,:)
+      ! internal
+      character(len=*), parameter :: this_procedure = 'save_LR_state_npy'
+      real(dp), allocatable :: Uwrk(:,:)
+      character(len=:), allocatable :: base
+   
+      ! strip extension
+      base = trim(filename)
+      if (index(base, '.npy') > 0) base = base(:index(base,'.npy')-1)
+   
+      ! Save low-rank components
+      allocate(Uwrk(N, X%rk), source=zero_rdp)
+      call get_state(Uwrk, X%U(:X%rk), this_procedure)
+      call save_npy(base//'_U.npy', Uwrk)
+      call save_npy(base//'_S.npy', X%S(1:X%rk,1:X%rk))   
+      ! Save weight matrix
+      call save_npy(base//'_W.npy', weight_mat)
+   
+   end subroutine save_LR_state_npy
+
+   pure function make_filename(fldr, case, note, rk, TO, tau, Tend, tol) result(name)
+      implicit none
+
+      character(len=*), intent(in)           :: fldr
+      character(len=*), intent(in)           :: case
+      character(len=*), intent(in)           :: note
+      integer,          intent(in)           :: rk, TO
+      real(dp),         intent(in)           :: tau, Tend
+      real(dp),         intent(in), optional :: tol
+
+      character(len=256) :: name
+      character(len=32)  :: tolstr, taustr
+
+      ! ---- tau string ----------------------------------------------
+      taustr = ''
+      write(tolstr,'(ES10.2)') tau
+      taustr = adjustl(trim(taustr))
+      taustr = replace_all(taustr, 'E', 'e')
+      taustr = replace_all(taustr, '+', '')
+
+      ! ---- tolerance string ----------------------------------------------
+      tolstr = ''
+      if (present(tol)) then
+         write(tolstr,'(ES10.2)') tol
+         tolstr = adjustl(trim(tolstr))
+         tolstr = replace_all(tolstr, 'E', 'e')
+         tolstr = replace_all(tolstr, '+', '')
+      end if
+
+      ! ---- assemble filename ---------------------------------------------
+      if (present(tol)) then
+         write(name,'(A,A,"_rk",I3.3,"_TO",I1,"_tau",A,"_Tend",I3.3,"_tol",A,"_",A,".npy")') &
+            trim(fldr), trim(case), rk, TO, trim(taustr), int(Tend), trim(tolstr), trim(note)
+      else
+         write(name,'(A,A,"_rk",I3.3,"_TO",I1,"_tau",A,"_Tend",I3.3,"_",A,".npy")') &
+            trim(fldr), trim(case), rk, TO, trim(taustr), int(Tend), trim(note)
+      end if
+
+   end function make_filename
+
+
 end module Ginzburg_Landau_Utils
