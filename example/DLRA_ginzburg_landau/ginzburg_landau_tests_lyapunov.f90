@@ -131,6 +131,7 @@ contains
       logical :: exist_file
       
       ! Internals
+      character(len=256)                           :: fbase
       character(len=256)                           :: fname
       type(LR_state),                allocatable   :: X
       type(state_matrix)                           :: X_mat(2)
@@ -252,6 +253,7 @@ contains
       logical :: exist_file
 
       ! Internals
+      character(len=256)                           :: fbase
       character(len=256)                           :: fname
       type(LR_state),                allocatable   :: X
       type(state_matrix)                           :: X_mat(2)
