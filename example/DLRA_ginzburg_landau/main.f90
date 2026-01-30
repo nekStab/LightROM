@@ -66,6 +66,8 @@ program demo
    ! LTI system
    type(lti_system)                          :: LTI
    type(dlra_opts)                           :: opts
+   
+   type(LR_state),               allocatable :: X
 
    ! Initial condition
    type(state_vector),           allocatable :: U0(:), output(:)
@@ -80,7 +82,6 @@ program demo
 
    ! IO
    real(wp),                    allocatable :: U_load(:,:)
-   real(wp),                    allocatable :: S_load(:)
    
    ! POD
    type(state_vector),          allocatable :: X0(:)    
@@ -236,13 +237,6 @@ program demo
    print '(4X,A)', 'Initialize exponential propagator'
    prop = exponential_prop(1.0_wp)
 
-   ! Initialize propagator with control
-   call load_npy(trim(fname_ricc_SVD_U), U_load)
-   call load_npy(trim(fname_ricc_SVD_S), S_load)
-
-   print '(4X,A)', 'Initialize exponential propagator with control'
-   prop_control = exponential_prop_with_control(1.0_wp)
-
    ! Initialize LTI system
    A = GL_operator()
    print '(4X,A)', 'Initialize LTI system (A, prop, B, CT, _)'
@@ -326,6 +320,37 @@ program demo
    end do
 
    call global_lightROM_timer%stop('Direct solution (LAPACK)')
+
+
+
+
+
+
+   
+   ! Initialize propagator with control
+   X = LR_state()
+   call load_npy(trim(fname_ricc_SVD_U), U_load)
+   X%rk = size(U_load, 2)
+   ! U
+   allocate(X%U(X%rk), source=U0(1))
+   call set_state(X%U, U_load, 'load_from_file')
+   ! S
+   call load_npy(trim(fname_ricc_SVD_S), U_load)
+   allocate(X%S(X%rk,X%rk), source=U_load)
+
+   print '(4X,A)', 'Initialize exponential propagator with control'
+   rkintegrator = rks54_class_with_control()
+   prop_control = exponential_prop_with_control(1.0_wp, prop=rkintegrator)
+   call prop_control%init(X, B, Rinv)
+
+   ! TEST
+   call prop_control%matvec(U0(1), U0(2))
+
+
+
+
+
+
    call global_lightROM_timer%add_timer('Short time: Runge-Kutta', start=.true.)
    
    if (main_run) then

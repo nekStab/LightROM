@@ -31,7 +31,7 @@ module Ginzburg_Landau_Control
       logical, private :: initialised = .false.
    contains
       private
-      procedure, pass(self), public :: is_initialised
+      procedure, pass(self), public :: is_initialised => controller_is_initialised
       procedure, pass(self), public :: setup => setup_controller
       procedure, pass(self), public :: eval => eval_control
    end type rks54_class_with_control
@@ -42,9 +42,12 @@ module Ginzburg_Landau_Control
 
    type, extends(abstract_linop_rdp), public :: exponential_prop_with_control
       real(dp) :: tau ! Integration time.
+      type(rks54_class_with_control) :: prop
       logical :: control_enabled = .false.
+      logical, private :: initialised = .false.
    contains
       private
+      procedure, pass(self), public :: is_initialised => exptA_is_initialised
       procedure, pass(self), public :: init => init_exptA_with_control
       procedure, pass(self), public :: matvec => direct_solver_with_control
       procedure, pass(self), public :: rmatvec => direct_solver_with_control ! dummy
@@ -52,15 +55,77 @@ module Ginzburg_Landau_Control
 
 contains
 
+   !-------------------------------------------------------------------------------
+   !-----     TYPE-BOUND PROCEDURES FOR THE exponential_prop_with_control     -----
+   !-------------------------------------------------------------------------------
+
+   pure logical function exptA_is_initialised(self) result(initialised)
+      class(exponential_prop_with_control), intent(in) :: self
+      !! Controller
+      initialised = self%initialised
+   end function exptA_is_initialised
+
+   subroutine init_exptA_with_control(self, X, B, Rinv, enable_control)
+      class(exponential_prop_with_control), intent(inout)  :: self
+      !! Linear Operator.
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
+      !! Riccati matrix representation
+      class(abstract_vector_rdp), intent(in) :: B(:)
+      !! Input matrix
+      real(dp), intent(in) :: Rinv(:, :)
+      !! Inverse control cost
+      logical, optional, intent(in) :: enable_control
+      !! enable control?
+      ! internals
+      character(len=*), parameter :: this_procedure = 'init_exptA_with_control'
+      ! setup internal propagator to compute K
+      call self%prop%setup(X, B, Rinv)
+      ! Choose whether to enable control
+      self%control_enabled = optval(enable_control, .true.)
+      ! set initialisation flag
+      self%initialised = .true.
+   end subroutine init_exptA_with_control
+
+   subroutine direct_solver_with_control(self, vec_in, vec_out)
+      ! Linear Operator.
+      class(exponential_prop_with_control), intent(inout)  :: self
+      ! Input vector.
+      class(abstract_vector_rdp),  intent(in)  :: vec_in
+      ! Output vector.
+      class(abstract_vector_rdp),  intent(out) :: vec_out
+  
+      ! Time-integrator.
+      character(len=*), parameter :: this_procedure = 'direct_solver_with_control'
+      real(dp) :: dt = 1.0_dp
+  
+      select type(vec_in)
+      type is(state_vector)
+         select type(vec_out)
+         type is(state_vector)
+
+            ! Initialize propagator.
+            call self%prop%initialize(n=2*nx, f=rhs_with_control)
+           
+            ! Integrate forward in time.
+            call self%prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
+      
+         class default
+               call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
+         end select
+      class default
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
+      end select
+   end subroutine direct_solver_with_control
+
    !--------------------------------------------------------------------------
    !-----     TYPE-BOUND PROCEDURES FOR THE rks54_class_with_control     -----
    !--------------------------------------------------------------------------
 
-   pure logical function is_initialised(self) result(initialised)
+   pure logical function controller_is_initialised(self) result(initialised)
       class(rks54_class_with_control), intent(in) :: self
       !! Controller
       initialised = self%initialised
-   end function
+   end function controller_is_initialised
 
    subroutine setup_controller(self, X, B, Rinv)
       class(rks54_class_with_control), intent(inout) :: self
@@ -83,8 +148,8 @@ contains
             call get_state(self%B, B, this_procedure)
             ! compute LQR gains and store them
             call LQR_gain(KT, X, B, Rinv) ! will allocate KT as a state vector
-            allocate(self%K(X%rk, 2*nx), source=zero_rdp)
-            allocate(wrk(2*nx, X%rk), source=zero_rdp)
+            allocate(self%K(size(B), 2*nx), source=zero_rdp)
+            allocate(wrk(2*nx, size(B)), source=zero_rdp)
             call get_state(wrk, KT, this_procedure)
             self%K = transpose(wrk)
             ! set init flag
@@ -135,51 +200,5 @@ contains
          call type_error('me', 'rks54_class_with_control', 'INOUT', this_module, this_procedure)
       end select
    end subroutine rhs_with_control
-
-   !-------------------------------------------------------------------------------
-   !-----     TYPE-BOUND PROCEDURES FOR THE exponential_prop_with_control     -----
-   !-------------------------------------------------------------------------------
-
-   subroutine init_exptA_with_control(self, enable_control_)
-      ! Linear Operator.
-      class(exponential_prop_with_control), intent(inout)  :: self
-      ! enable control?
-      logical, optional, intent(in) :: enable_control_
-      ! internals
-      logical :: enable_control
-      self%control_enabled = optval(enable_control, .true.)
-   end subroutine init_exptA_with_control
-
-   subroutine direct_solver_with_control(self, vec_in, vec_out)
-      ! Linear Operator.
-      class(exponential_prop_with_control), intent(inout)  :: self
-      ! Input vector.
-      class(abstract_vector_rdp),  intent(in)  :: vec_in
-      ! Output vector.
-      class(abstract_vector_rdp),  intent(out) :: vec_out
-  
-      ! Time-integrator.
-      character(len=*), parameter :: this_procedure = 'direct_solver_with_control'
-      type(rks54_class_with_control) :: prop
-      real(dp) :: dt = 1.0_dp
-  
-      select type(vec_in)
-      type is(state_vector)
-         select type(vec_out)
-         type is(state_vector)
-      
-            ! Initialize propagator.
-            call prop%initialize(n=2*nx, f=rhs_with_control)
-           
-            ! Integrate forward in time.
-            call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
-      
-         class default
-               call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
-         end select
-      class default
-         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
-      end select
-   end subroutine direct_solver_with_control  
 
 end module Ginzburg_Landau_Control
