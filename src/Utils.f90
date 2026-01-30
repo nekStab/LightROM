@@ -165,7 +165,7 @@ contains
 
       proj = innerprod(B, X%U(:X%rk))
       wrk  = matmul(Rinv, matmul(proj, X%S(:X%rk,:X%rk)))
-      call linear_combination(KT, X%U(:X%rk), wrk)
+      call linear_combination(KT, X%U(:X%rk), transpose(wrk))  ! we compute K.T = (wrk @ U.T).T = U @ wrk.T
       
    end subroutine LQR_gain_rdp
 
