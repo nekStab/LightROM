@@ -252,10 +252,11 @@ module LightROM_LyapunovSolvers
          ! here we can do some checks such as whether we have reached steady state
          if ( X%rk > 0 .and. (mod(istep, chkstep) == 0 .or. istep == nsteps) ) then
             svals = svdvals(X%S(:X%rk,:X%rk))
-            irk = min(size(svals), size(svals_lag))
+            if (.not. allocated(svals_lag)) allocate(svals_lag(X%rk), source=zero_rdp)
             call log_svals(logfile_basename, X, tau, svals, svals_lag, LyapSolver_counter, istep, nsteps)
             ! Check convergence
             if (istep == nsteps) if_lastep = .true.
+            irk = min(size(svals), size(svals_lag))
             X%is_converged = is_converged(X, svals(:irk), svals_lag(:irk), opts, if_lastep)
             if (X%is_converged) then
                write(msg,'(A,I0,A)') "Step ", istep, ": Solution converged!"
