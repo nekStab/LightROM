@@ -9,6 +9,7 @@ module Laplacian2D_LTI_Riccati_Utils
    use rklib_module
    ! LightKrylov for linear algebra.
    use LightKrylov
+   use LightKrylov_Constants, only : one_rdp, zero_rdp
    use LightKrylov_AbstractVectors ! zero_basis
    use LightKrylov_Utils, only : assert_shape
    ! Laplacian
@@ -85,7 +86,7 @@ contains
       select type (state_in)
       type is (state_vector)
          kdim = size(state_in)
-         call assert_shape(mat_out, [ N, kdim ], 'mat_out', this_module, this_procedure//': 'trim(procedure))
+         call assert_shape(mat_out, [ N, kdim ], 'mat_out', this_module, this_procedure//': '//trim(procedure))
          do k = 1, kdim
             mat_out(:,k) = state_in(k)%state
          end do
@@ -159,6 +160,7 @@ contains
       character(len=*), parameter :: this_procedure = 'generate_random_initial_condition'
       class(state_vector),   allocatable :: Utmp(:)
       integer                            :: i, info
+      real(dp) :: mean, std
       character(len=128) :: msg
 
       ! sanity check

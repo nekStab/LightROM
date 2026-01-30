@@ -196,7 +196,7 @@ contains
             type is (laplace_operator)
                call krylov_exptA(vec_out, A, vec_in, tau, info, transpose)
             class default
-               call stop_error('A', 'laplace_operator', 'INOUT', this_module, this_procedure)
+               call type_error('A', 'laplace_operator', 'INOUT', this_module, this_procedure)
             end select
          class default
             call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)

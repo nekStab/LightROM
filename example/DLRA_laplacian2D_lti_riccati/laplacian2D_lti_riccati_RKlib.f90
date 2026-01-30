@@ -67,6 +67,7 @@ contains
       class(abstract_vector_rdp),   intent(out) :: vec_out
 
       !> Time-integrator.
+      character(len=*), parameter :: this_procedure = 'direct_solver_vec'
       type(rks54_class) :: prop
       real(dp)          :: dt = 1.0_dp
 
@@ -135,7 +136,7 @@ contains
          select type(vec_out)
          type is(state_matrix)
             !> Initialize propagator.
-            call prop%initialize(n=N**2, f=rhs_lyap)
+            call prop%initialize(n=N**2, f=rhs_riccati)
             !> Integrate forward in time.
             call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
          class default
