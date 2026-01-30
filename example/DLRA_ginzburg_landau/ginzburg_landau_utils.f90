@@ -8,7 +8,7 @@ module Ginzburg_Landau_Utils
    !use fortime
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov_Constants, only : zero_rdp
+   use LightKrylov_Constants, only : zero_rdp, one_rdp
    use LightKrylov_AbstractVectors
    use LightKrylov_Utils, only : assert_shape
    ! LightROM
@@ -347,7 +347,7 @@ contains
       case ('RKLIB')
          write(*,'(A7,A10,A19,A19,A19,A12)') &
               ' RKlib:', 'Tend', '| X_RK |/N', '| X_RK - '//trim(ref)//' |/N', '| res_RK |/N', 'etime'
-         write(*,*) repeat('-', 85)
+         write(*,*) repeat('-', 86)
       case ('DLRA_FIXED')
          print '(A16,A8,A4,A10,A8,A10,4(A19),A12)', &
          'DLRA:', '  rk', ' TO', 'dt', 'steps', 'Tend', &
@@ -425,7 +425,6 @@ contains
       ! internal
       real(dp), allocatable :: svals(:)
       integer :: k, j, is, ie, nblocks
-      real(dp), parameter :: one_rdp = 1.0_dp
    
       svals = svdvals(A)
    
@@ -434,7 +433,7 @@ contains
       do k = 1, nblocks
          is = (k-1)*irow + 1
          ie = min(k*irow, size(svals))
-         print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD('//trim(label)//') ', is, '-', ie, ( svals(j), j = is, ie )
+         print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD('//label//') ', is, '-', ie, ( svals(j), j = is, ie )
       end do
       print *, ''
    
@@ -485,7 +484,7 @@ contains
 
       ! ---- tau string ----------------------------------------------
       taustr = ''
-      write(tolstr,'(ES10.2)') tau
+      write(taustr,'(ES10.2)') tau
       taustr = adjustl(trim(taustr))
       taustr = replace_all(taustr, 'E', 'e')
       taustr = replace_all(taustr, '+', '')
