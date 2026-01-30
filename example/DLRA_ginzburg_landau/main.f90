@@ -31,8 +31,16 @@ program demo
    character(len=*), parameter :: this_module = 'Ginzburg_Landau_Main'
 
    character(len=128), parameter :: home = 'example/DLRA_ginzburg_landau/local/'
+   ! reference solutiions using python
+   character(len=128), parameter :: fname_lyap_SVD_U = trim(home)//'Xref_lyapunov_SVD_U.npy'
+   character(len=128), parameter :: fname_lyap_SVD_S = trim(home)//'Xref_lyapunov_SVD_S.npy'
+   character(len=128), parameter :: fname_ricc_SVD_U = trim(home)//'Xref_riccati_SVD_U.npy'
+   character(len=128), parameter :: fname_ricc_SVD_S = trim(home)//'Xref_riccati_SVD_S.npy'
+   ! reference solutiions using RK
    character(len=128), parameter :: fname_RK_lyapunov = trim(home)//'Xref_RK_lyapunov.npy'
    character(len=128), parameter :: fname_RK_riccati  = trim(home)//'Xref_RK_riccati.npy'
+   character(len=128), parameter :: fname_RK_main_lyapunov = trim(home)//'Xref_RK_main_lyapunov.npy'
+   character(len=128), parameter :: fname_RK_main_riccati  = trim(home)//'Xref_RK_main_riccati.npy'
    character(len=128) :: onameU, onameS, oname
    ! rk_B & rk_C are set in ginzburg_landau_base.f90
 
@@ -51,6 +59,10 @@ program demo
    type(GL_operator),            allocatable :: A
    type(exponential_prop),       allocatable :: prop
 
+   ! Exponential propagator (with control)
+   type(rks54_class_with_control), allocatable :: rkintegrator
+   type(exponential_prop_with_control), allocatable :: prop_control
+
    ! LTI system
    type(lti_system)                          :: LTI
    type(dlra_opts)                           :: opts
@@ -68,6 +80,7 @@ program demo
 
    ! IO
    real(wp),                    allocatable :: U_load(:,:)
+   real(wp),                    allocatable :: S_load(:)
    
    ! POD
    type(state_vector),          allocatable :: X0(:)    
@@ -107,15 +120,15 @@ program demo
    ! Adjoint = .false.:     Solve the direct Lyapunov equation:   0 = A @ X + X @ A.T + B @ B.T @ W
    !     The solution to this equation is called the controllability Gramian X.
    !
-   logical, parameter :: main_run = .false.
+   logical, parameter :: main_run = .true.
    !
    ! Run the computation instead of the test
    !
-   logical, parameter :: short_test = .true.
+   logical, parameter :: short_test = .false.
    !
    ! Skip the computations with small dt/small tolerance to speed up test
    !
-   logical, parameter :: run_fixed_rank_short_integration_time_test   = .true.
+   logical, parameter :: run_fixed_rank_short_integration_time_test   = .false.
    !
    ! Integrate the same initial condition for a short time with Runge-Kutta and DLRA.
    !
@@ -222,6 +235,13 @@ program demo
    ! Initialize propagator
    print '(4X,A)', 'Initialize exponential propagator'
    prop = exponential_prop(1.0_wp)
+
+   ! Initialize propagator with control
+   call load_npy(trim(fname_ricc_SVD_U), U_load)
+   call load_npy(trim(fname_ricc_SVD_S), S_load)
+
+   print '(4X,A)', 'Initialize exponential propagator with control'
+   prop_control = exponential_prop_with_control(1.0_wp)
 
    ! Initialize LTI system
    A = GL_operator()
@@ -343,7 +363,39 @@ program demo
       print *, '#########################################################################'
       print *, ''
 
-      call run_lyapunov_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
+      if (if_lyapunov) then
+         inquire(file=fname_RK_main_lyapunov, exist=exist_file)
+         if (.not. save_and_load_RK_solution) then
+            ! Run RK integrator for the Lyapunov equation
+            call run_lyapunov_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
+         else
+            if (exist_file) then
+               print *, 'Read reference data from '//trim(fname_RK_main_lyapunov)//'.'
+               call load_npy(fname_RK_main_lyapunov, U_load)
+               Xref_RK = U_load
+            else
+               ! Run RK integrator for the Lyapunov equation
+               call run_lyapunov_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
+               call save_npy(fname_RK_main_lyapunov, Xref_RK)
+            end if
+         end if
+      else
+         inquire(file=fname_RK_main_riccati, exist=exist_file)
+         if (.not. save_and_load_RK_solution) then
+            ! Run RK integrator for the Riccati equation
+            call run_riccati_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref)
+         else
+            if (exist_file) then
+               print *, 'Read reference data from '//trim(fname_RK_main_riccati)//'.'
+               call load_npy(fname_RK_main_riccati, U_load)
+               Xref_RK = U_load
+            else
+               ! Run RK integrator for the Riccati equation
+               call run_riccati_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref)
+               call save_npy(fname_RK_main_riccati, Xref_RK)
+            end if
+         end if
+      end if
 
       print *, ''
       print *, '#########################################################################'
@@ -353,40 +405,48 @@ program demo
       print *, '#########################################################################'
       print *, ''
 
-      call run_lyapunov_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, if_adj, home, if_save_output)
+      if_save_output = .true.   
+      if (if_lyapunov) then
+         call run_lyapunov_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, if_adj, home, if_save_output)
+      else
+         TOv = [ 1 ]
+         call run_riccati_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, home, if_save_output)
+      end if
 
-      print *, ''
-      print *, '#########################################################################'
-      print *, '#                                                                       #'
-      print *, '#    Ic.  Solution using POD                                            #'
-      print *, '#                                                                       #'
-      print *, '#########################################################################'
-      print *, ''
+      if (if_lyapunov) then
+         print *, ''
+         print *, '#########################################################################'
+         print *, '#                                                                       #'
+         print *, '#    Ic.  Solution using POD                                            #'
+         print *, '#                                                                       #'
+         print *, '#########################################################################'
+         print *, ''
 
-      tolv = [ 10.0_wp, 50.0_wp, 100.0_wp ]
-      dtv  = logspace(-1.0_wp, 0.0_wp, 3, 10)
-      dtv  = dtv(size(dtv):1:-1) ! reverse vector
-      print '(1X,A)', 'POD:'
-      do it = 1, size(tolv)
-         Tend = tolv(it)
-         print '(3X,A,F12.6)', '   Tend:', Tend
-         do irep = 1, size(dtv)
-            tau = dtv(irep)
-            prop = exponential_prop(tau)
-            if (if_adj) then
-               allocate(X0(rk_C), source=CT)
-            else
-               allocate(X0(rk_B), source=B)
-            end if
-            call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, if_adj)
-            nprint = min(8, size(svals))
-            do i = 1, ceiling(nprint*1.0_wp/irow)
-               is = (i-1)*irow+1; ie = min(i*irow, nprint)
-               print '(1X,A,F6.4,A,I2,A,I2,*(1X,F16.12))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+         tolv = [ 10.0_wp, 50.0_wp, 100.0_wp ]
+         dtv  = logspace(-1.0_wp, 0.0_wp, 3, 10)
+         dtv  = dtv(size(dtv):1:-1) ! reverse vector
+         print '(1X,A)', 'POD:'
+         do it = 1, size(tolv)
+            Tend = tolv(it)
+            print '(3X,A,F12.6)', '   Tend:', Tend
+            do irep = 1, size(dtv)
+               tau = dtv(irep)
+               prop = exponential_prop(tau)
+               if (if_adj) then
+                  allocate(X0(rk_C), source=CT)
+               else
+                  allocate(X0(rk_B), source=B)
+               end if
+               call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, if_adj)
+               nprint = min(8, size(svals))
+               do i = 1, ceiling(nprint*1.0_wp/irow)
+                  is = (i-1)*irow+1; ie = min(i*irow, nprint)
+                  print '(1X,A,F6.4,A,I2,A,I2,*(1X,F16.12))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+               end do
+               deallocate(X0)
             end do
-            deallocate(X0)
          end do
-      end do
+      end if
 
    else
       

@@ -469,11 +469,12 @@ contains
    
    end subroutine save_LR_state_npy
 
-   pure function make_filename(fldr, case, note, rk, TO, tau, Tend, tol) result(name)
+   pure function make_filename(fldr, case, eq, note, rk, TO, tau, Tend, tol) result(name)
       implicit none
 
       character(len=*), intent(in)           :: fldr
       character(len=*), intent(in)           :: case
+      character(len=*), intent(in)           :: eq
       character(len=*), intent(in)           :: note
       integer,          intent(in)           :: rk, TO
       real(dp),         intent(in)           :: tau, Tend
@@ -500,11 +501,21 @@ contains
 
       ! ---- assemble filename ---------------------------------------------
       if (present(tol)) then
-         write(name,'(A,A,"_rk",I3.3,"_TO",I1,"_tau",A,"_Tend",I3.3,"_tol",A,"_",A,".npy")') &
-            trim(fldr), trim(case), rk, TO, trim(taustr), int(Tend), trim(tolstr), trim(note)
+         if (len(trim(note)) == 0) then
+            write(name,'(A,A,"_",A,"_rk",I3.3,"_TO",I1,"_tau",A,"_Tend",I3.3,"_tol",A,".npy")') &
+               trim(fldr), trim(case), trim(eq), rk, TO, trim(taustr), int(Tend), trim(tolstr)
+         else
+            write(name,'(A,A,"_",A,"_rk",I3.3,"_TO",I1,"_tau",A,"_Tend",I3.3,"_tol",A,"_",A,".npy")') &
+               trim(fldr), trim(case), trim(eq), rk, TO, trim(taustr), int(Tend), trim(tolstr), trim(note)
+         end if
       else
-         write(name,'(A,A,"_rk",I3.3,"_TO",I1,"_tau",A,"_Tend",I3.3,"_",A,".npy")') &
-            trim(fldr), trim(case), rk, TO, trim(taustr), int(Tend), trim(note)
+         if (len(trim(note)) == 0) then
+            write(name,'(A,A,"_",A,"_rk",I3.3,"_TO",I1,"_tau",A,"_Tend",I3.3,".npy")') &
+               trim(fldr), trim(case), trim(eq), rk, TO, trim(taustr), int(Tend)
+         else
+            write(name,'(A,A,"_",A,"_rk",I3.3,"_TO",I1,"_tau",A,"_Tend",I3.3,"_",A,".npy")') &
+               trim(fldr), trim(case), trim(eq), rk, TO, trim(taustr), int(Tend), trim(note)
+         end if
       end if
 
    end function make_filename

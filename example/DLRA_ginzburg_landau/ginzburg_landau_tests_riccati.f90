@@ -116,8 +116,12 @@ contains
       integer,                       intent(in)    :: nprint
       character(len=128),            intent(in)    :: home
       logical,                       intent(in)    :: if_save_output
+      ! IO
+      real(wp),                      allocatable   :: U_load(:,:)
+      logical :: exist_file
 
       ! Internals
+      character(len=256)                           :: fbase
       character(len=256)                           :: fname
       type(LR_state),                allocatable   :: X
       type(state_matrix)                           :: X_mat(2)
@@ -161,31 +165,46 @@ contains
                ! set solver options
                opts%mode = torder
 
-               ! Initialize low-rank representation with rank rk
-               call X%initialize_LR_state(U0, S0, rk, rkmax, .false.)
+               fbase = make_filename(home, case, eq, note, rk, torder, tau, Tend)
+               fname = fbase(:index(fbase,'.npy')-1)//'_U.npy'
+               inquire(file=trim(fname), exist=exist_file)
+               if (exist_file) then
+                  ! U
+                  call load_npy(trim(fname), U_load)
+                  X%rk = size(U_load, 2)
+                  allocate(X%U(X%rk), source=U0(1))
+                  call set_state(X%U, U_load, 'load_from_file')
+                  ! S
+                  fname = fbase(:index(fbase,'.npy')-1)//'_S.npy'
+                  call load_npy(trim(fname), U_load)
+                  allocate(X%S(X%rk,X%rk), source=U_load)
+               else
+                  ! Initialize low-rank representation with rank rk
+                  call X%initialize_LR_state(U0, S0, rk, rkmax, .false.)
 
-               ! run integrator
-               call system_clock(count=clock_start)     ! Start Timer
-               call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
-                                                            & exptA=exptA, iftrans=.true., options=opts)
-               call system_clock(count=clock_stop)      ! Stop Timer
-               etime = real(clock_stop-clock_start)/real(clock_rate)
+                  ! run integrator
+                  call system_clock(count=clock_start)     ! Start Timer
+                  call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
+                                                               & exptA=exptA, iftrans=.true., options=opts)
+                  call system_clock(count=clock_stop)      ! Stop Timer
+                  etime = real(clock_stop-clock_start)/real(clock_rate)
+                  ! save output
+                  if (if_save_output) then
+                     
+                     call save_LR_state_npy(fname, X, weight_mat)
+                  end if
+               end if
                ! Reconstruct solution
                call reconstruct_solution(X_out, X)
                ! print information
                call print_dlra_output(eq, rk, torder, tau, nsteps, Tend, X_out, Xref_RK, Xref, etime, note)
-               ! save output
-               if ((k == size(dtv)) .and. if_save_output) then
-                  fname = make_filename(home, case, note, rk, torder, tau, Tend)
-                  call save_LR_state_npy(fname, X, weight_mat)
-               end if
                deallocate(X%U); deallocate(X%S)
             end do
             print *, ''
          end do
       end do
       if (nprint > 0) then
-         call print_svdvals(Xref,     'X_BS', nprint, irow)
+         call print_svdvals(Xref,     'X_SD', nprint, irow)
          call print_svdvals(Xref_RK,  'X_RK', nprint, irow)
          call print_svdvals(X_out,    'X_D ', nprint, irow)
       end if
@@ -212,8 +231,12 @@ contains
       integer,                       intent(in)    :: nprint
       character(len=128),            intent(in)    :: home
       logical,                       intent(in)    :: if_save_output
+      ! IO
+      real(wp),                      allocatable   :: U_load(:,:)
+      logical :: exist_file
 
       ! Internals
+      character(len=256)                           :: fbase
       character(len=256)                           :: fname
       type(LR_state),                allocatable   :: X
       type(state_matrix)                           :: X_mat(2)
@@ -257,32 +280,46 @@ contains
                ! set solver options
                opts%mode = torder
 
-               ! Initialize low-rank representation with rank rk
-               call X%initialize_LR_state(U0, S0, rk, rkmax, opts%if_rank_adaptive)
-               X%tot_time = 0.0_dp
-               X%time     = 0.0_dp
-               X%step     = 0
+               fbase = make_filename(home, case, eq, note, rk, torder, tau, Tend, opts%tol)
+               fname = fbase(:index(fbase,'.npy')-1)//'_U.npy'
+               inquire(file=trim(fname), exist=exist_file)
+               if (exist_file) then
+                  ! U
+                  call load_npy(trim(fname), U_load)
+                  X%rk = size(U_load, 2)
+                  allocate(X%U(X%rk), source=U0(1))
+                  call set_state(X%U, U_load, 'load_from_file')
+                  ! S
+                  fname = fbase(:index(fbase,'.npy')-1)//'_S.npy'
+                  call load_npy(trim(fname), U_load)
+                  allocate(X%S(X%rk,X%rk), source=U_load)
+               else
+                  ! Initialize low-rank representation with rank rk
+                  call X%initialize_LR_state(U0, S0, rk, rkmax, opts%if_rank_adaptive)
+                  X%tot_time = 0.0_dp
+                  X%time     = 0.0_dp
+                  X%step     = 0
 
-               ! run integrator
-               call system_clock(count=clock_start)     ! Start Timer
-               call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
-                                                               & exptA=exptA, iftrans=.true., options=opts)
-               call system_clock(count=clock_stop)      ! Stop Timer
-               etime = real(clock_stop-clock_start)/real(clock_rate)
+                  ! run integrator
+                  call system_clock(count=clock_start)     ! Start Timer
+                  call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
+                                                                  & exptA=exptA, iftrans=.true., options=opts)
+                  call system_clock(count=clock_stop)      ! Stop Timer
+                  etime = real(clock_stop-clock_start)/real(clock_rate)
+                  ! save output
+                  if (if_save_output) then
+                     call save_LR_state_npy(fname, X, weight_mat)
+                  end if
+               end if
                ! Reconstruct solution
                call reconstruct_solution(X_out, X)
                ! print information
                call print_dlra_output(eq, X%rk, torder, tau, nsteps, Tend, X_out, Xref_RK, Xref, etime, note)
-               ! save output
-               if ((k == size(dtv)) .and. if_save_output) then
-                  fname = make_filename(home, case, note, rk, torder, tau, Tend, opts%tol)
-                  call save_LR_state_npy(fname, X, weight_mat)
-               end if
                deallocate(X%U); deallocate(X%S)
             end do
             print *, ''
          end do
-         call print_svdvals(Xref,     'X_BS', nprint, irow)
+         call print_svdvals(Xref,     'X_SD', nprint, irow)
          call print_svdvals(Xref_RK,  'X_RK', nprint, irow)
          call print_svdvals(X_out,    'X_D ', nprint, irow)
       end do
