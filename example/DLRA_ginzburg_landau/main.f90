@@ -8,7 +8,6 @@ program demo
    use stdlib_logger, only : information_level, warning_level, debug_level, error_level, none_level
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov, only : wp => dp
    use LightKrylov_Logger
    use LightKrylov_AbstractVectors
    use LightKrylov_ExpmLib
@@ -45,11 +44,11 @@ program demo
    ! rk_B & rk_C are set in ginzburg_landau_base.f90
 
    integer  :: nrk, ntau, rk,  torder
-   real(wp) :: tau, Tend, T_RK
+   real(dp) :: tau, Tend, T_RK
    ! vector of dt values
-   real(wp), allocatable :: dtv(:)
+   real(dp), allocatable :: dtv(:)
    ! vector of tolerances
-   real(wp), allocatable :: tolv(:)
+   real(dp), allocatable :: tolv(:)
    ! vector of rank values
    integer, allocatable :: rkv(:)
    ! vector of temporal order
@@ -71,20 +70,26 @@ program demo
 
    ! Initial condition
    type(state_vector),           allocatable :: U0(:), output(:)
-   real(wp),                     allocatable :: S0(:,:)
+   real(dp),                     allocatable :: S0(:,:)
    
    ! OUTPUT
-   real(wp)                                  :: X_out(N,N)
+   real(dp)                                  :: X_out(N,N)
 
    ! Reference solutions (BS & RK)
-   real(wp)                                  :: Xref(N,N)
-   real(wp)                                  :: Xref_RK(N,N)
+   real(dp)                                  :: Xref(N,N)
+   real(dp)                                  :: Xref_RK(N,N)
 
    ! IO
-   real(wp),                    allocatable :: U_load(:,:)
+   real(dp),                     allocatable :: U_load(:,:)
    
    ! POD
-   type(state_vector),          allocatable :: X0(:)    
+   type(state_vector),           allocatable :: X0(:)
+
+   ! eigendecomposition
+   integer                                   :: nev
+   type(state_vector),           allocatable :: V(:)
+   complex(dp),                  allocatable :: lambda(:)
+   real(dp),                     allocatable :: residuals(:)
 
    ! Information flag.
    integer                                   :: info
@@ -94,7 +99,7 @@ program demo
    integer                                   :: nsnap, nstep, nrank
    integer                                   :: rk_X0
    ! SVD & printing
-   real(wp), dimension(:),       allocatable :: svals
+   real(dp), dimension(:),       allocatable :: svals
    integer, parameter                        :: irow = 8
    integer                                   :: nprint
    logical                                   :: if_save_output
@@ -235,7 +240,7 @@ program demo
 
    ! Initialize propagator
    print '(4X,A)', 'Initialize exponential propagator'
-   prop = exponential_prop(1.0_wp)
+   prop = exponential_prop(1.0_dp)
 
    ! Initialize LTI system
    A = GL_operator()
@@ -304,7 +309,7 @@ program demo
    
    ! Define initial condition
    allocate(U0(rk_X0), source=B(1)); call zero_basis(U0)
-   allocate(S0(rk_X0,rk_X0)); S0 = 0.0_wp
+   allocate(S0(rk_X0,rk_X0)); S0 = 0.0_dp
    print *, 'Define initial condition'
    call generate_random_initial_condition(U0, S0, rk_X0)
    call reconstruct_solution(X_out, U0, S0)
@@ -314,50 +319,61 @@ program demo
    print *, ''
    ! compute svd
    svals = svdvals(X_out)
-   do i = 1, ceiling(rk_X0*1.0_wp/irow)
+   do i = 1, ceiling(rk_X0*1.0_dp/irow)
       is = (i-1)*irow+1; ie = i*irow
       print '(2X,I2,"-",I2,*(1X,F16.12))', is, ie, ( svals(j), j = is, ie )
    end do
 
    call global_lightROM_timer%stop('Direct solution (LAPACK)')
-
-
-
-
-
-
+   call global_lightROM_timer%add_timer('Eigendecomposition of A', start=.true.)
    
+   nev = 50; allocate(V(nev)); tau = 1.0_dp
+
+   ! prop already initialised
+   print '(4X,A)', 'Eigendecomposition of A'
+   call zero_basis(V)
+   call eigs(prop, V, lambda, residuals, info, kdim=2*nev)
+   call check_info(info, 'eigs', module=this_module, procedure='main')
+   
+   lambda = log(lambda)/tau
+   call save_npy(trim(home)//"spectrum_A.npy", lambda)
+   
+   call global_lightROM_timer%stop('Eigendecomposition of A')
+   call global_lightROM_timer%add_timer('Eigendecomposition of A - BK', start=.true.)
+   
+   print '(4X,A)', 'Eigendecomposition of A - BK'
    ! Initialize propagator with control
    X = LR_state()
+   ! U
    call load_npy(trim(fname_ricc_SVD_U), U_load)
    X%rk = size(U_load, 2)
-   ! U
    allocate(X%U(X%rk), source=U0(1))
    call set_state(X%U, U_load, 'load_from_file')
    ! S
    call load_npy(trim(fname_ricc_SVD_S), U_load)
    allocate(X%S(X%rk,X%rk), source=U_load)
-
+   
    print '(4X,A)', 'Initialize exponential propagator with control'
    rkintegrator = rks54_class_with_control()
-   prop_control = exponential_prop_with_control(1.0_wp, prop=rkintegrator)
+   prop_control = exponential_prop_with_control(tau, prop=rkintegrator)
    call prop_control%init(X, B, Rinv)
-
-   ! TEST
-   call prop_control%matvec(U0(1), U0(2))
-
-
-
-
-
-
-   call global_lightROM_timer%add_timer('Short time: Runge-Kutta', start=.true.)
    
+   ! eigendecomposition
+   call zero_basis(V)
+   call eigs(prop_control, V, lambda, residuals, info, kdim=2*nev)
+   call check_info(info, 'eigs', module=this_module, procedure='main')
+   
+   lambda = log(lambda)/tau
+   call save_npy(trim(home)//"spectrum_A-BK.npy", lambda)
+     
+   call global_lightROM_timer%stop('Eigendecomposition of A - BK')
+   call global_lightROM_timer%add_timer('Short time: Runge-Kutta', start=.true.)
+   STOP 9
    if (main_run) then
       ! DLRA with adaptive rank
-      dtv  = logspace(-2.0_wp, 0.0_wp, 3, 10)
+      dtv  = logspace(-2.0_dp, 0.0_dp, 3, 10)
       dtv  = dtv(size(dtv):1:-1) ! reverse vector
-      tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
+      tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
       TOv  = [ 1, 2 ]
       
       open (1234, file='Lyap_case.log', status='replace', action='write')
@@ -375,7 +391,7 @@ program demo
       nprint = 60
       if_save_output = .true.
 
-      T_RK  = 120.0_wp
+      T_RK  = 120.0_dp
       nstep = 120
       iref  = 120
       Tend = T_RK/nstep*iref
@@ -447,8 +463,8 @@ program demo
          print *, '#########################################################################'
          print *, ''
 
-         tolv = [ 10.0_wp, 50.0_wp, 100.0_wp ]
-         dtv  = logspace(-1.0_wp, 0.0_wp, 3, 10)
+         tolv = [ 10.0_dp, 50.0_dp, 100.0_dp ]
+         dtv  = logspace(-1.0_dp, 0.0_dp, 3, 10)
          dtv  = dtv(size(dtv):1:-1) ! reverse vector
          print '(1X,A)', 'POD:'
          do it = 1, size(tolv)
@@ -464,7 +480,7 @@ program demo
                end if
                call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, if_adj)
                nprint = min(8, size(svals))
-               do i = 1, ceiling(nprint*1.0_wp/irow)
+               do i = 1, ceiling(nprint*1.0_dp/irow)
                   is = (i-1)*irow+1; ie = min(i*irow, nprint)
                   print '(1X,A,F6.4,A,I2,A,I2,*(1X,F16.12))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
                end do
@@ -483,7 +499,7 @@ program demo
       print *, '#########################################################################'
       print *, ''
 
-      T_RK  = 0.01_wp
+      T_RK  = 0.01_dp
       nstep = 10
       iref  = 5
       if (run_fixed_rank_short_integration_time_test) then         
@@ -516,9 +532,9 @@ program demo
          if (if_lyapunov) then
             rkv = [ 10, 12, 16 ]
             if (short_test) then
-               dtv = logspace(-3.0_wp, -3.0_wp, 1, 10)
+               dtv = logspace(-3.0_dp, -3.0_dp, 1, 10)
             else
-               dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
+               dtv = logspace(-5.0_dp, -3.0_dp, 3, 10)
             end if
             dtv = dtv(size(dtv):1:-1) ! reverse vector
             TOv  = [ 1, 2 ] 
@@ -528,9 +544,9 @@ program demo
          else
             rkv = [ 6, 10, 14 ]
             if (short_test) then
-               dtv = logspace(-3.0_wp, -3.0_wp, 1, 10)
+               dtv = logspace(-3.0_dp, -3.0_dp, 1, 10)
             else
-               dtv = logspace(-6.0_wp, -3.0_wp, 4, 10)
+               dtv = logspace(-6.0_dp, -3.0_dp, 4, 10)
             end if
             dtv = dtv(size(dtv):1:-1) ! reverse vector
             TOv  = [ 1 ] 
@@ -560,8 +576,8 @@ program demo
       print *, '#########################################################################'
       print *, ''
       
-      T_RK  = 50.0_wp
-      Tend  = 50.0_wp
+      T_RK  = 50.0_dp
+      Tend  = 50.0_dp
       nstep = 20
       iref  = 20
 
@@ -621,9 +637,9 @@ program demo
             Tend = T_RK/nstep*iref
             rkv = [ 10, 20, 40 ]
             if (short_test) then
-               dtv = logspace(-1.0_wp, 0.0_wp, 2, 10)
+               dtv = logspace(-1.0_dp, 0.0_dp, 2, 10)
             else
-               dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+               dtv = logspace(-2.0_dp, 0.0_dp, 3, 10)
             end if
             dtv = dtv(size(dtv):1:-1) ! reverse vector
             TOv  = [ 1, 2 ] 
@@ -637,9 +653,9 @@ program demo
             Tend = T_RK/nstep*iref
             rkv = [ 10, 20, 40 ]
             if (short_test) then
-               dtv = logspace(-1.0_wp, 0.0_wp, 2, 10)
+               dtv = logspace(-1.0_dp, 0.0_dp, 2, 10)
             else
-               dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
+               dtv = logspace(-2.0_dp, 0.0_dp, 3, 10)
             end if
             dtv = dtv(size(dtv):1:-1) ! reverse vector
             TOv  = [ 1 ] 
@@ -668,11 +684,11 @@ program demo
       if (run_rank_adaptive_long_integration_time_test) then
          if (if_lyapunov) then
             if (short_test) then
-               dtv = logspace(-3.0_wp, 0.0_wp, 2, 10)
-               tolv = [ 1e-2_wp, 1e-6_wp ]
+               dtv = logspace(-3.0_dp, 0.0_dp, 2, 10)
+               tolv = [ 1e-2_dp, 1e-6_dp ]
             else
-               dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
-               tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
+               dtv = logspace(-2.0_dp, 0.0_dp, 3, 10)
+               tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
             end if
             dtv = dtv(size(dtv):1:-1) ! reverse vector
             TOv  = [ 1, 2 ]
@@ -684,11 +700,11 @@ program demo
             call reset_lyapunov_solver()
          else
             if (short_test) then
-               dtv = logspace(-3.0_wp, 0.0_wp, 2, 10)
-               tolv = [ 1e-2_wp, 1e-6_wp ]
+               dtv = logspace(-3.0_dp, 0.0_dp, 2, 10)
+               tolv = [ 1e-2_dp, 1e-6_dp ]
             else
-               dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
-               tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
+               dtv = logspace(-2.0_dp, 0.0_dp, 3, 10)
+               tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
             end if
             dtv = dtv(size(dtv):1:-1) ! reverse vector
             TOv  = [ 1 ]
