@@ -190,7 +190,6 @@ contains
                   etime = real(clock_stop-clock_start)/real(clock_rate)
                   ! save output
                   if (if_save_output) then
-                     
                      call save_LR_state_npy(fname, X, weight_mat)
                   end if
                end if
