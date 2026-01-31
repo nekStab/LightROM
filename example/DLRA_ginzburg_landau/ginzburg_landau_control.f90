@@ -32,6 +32,7 @@ module Ginzburg_Landau_Control
    contains
       private
       procedure, pass(self), public :: is_initialised => controller_is_initialised
+      procedure, pass(self), public :: check_control_enabled
       procedure, pass(self), public :: setup => setup_controller
       procedure, pass(self), public :: eval => eval_control
    end type rks54_class_with_control
@@ -78,6 +79,8 @@ contains
       !! enable control?
       ! internals
       character(len=*), parameter :: this_procedure = 'init_exptA_with_control'
+      ! Initialize propagator.
+      call self%prop%initialize(n=2*nx, f=rhs_with_control)
       ! setup internal propagator to compute K
       call self%prop%setup(X, B, Rinv)
       ! Choose whether to enable control
@@ -85,7 +88,7 @@ contains
       ! set initialisation flag
       self%initialised = .true.
    end subroutine init_exptA_with_control
-
+   
    subroutine direct_solver_with_control(self, vec_in, vec_out)
       ! Linear Operator.
       class(exponential_prop_with_control), intent(inout)  :: self
@@ -93,19 +96,19 @@ contains
       class(abstract_vector_rdp),  intent(in)  :: vec_in
       ! Output vector.
       class(abstract_vector_rdp),  intent(out) :: vec_out
-  
+      
       ! Time-integrator.
       character(len=*), parameter :: this_procedure = 'direct_solver_with_control'
       real(dp) :: dt = 1.0_dp
-  
+      
       select type(vec_in)
       type is(state_vector)
          select type(vec_out)
          type is(state_vector)
-
-            ! Initialize propagator.
-            call self%prop%initialize(n=2*nx, f=rhs_with_control)
-           
+      
+            ! check if control should be enabled
+            call self%prop%check_control_enabled(self%control_enabled)
+            
             ! Integrate forward in time.
             call self%prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
       
@@ -126,6 +129,14 @@ contains
       !! Controller
       initialised = self%initialised
    end function controller_is_initialised
+   
+   subroutine check_control_enabled(self, linop_setting)
+      class(rks54_class_with_control), intent(inout) :: self
+      !! Controller
+      logical, intent(in) :: linop_setting
+      !! Setting at the linop level for control enabled/disabled
+      self%control_enabled = linop_setting
+   end subroutine check_control_enabled
 
    subroutine setup_controller(self, X, B, Rinv)
       class(rks54_class_with_control), intent(inout) :: self
