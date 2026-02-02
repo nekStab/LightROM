@@ -98,8 +98,11 @@ program demo
    integer                                   :: i, j, k, it, irep, iref, is, ie
    integer                                   :: nsnap, nstep, nrank
    integer                                   :: rk_X0
+   character(len=256)                        :: fbase, fname
+   character(len=32)                         :: tolstr
    ! SVD & printing
    real(dp), dimension(:),       allocatable :: svals
+   real(dp)                                  :: tol
    integer, parameter                        :: irow = 8
    integer                                   :: nprint
    logical                                   :: if_save_output
@@ -328,6 +331,7 @@ program demo
    call global_lightROM_timer%add_timer('Eigendecomposition of A', start=.true.)
    
    nev = 50; allocate(V(nev)); tau = 1.0_dp
+   nprint = 8
 
    ! prop already initialised
    print '(4X,A)', 'Eigendecomposition of A'
@@ -337,11 +341,12 @@ program demo
    
    lambda = log(lambda)/tau
    call save_npy(trim(home)//"spectrum_A.npy", lambda)
+   print *,'  Leading eigenvalue:  ', maxval(real(lambda))
    
    call global_lightROM_timer%stop('Eigendecomposition of A')
    call global_lightROM_timer%add_timer('Eigendecomposition of A - BK', start=.true.)
    
-   print '(4X,A)', 'Eigendecomposition of A - BK'
+   print '(4X,A)', 'Eigendecomposition of A - BK (exact solution)'
    ! Initialize propagator with control
    X = LR_state()
    ! U
@@ -365,14 +370,65 @@ program demo
    
    lambda = log(lambda)/tau
    call save_npy(trim(home)//"spectrum_A-BK.npy", lambda)
-     
+   print *,'  Leading eigenvalue:  ', maxval(real(lambda))
+   ! deallocate and clean
+   if (allocated(rkintegrator)) deallocate(rkintegrator)
+   if (allocated(prop_control)) deallocate(prop_control)
+
+   dtv  = logspace(-4.0_dp, 0.0_dp, 5, 10)
+   dtv  = dtv(size(dtv):1:-1) ! reverse vector
+   tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
+   torder = 1
+   !
+   !Tend = 120.0_dp
+   !write(*,*), ''
+   !print '(A64,A,A24)', adjustl('DLRA output'), ': ', 'Leading eigenvalue'
+   !Tend = 50.0_dp
+   !rk = rk_X0_riccati
+   !do j = 1, size(tolv)
+   !   tol = tolv(j)
+   !   do k = 1, size(dtv)
+   !      tau = dtv(k)
+   !      fbase = make_filename(home, 'DLRA_ADAPT', 'ricc', 'P', rk, torder, tau, Tend, tol)
+   !      exist_file = exist_X_file(fbase)
+   !      if (exist_file) then
+   !         ! load new X state
+   !         call load_X_from_file(X, fbase, U0)
+   !         ! recreate integrators
+   !         rkintegrator = rks54_class_with_control()
+   !         prop_control = exponential_prop_with_control(tau, prop=rkintegrator)
+   !         ! initialize integrators
+   !         call prop_control%init(X, B, Rinv)
+   !
+   !         ! eigendecomposition
+   !         call zero_basis(V)
+   !         call eigs(prop_control, V, lambda, residuals, info, kdim=2*nev)
+   !         call check_info(info, 'eigs', module=this_module, procedure='main')
+   !         
+   !         lambda = log(lambda)/tau
+   !         write(tolstr,'(ES10.2)') tol
+   !         tolstr = adjustl(trim(tolstr))
+   !         tolstr = replace_all(tolstr, 'E', 'e')
+   !         tolstr = replace_all(tolstr, '+', '')
+   !         call save_npy(trim(home)//"spectrum_A-BK_tol"//trim(tolstr)//".npy", lambda)
+   !         fname = replace_all(replace_all(fbase, home, ''), 'example/DLRA_ginzburg_landau/local/','')
+   !         print '(A64,A,F21.7)', adjustl(trim(fname)), ': ', maxval(real(lambda))
+   !         ! deallocate and clean
+   !         if (allocated(rkintegrator)) deallocate(rkintegrator)
+   !         if (allocated(prop_control)) deallocate(prop_control)
+   !      end if
+   !   end do
+   !   write(*,*)
+   !end do
+
    call global_lightROM_timer%stop('Eigendecomposition of A - BK')
    call global_lightROM_timer%add_timer('Short time: Runge-Kutta', start=.true.)
-   STOP 9
+   
    if (main_run) then
       ! DLRA with adaptive rank
-      dtv  = logspace(-2.0_dp, 0.0_dp, 3, 10)
+      dtv  = logspace(-4.0_dp, 0.0_dp, 5, 10)
       dtv  = dtv(size(dtv):1:-1) ! reverse vector
+      !tolv = [ 1e-2_dp, 1e-4_dp, 1e-6_dp, 1e-8_dp, 1e-10_dp ]
       tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
       TOv  = [ 1, 2 ]
       
@@ -391,9 +447,12 @@ program demo
       nprint = 60
       if_save_output = .true.
 
-      T_RK  = 120.0_dp
-      nstep = 120
-      iref  = 120
+      T_RK  = 50.0_dp
+      nstep = 50
+      iref  = 50
+      !T_RK  = 120.0_dp
+      !nstep = 120
+      !iref  = 120
       Tend = T_RK/nstep*iref
 
       print *, ''
