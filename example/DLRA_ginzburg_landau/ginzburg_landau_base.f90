@@ -219,6 +219,8 @@ contains
          end if
          
          ! allocate & initialize
+         if (allocated(self%U)) deallocate(self%U)
+         if (allocated(self%S)) deallocate(self%S)
          allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
          allocate(self%S(rka,rka)); self%S = 0.0_dp
          write(msg,'(3(A,I0),A)') 'size(X%U) = [ ', rka,' ], X%rk = ', self%rk, ', size(U0) = [ ', m,' ]'
