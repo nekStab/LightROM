@@ -1,10 +1,10 @@
 module Ginzburg_Landau_Utils
    ! Standard Library.
    use stdlib_stats_distribution_normal, only: normal => rvs_normal
-   use stdlib_io_npy, only: save_npy
+   use stdlib_io_npy, only: save_npy, load_npy
    use stdlib_strings, only: replace_all
    use stdlib_optval, only : optval
-   use stdlib_linalg, only : eye, diag, svd
+   use stdlib_linalg, only : eye, diag
    !use fortime
    ! LightKrylov for linear algebra.
    use LightKrylov
@@ -37,6 +37,8 @@ module Ginzburg_Landau_Utils
    public :: generate_random_initial_condition
    ! misc
    public :: CALE, CARE
+   ! readers
+   public :: exist_X_file, load_X_from_file
    ! printing helpers
    public :: print_header, print_rklib_output, print_dlra_output, print_svdvals
    ! saving helpers
@@ -249,6 +251,47 @@ contains
       X = matmul(matmul(Uwrk, matmul(S, transpose(Uwrk))), weight_mat)
 
    end subroutine reconstruct_solution_US
+
+   logical function exist_X_file(fbase) result(exist_file)
+      character(len=*), intent(in) :: fbase
+      ! internal
+      character(len=256) :: fname
+      exist_file = .false.
+      fname = fbase(:index(fbase,'.npy')-1)//'_W.npy'
+      inquire(file=trim(fname), exist=exist_file)
+      fname = fbase(:index(fbase,'.npy')-1)//'_U.npy'
+      inquire(file=trim(fname), exist=exist_file)
+      fname = fbase(:index(fbase,'.npy')-1)//'_S.npy'
+      inquire(file=trim(fname), exist=exist_file)
+   end function exist_X_file
+
+   subroutine load_X_from_file(X, fbase, U0)
+      type(LR_state),    intent(inout) :: X
+      character(len=*), intent(in) :: fbase
+      type(state_vector), intent(in) :: U0(:) ! for type reference
+      ! internal
+      character(len=256) :: fname
+      real(dp), allocatable :: U_load(:,:)
+      real(dp), allocatable :: W_load(:,:)
+      real(dp), allocatable :: S_load(:,:)
+      if (allocated(X%U)) deallocate(X%U)
+      if (allocated(X%S)) deallocate(X%S)
+
+      ! W
+      fname = fbase(:index(fbase,'.npy')-1)//'_W.npy'
+      call load_npy(trim(fname), W_load)
+      ! U
+      fname = fbase(:index(fbase,'.npy')-1)//'_U.npy'
+      call load_npy(trim(fname), U_load)
+      X%rk = size(U_load, 2)
+      allocate(X%U(X%rk), source=U0(1))
+      call set_state(X%U, matmul(sqrt(W_load),U_load), 'load_X_from_file')
+      ! S
+      fname = fbase(:index(fbase,'.npy')-1)//'_S.npy'
+      call load_npy(trim(fname), S_load)
+      allocate(X%S(X%rk,X%rk), source=S_load)
+
+   end subroutine load_X_from_file
 
    !------------------------------------
    !-----     INITIAL CONDIIONS    -----
@@ -502,11 +545,11 @@ contains
       ! ---- assemble filename ---------------------------------------------
       if (present(tol)) then
          if (len(trim(note)) == 0) then
-            write(name,'(A,A,"_",A,"_rk",I3.3,"_TO",I1,"_tau",A,"_Tend",I3.3,"_tol",A,".npy")') &
-               trim(fldr), trim(case), trim(eq), rk, TO, trim(taustr), int(Tend), trim(tolstr)
+            write(name,'(A,A,"_",A,"_TO",I1,"_tau",A,"_Tend",I3.3,"_tol",A,".npy")') &
+               trim(fldr), trim(case), trim(eq), TO, trim(taustr), int(Tend), trim(tolstr)
          else
-            write(name,'(A,A,"_",A,"_rk",I3.3,"_TO",I1,"_tau",A,"_Tend",I3.3,"_tol",A,"_",A,".npy")') &
-               trim(fldr), trim(case), trim(eq), rk, TO, trim(taustr), int(Tend), trim(tolstr), trim(note)
+            write(name,'(A,A,"_",A,"_TO",I1,"_tau",A,"_Tend",I3.3,"_tol",A,"_",A,".npy")') &
+               trim(fldr), trim(case), trim(eq), TO, trim(taustr), int(Tend), trim(tolstr), trim(note)
          end if
       else
          if (len(trim(note)) == 0) then
@@ -517,7 +560,6 @@ contains
                trim(fldr), trim(case), trim(eq), rk, TO, trim(taustr), int(Tend), trim(note)
          end if
       end if
-
    end function make_filename
 
 
