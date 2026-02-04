@@ -25,34 +25,24 @@ program demo
    use Ginzburg_Landau_Utils
    use Ginzburg_Landau_Tests_Lyapunov
    use Ginzburg_Landau_Tests_Riccati
+   use Ginzburg_Landau_Tests
    implicit none
 
    character(len=*), parameter :: this_module = 'Ginzburg_Landau_Main'
 
    character(len=128), parameter :: home = 'example/DLRA_ginzburg_landau/local/'
-   ! reference solutiions using python
-   character(len=128), parameter :: fname_lyap_SVD_U = trim(home)//'Xref_lyapunov_SVD_U.npy'
-   character(len=128), parameter :: fname_lyap_SVD_S = trim(home)//'Xref_lyapunov_SVD_S.npy'
-   character(len=128), parameter :: fname_ricc_SVD_U = trim(home)//'Xref_riccati_SVD_U.npy'
-   character(len=128), parameter :: fname_ricc_SVD_S = trim(home)//'Xref_riccati_SVD_S.npy'
-   ! reference solutiions using RK
-   character(len=128), parameter :: fname_RK_lyapunov = trim(home)//'Xref_RK_lyapunov.npy'
-   character(len=128), parameter :: fname_RK_riccati  = trim(home)//'Xref_RK_riccati.npy'
-   character(len=128), parameter :: fname_RK_main_lyapunov = trim(home)//'Xref_RK_main_lyapunov.npy'
-   character(len=128), parameter :: fname_RK_main_riccati  = trim(home)//'Xref_RK_main_riccati.npy'
-   character(len=128) :: onameU, onameS, oname
+   ! reference solutiions using SVD
+   character(len=128), parameter :: fname_SVD_base = trim(home)//'Xref_SVD_'
    ! rk_B & rk_C are set in ginzburg_landau_base.f90
 
+   real(dp), parameter :: Tend_long  = 1.0
+   real(dp), parameter :: Tend_short = 0.01
    integer  :: nrk, ntau, rk,  torder
-   real(dp) :: tau, Tend, T_RK
+   real(dp) :: tau, T_POD, Tend
    ! vector of dt values
-   real(dp), allocatable :: dtv(:)
-   ! vector of tolerances
-   real(dp), allocatable :: tolv(:)
+   real(dp), allocatable :: dtv(:), tolv(:), Tendv(:)
    ! vector of rank values
-   integer, allocatable :: rkv(:)
-   ! vector of temporal order
-   integer, allocatable :: TOv(:)
+   integer, allocatable :: rkv(:), TOv(:)
 
    ! Exponential propagator (RKlib).
    type(GL_operator),            allocatable :: A
@@ -69,7 +59,7 @@ program demo
    type(LR_state),               allocatable :: X
 
    ! Initial condition
-   type(state_vector),           allocatable :: U0(:), output(:)
+   type(state_vector),           allocatable :: U0(:)!, output(:)
    real(dp),                     allocatable :: S0(:,:)
    
    ! OUTPUT
@@ -80,36 +70,27 @@ program demo
    real(dp)                                  :: Xref_RK(N,N)
 
    ! IO
-   real(dp),                     allocatable :: U_load(:,:)
+   real(dp),                     allocatable :: meta(:)
    
    ! POD
    type(state_vector),           allocatable :: X0(:)
-
-   ! eigendecomposition
-   integer                                   :: nev
-   type(state_vector),           allocatable :: V(:)
-   complex(dp),                  allocatable :: lambda(:)
-   real(dp),                     allocatable :: residuals(:)
 
    ! Information flag.
    integer                                   :: info
 
    ! Misc
-   integer                                   :: i, j, k, it, irep, iref, is, ie
-   integer                                   :: nsnap, nstep, nrank
+   integer                                   :: i, j, k, is, ie, it, irep
    integer                                   :: rk_X0
-   character(len=256)                        :: fbase, fname
-   character(len=32)                         :: tolstr
-   ! SVD & printing
-   real(dp), dimension(:),       allocatable :: svals
+   character(len=2)                          :: refid
+   character(len=4)                          :: eq
+   character(len=32)                         :: tolstr, taustr, Tstr
+   character(len=256)                        :: fbase, fname, tmr_name
+   character(len=128),           allocatable :: names(:)
+   real(dp),                     allocatable :: svals(:)
    real(dp)                                  :: tol
    integer, parameter                        :: irow = 8
    integer                                   :: nprint
-   logical                                   :: if_save_output
    logical                                   :: exist_file
-   character(len=128)                        :: msg
-   character(len=2)                          :: refid
-   integer                                   :: nout
 
    !--------------------------------
    ! Define which examples to run:
@@ -133,20 +114,7 @@ program demo
    !
    ! Run the computation instead of the test
    !
-   logical, parameter :: short_test = .false.
-   !
-   ! Skip the computations with small dt/small tolerance to speed up test
-   !
-   logical, parameter :: run_fixed_rank_short_integration_time_test   = .false.
-   !
-   ! Integrate the same initial condition for a short time with Runge-Kutta and DLRA.
-   !
-   ! The solution will be far from steady state (the residual will be large) for both methods.
-   ! This test shows the convergence of the method as a function of the step size, the rank
-   ! and the temporal order of DLRA.
-   ! Owing to the short integration time, this test is by far the fastest to run.
-   !
-   logical, parameter :: run_fixed_rank_long_integration_time_test    = .true.
+   logical, parameter :: run_fixed_rank_test = .true.
    !
    ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA.
    !
@@ -154,7 +122,7 @@ program demo
    ! Similarly, the test shows the effect of step size, rank and temporal order on the solution
    ! using DLRA.
    !
-   logical, parameter :: run_rank_adaptive_long_integration_time_test = .true.
+   logical, parameter :: run_rank_adaptive_test = .true.
    !
    ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA using an 
    ! adaptive rank.
@@ -163,9 +131,9 @@ program demo
    ! such that the error on the singular values does not exceed a chosen tolerance. This rank
    ! depends on the tolerance but also the chosen time-step.
    !
-   logical, parameter :: save_and_load_RK_solution = .true.
+   logical, parameter :: run_eigenvalue_test = .false.
    !
-   ! Save the output of the RK solver to a .npy file and read the solution if present. 
+   ! Check the control efficacy using the eigenvalues of the controlled system matrix
    !
    !--------------------------------
 
@@ -175,141 +143,24 @@ program demo
    ! Initialize timers for LightKrylov and LightROM
    call initialize_timers()
    call global_lightROM_timer%add_timer('DLRA Ginzburg-Landau example', start=.true.)
-   call global_lightROM_timer%add_timer('Direct solution (LAPACK)', start=.true.)
+   
    ! Enumerate timers to check proper initialization
    call enumerate_timers()
 
-   print *, 'Cases to be run:'
-   print '(2X,A45,L4)', padr('if_lyapunov:',50), if_lyapunov
-   print '(2X,A45,L4)', padr('if_adj:',50), if_adj
-   print '(2X,A45,L4)', padr('main_run:',50), main_run
-   print '(2X,A45,L4)', padr('short_test:',50), short_test
-   print '(2X,A45,L4)', padr('run_fixed_rank_short_integration_time_test:',50), run_fixed_rank_short_integration_time_test
-   print '(2X,A45,L4)', padr('run_fixed_rank_long_integration_time_test:',50), run_fixed_rank_long_integration_time_test
-   print '(2X,A45,L4)', padr('run_rank_adaptive_long_integration_time_test:',50), run_rank_adaptive_long_integration_time_test
-   print *, '#########################################################################'
-   print *, '#                                                                       #'
-   print *, '#               DYNAMIC LOW-RANK APPROXIMATION  -  DLRA                 #'
-   print *, '#                                                                       #'
-   print *, '#########################################################################'
-   print *, ''
-   print *, '             THE NON-PARALLEL LINEAR GINZBURG-LANDAU EQUATION:'
-   print *, ''
-   print *, '                 A = mu(x) * I + nu * D_x + gamma * D2_x'
-   print *, ''
-   print *, '                   with mu(x) = mu_0 * x + mu_2 * x^2'
-   print *, ''
-   if (if_lyapunov) then
-      refid = 'BS'
-      print *, '                     Algebraic Lyapunov equation:'
-      print *, '                     0 = A @ X + X @ A.T + B @ B.T'
-      print *, '                                  or'               
-      print *, '                     0 = A.T @ X + X @ A + C.T @ C (adjoint)'
-      print *, ''               
-      print *, '                   Differential Lyapunov equation:'
-      print *, '                  \dot{X} = A @ X + X @ A.T + B @ B.T'
-      print *, '                                  or'               
-      print *, '                  \dot{X} = A.T @ X + X @ A + C.T @ C (adjoint)'
-      print *, ''
-      print *, ''
-      print '(13X,A,I4,"x",I4)', 'Complex problem size:          ', nx, nx
-      print '(13X,A,I4,"x",I4)', 'Equivalent real problem size:  ', N, N
-      print *, ''
-      print *, '            Initial condition: rank(X0)  =', rk_X0_lyapunov
-      print *, '            Inhomogeneity:     rank(B)   =', rk_B
-      print *, '            Inhomogeneity:     rank(C.T) =', rk_C
-   else
-      refid = 'SD'
-      print *, '                     Algebraic Riccati equation:'
-      print *, '     0 = A.T @ X + X @ A - X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
-      print *, ''               
-      print *, '                   Differential Riccati equation:'
-      print *, '   \dot{X} = A.T @ X + X @ A - X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
-      print *, ''
-      print '(13X,A,I4,"x",I4)', 'Complex problem size:                       ', nx, nx
-      print '(13X,A,I4,"x",I4)', 'Equivalent real problem size:               ', N, N
-      print *, ''
-      print *, '            Initial condition: rank(X0)               =', rk_X0_riccati
-      print *, '            Nonlinearity:      rank(B @ R^{-1} @ B.T) =', rk_b
-      print *, '            Inhomogeneity:     rank(C.T @ Qc @ C)     =', rk_C
-   end if
-   print *, ''
-   print *, '#########################################################################'
-   print *, ''
-
-   ! Initialize mesh and system parameters A, B, CT
-   print '(4X,A)', 'Initialize parameters'
-   call initialize_parameters()
-
+   call print_test_info(if_lyapunov, if_adj, main_run, run_fixed_rank_test, run_rank_adaptive_test, run_eigenvalue_test)
+   call print_test_header(if_lyapunov, if_adj, eq, refid, rk_X0, Xref)
+   
    ! Initialize propagator
    print '(4X,A)', 'Initialize exponential propagator'
    prop = exponential_prop(1.0_dp)
-
+   
    ! Initialize LTI system
    A = GL_operator()
+   ! Initialize mesh and system parameters A, B, CT
    print '(4X,A)', 'Initialize LTI system (A, prop, B, CT, _)'
    LTI = lti_system()
    call LTI%initialize_lti_system(A, prop, B, CT)
-
-   print *, ''
-   if (if_lyapunov) then
-      rk_X0 = rk_X0_lyapunov
-      print '(4X,A,L2)', 'adjoint:', if_adj
-      if (if_adj) then
-         svals = svdvals(CTCW)
-         print '(1X,A)', 'Inhomogeneity: CTCW'
-         print '(1X,A,*(F16.12,X))', 'SVD(1:3)     = ', svals(1:3)
-         print '(1X,A,F16.12)',      '|  CTCW  |/N = ', norm2(CTCW)/N
-      else
-         svals = svdvals(BBTW)
-         print '(1X,A)', 'Inhomogeneity: BBTW'
-         print '(1X,A,*(F16.12,X))', 'SVD(1:3)     = ', svals(1:3)
-         print '(1X,A,F16.12)',      '|  BBTW  |/N = ', norm2(BBTW)/N
-      end if
-      print *, ''
-      print *, 'Check residual computation with Bartels-Stuart solution:'
-      if (if_adj) then
-         oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Observability_Yref_BS_W.npy'
-      else
-         oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Controllability_Xref_BS_W.npy'
-      end if
-   else
-      rk_X0 = rk_X0_riccati
-      svals = svdvals(CTQcCW)
-      print '(1X,A)', 'Inhomogeneity: CTQcCW'
-      print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
-      print '(1X,A,F16.12)',      '|  CTQcCW  |/N   = ', norm2(CTQcCW)/N
-      print *, ''
-      svals = svdvals(BRinvBTW)
-      print '(1X,A)', 'Nonlinearity: BRinvBTW'
-      print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
-      print '(1X,A,F16.12)',      '|  BRinvBTW  |/N = ', norm2(BRinvBTW)/N
-      print *, ''
-      print *, 'Check residual computation with Schur decomposition method:'
-      oname = './example/DLRA_ginzburg_landau/CGL_Riccati_Pref_Schur_W.npy'
-   end if
-   call load_npy(oname, U_load)
-   Xref = U_load
-   
-   print *, ''
-   if (if_lyapunov) then
-      print '(A,A,A,F16.12)', '  |  X_', refid, '  |/N = ', norm2(Xref)/N
-      print '(A,A,A,F16.12)', '  | res_', refid, ' |/N = ', norm2(CALE(Xref, if_adj))/N
-   else
-      print '(A,A,A,F16.12)', '  |  X_', refid, '  |/N = ', norm2(Xref)/N
-      print '(A,A,A,F16.12)', '  | res_', refid, ' |/N = ', norm2(CARE(Xref, CTQcCW, BRinvBTW))/N
-   end if
-   
-   print *, ''
-   ! compute svd
-   svals = svdvals(Xref)
-   print *, 'SVD X_', refid, ':'
-   do i = 1, ceiling(60.0/irow)
-      is = (i-1)*irow+1; ie = i*irow
-      print '(2X,I2,"-",I2,*(1X,F16.12))', is, ie, ( svals(j), j = is, ie )
-   end do
-   print *, ''
-   
+      
    ! Define initial condition
    allocate(U0(rk_X0), source=B(1)); call zero_basis(U0)
    allocate(S0(rk_X0,rk_X0)); S0 = 0.0_dp
@@ -320,463 +171,135 @@ program demo
    print '(A,F16.12)', '  |  X_0  |/N = ', norm2(X_out)/N
    print '(A,F16.12)', '  | res_0 |/N = ', norm2(CALE(X_out, if_adj))/N
    print *, ''
-   ! compute svd
-   svals = svdvals(X_out)
-   do i = 1, ceiling(rk_X0*1.0_dp/irow)
-      is = (i-1)*irow+1; ie = i*irow
-      print '(2X,I2,"-",I2,*(1X,F16.12))', is, ie, ( svals(j), j = is, ie )
-   end do
-
-   call global_lightROM_timer%stop('Direct solution (LAPACK)')
-   call global_lightROM_timer%add_timer('Eigendecomposition of A', start=.true.)
-   
-   nev = 50; allocate(V(nev)); tau = 1.0_dp
-   nprint = 8
-
-   ! prop already initialised
-   print '(4X,A)', 'Eigendecomposition of A'
-   call zero_basis(V)
-   call eigs(prop, V, lambda, residuals, info, kdim=2*nev)
-   call check_info(info, 'eigs', module=this_module, procedure='main')
-   
-   lambda = log(lambda)/tau
-   call save_npy(trim(home)//"spectrum_A.npy", lambda)
-   print *,'  Leading eigenvalue:  ', maxval(real(lambda))
-   
-   call global_lightROM_timer%stop('Eigendecomposition of A')
-   call global_lightROM_timer%add_timer('Eigendecomposition of A - BK', start=.true.)
-   
-   print '(4X,A)', 'Eigendecomposition of A - BK (exact solution)'
-   ! Initialize propagator with control
-   X = LR_state()
-   ! U
-   call load_npy(trim(fname_ricc_SVD_U), U_load)
-   X%rk = size(U_load, 2)
-   allocate(X%U(X%rk), source=U0(1))
-   call set_state(X%U, U_load, 'load_from_file')
-   ! S
-   call load_npy(trim(fname_ricc_SVD_S), U_load)
-   allocate(X%S(X%rk,X%rk), source=U_load)
-   
-   print '(4X,A)', 'Initialize exponential propagator with control'
-   rkintegrator = rks54_class_with_control()
-   prop_control = exponential_prop_with_control(tau, prop=rkintegrator)
-   call prop_control%init(X, B, Rinv)
-   
-   ! eigendecomposition
-   call zero_basis(V)
-   call eigs(prop_control, V, lambda, residuals, info, kdim=2*nev)
-   call check_info(info, 'eigs', module=this_module, procedure='main')
-   
-   lambda = log(lambda)/tau
-   call save_npy(trim(home)//"spectrum_A-BK.npy", lambda)
-   print *,'  Leading eigenvalue:  ', maxval(real(lambda))
-   ! deallocate and clean
-   if (allocated(rkintegrator)) deallocate(rkintegrator)
-   if (allocated(prop_control)) deallocate(prop_control)
-
-   dtv  = logspace(-4.0_dp, 0.0_dp, 5, 10)
-   dtv  = dtv(size(dtv):1:-1) ! reverse vector
-   tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
-   torder = 1
-   !
-   !Tend = 120.0_dp
-   !write(*,*), ''
-   !print '(A64,A,A24)', adjustl('DLRA output'), ': ', 'Leading eigenvalue'
-   !Tend = 50.0_dp
-   !rk = rk_X0_riccati
-   !do j = 1, size(tolv)
-   !   tol = tolv(j)
-   !   do k = 1, size(dtv)
-   !      tau = dtv(k)
-   !      fbase = make_filename(home, 'DLRA_ADAPT', 'ricc', 'P', rk, torder, tau, Tend, tol)
-   !      exist_file = exist_X_file(fbase)
-   !      if (exist_file) then
-   !         ! load new X state
-   !         call load_X_from_file(X, fbase, U0)
-   !         ! recreate integrators
-   !         rkintegrator = rks54_class_with_control()
-   !         prop_control = exponential_prop_with_control(tau, prop=rkintegrator)
-   !         ! initialize integrators
-   !         call prop_control%init(X, B, Rinv)
-   !
-   !         ! eigendecomposition
-   !         call zero_basis(V)
-   !         call eigs(prop_control, V, lambda, residuals, info, kdim=2*nev)
-   !         call check_info(info, 'eigs', module=this_module, procedure='main')
-   !         
-   !         lambda = log(lambda)/tau
-   !         write(tolstr,'(ES10.2)') tol
-   !         tolstr = adjustl(trim(tolstr))
-   !         tolstr = replace_all(tolstr, 'E', 'e')
-   !         tolstr = replace_all(tolstr, '+', '')
-   !         call save_npy(trim(home)//"spectrum_A-BK_tol"//trim(tolstr)//".npy", lambda)
-   !         fname = replace_all(replace_all(fbase, home, ''), 'example/DLRA_ginzburg_landau/local/','')
-   !         print '(A64,A,F21.7)', adjustl(trim(fname)), ': ', maxval(real(lambda))
-   !         ! deallocate and clean
-   !         if (allocated(rkintegrator)) deallocate(rkintegrator)
-   !         if (allocated(prop_control)) deallocate(prop_control)
-   !      end if
-   !   end do
-   !   write(*,*)
-   !end do
-
-   call global_lightROM_timer%stop('Eigendecomposition of A - BK')
-   call global_lightROM_timer%add_timer('Short time: Runge-Kutta', start=.true.)
+   call print_svdvals(X_out, ' X0 ', 60, irow)
    
    if (main_run) then
-      ! DLRA with adaptive rank
-      dtv  = logspace(-4.0_dp, 0.0_dp, 5, 10)
+      Tend = Tend_long
+      rkv  = [ 10, 14, 18 ]
+      dtv  = logspace(-3.0_dp, 0.0_dp, 4, 10)
       dtv  = dtv(size(dtv):1:-1) ! reverse vector
-      !tolv = [ 1e-2_dp, 1e-4_dp, 1e-6_dp, 1e-8_dp, 1e-10_dp ]
       tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
-      TOv  = [ 1, 2 ]
-      
-      open (1234, file='Lyap_case.log', status='replace', action='write')
-      irep = 0
-      do i = 1, size(tolv)
-         do j = 1, size(TOv)
-            do k = 1, size(dtv)
-               irep= irep + 1
-               write (1234, '(I3,A,E9.2,A,I1,A,F10.6)') irep, ': stol= ', tolv(i), ', TO= ', TOv(j), ', dt= ', dtv(k) 
-            end do
-         end do
-      end do
-      close (1234)
-
-      nprint = 60
-      if_save_output = .true.
-
-      T_RK  = 50.0_dp
-      nstep = 50
-      iref  = 50
-      !T_RK  = 120.0_dp
-      !nstep = 120
-      !iref  = 120
-      Tend = T_RK/nstep*iref
-
-      print *, ''
-      print *, '#########################################################################'
-      print *, '#                                                                       #'
-      print *, '#    Ia.  Solution using Runge-Kutta to steady state                    #'
-      print *, '#                                                                       #'
-      print *, '#########################################################################'
-      print *, ''
-
       if (if_lyapunov) then
-         inquire(file=fname_RK_main_lyapunov, exist=exist_file)
-         if (.not. save_and_load_RK_solution) then
-            ! Run RK integrator for the Lyapunov equation
-            call run_lyapunov_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
-         else
-            if (exist_file) then
-               print *, 'Read reference data from '//trim(fname_RK_main_lyapunov)//'.'
-               call load_npy(fname_RK_main_lyapunov, U_load)
-               Xref_RK = U_load
-            else
-               ! Run RK integrator for the Lyapunov equation
-               call run_lyapunov_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
-               call save_npy(fname_RK_main_lyapunov, Xref_RK)
-            end if
-         end if
-      else
-         inquire(file=fname_RK_main_riccati, exist=exist_file)
-         if (.not. save_and_load_RK_solution) then
-            ! Run RK integrator for the Riccati equation
-            call run_riccati_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref)
-         else
-            if (exist_file) then
-               print *, 'Read reference data from '//trim(fname_RK_main_riccati)//'.'
-               call load_npy(fname_RK_main_riccati, U_load)
-               Xref_RK = U_load
-            else
-               ! Run RK integrator for the Riccati equation
-               call run_riccati_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref)
-               call save_npy(fname_RK_main_riccati, Xref_RK)
-            end if
-         end if
-      end if
-
-      print *, ''
-      print *, '#########################################################################'
-      print *, '#                                                                       #'
-      print *, '#    Ib.  Solution using rank-adaptive DLRA                            #'
-      print *, '#                                                                       #'
-      print *, '#########################################################################'
-      print *, ''
-
-      if_save_output = .true.   
-      if (if_lyapunov) then
-         call run_lyapunov_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, if_adj, home, if_save_output)
+         TOv = [ 1, 2 ]
       else
          TOv = [ 1 ]
-         call run_riccati_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, home, if_save_output)
       end if
-
-      if (if_lyapunov) then
-         print *, ''
-         print *, '#########################################################################'
-         print *, '#                                                                       #'
-         print *, '#    Ic.  Solution using POD                                            #'
-         print *, '#                                                                       #'
-         print *, '#########################################################################'
-         print *, ''
-
-         tolv = [ 10.0_dp, 50.0_dp, 100.0_dp ]
-         dtv  = logspace(-1.0_dp, 0.0_dp, 3, 10)
-         dtv  = dtv(size(dtv):1:-1) ! reverse vector
-         print '(1X,A)', 'POD:'
-         do it = 1, size(tolv)
-            Tend = tolv(it)
-            print '(3X,A,F12.6)', '   Tend:', Tend
-            do irep = 1, size(dtv)
-               tau = dtv(irep)
-               prop = exponential_prop(tau)
-               if (if_adj) then
-                  allocate(X0(rk_C), source=CT)
-               else
-                  allocate(X0(rk_B), source=B)
-               end if
-               call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, if_adj)
-               nprint = min(8, size(svals))
-               do i = 1, ceiling(nprint*1.0_dp/irow)
-                  is = (i-1)*irow+1; ie = min(i*irow, nprint)
-                  print '(1X,A,F6.4,A,I2,A,I2,*(1X,F16.12))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
-               end do
-               deallocate(X0)
-            end do
-         end do
-      end if
-
    else
-      
-      print *, ''
-      print *, '#########################################################################'
-      print *, '#                                                                       #'
-      print *, '#    Ia.  Solution using Runge-Kutta over a short time horizon          #'
-      print *, '#                                                                       #'
-      print *, '#########################################################################'
-      print *, ''
-
-      T_RK  = 0.01_dp
-      nstep = 10
-      iref  = 5
-      if (run_fixed_rank_short_integration_time_test) then         
-         if (if_lyapunov) then
-            ! Run RK integrator for the Lyapunov equation
-            call run_lyapunov_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
-         else
-            ! Run RK integrator for the Riccati equation
-            call run_riccati_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref)
-         end if
-      else
-         print *, 'Skip.'
-      end if
-
-      call global_lightROM_timer%stop('Short time: Runge-Kutta')
-      call global_lightROM_timer%add_timer('Short time: DLRA', start=.true.)
-      
-      print *, ''
-      print *, '#########################################################################'
-      print *, '#                                                                       #'
-      print *, '#    Ib.  Solution using fixed-rank DLRA                                #'
-      print *, '#                                                                       #'
-      print *, '#########################################################################'
-      print *, ''
-
-      Tend = T_RK/nstep*iref
-      nprint = 16
-      if_save_output = .false.
-      if (run_fixed_rank_short_integration_time_test) then
-         if (if_lyapunov) then
-            rkv = [ 10, 12, 16 ]
-            if (short_test) then
-               dtv = logspace(-3.0_dp, -3.0_dp, 1, 10)
-            else
-               dtv = logspace(-5.0_dp, -3.0_dp, 3, 10)
-            end if
-            dtv = dtv(size(dtv):1:-1) ! reverse vector
-            TOv  = [ 1, 2 ] 
-            
-            ! DLRA with fixed rank
-            call run_lyapunov_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, if_adj, home, if_save_output)
-         else
-            rkv = [ 6, 10, 14 ]
-            if (short_test) then
-               dtv = logspace(-3.0_dp, -3.0_dp, 1, 10)
-            else
-               dtv = logspace(-6.0_dp, -3.0_dp, 4, 10)
-            end if
-            dtv = dtv(size(dtv):1:-1) ! reverse vector
-            TOv  = [ 1 ] 
-            
-            ! DLRA with fixed rank
-            call run_riccati_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, home, if_save_output)
-         end if
-      else
-         print *, 'Skip.'
-      end if
+      Tend = Tend_short
+      dtv  = logspace(-4.0_dp, -2.0_dp, 3, 10)
+      dtv  = dtv(size(dtv):1:-1) ! reverse vector
+      tolv = [ 1e-2_dp ]
       if (if_lyapunov) then
-         call reset_lyapunov_solver()
+         rkv = [ 8, 12, 16 ]
+         TOv = [ 1, 2 ]
       else
-         call reset_riccati_solver()
+         rkv = [ 6, 10, 14 ]
+         TOv = [ 1 ]
       end if
+   end if
+   nprint = 60
 
-      ! Reset timers
-      call global_lightROM_timer%stop('Short time: DLRA')
-      call reset_timers()
-      call global_lightROM_timer%add_timer('Steady-State: Runge-Kutta', start=.true.)
+   !
+   !        RK long time horizon
+   !
+   call integrate_RK(eq, LTI, Xref, Xref_RK, U0, S0, Tend, if_adj, home, main_run)
+   
+   !
+   !        rank-adaptive DLRA long time horizon
+   !
+   if (run_fixed_rank_test) then
+      call integrate_DLRA_fixed(eq, LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, if_adj, home, main_run)
+   end if
+   
+   !
+   !        rank-adaptive DLRA long time horizon
+   !
+   if (run_rank_adaptive_test) then
+      call integrate_DLRA_adaptive(eq, LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, if_adj, home, main_run)
+   end if
 
-      print *, ''
-      print *, '#########################################################################'
-      print *, '#                                                                       #'
-      print *, '#    IIa.  Solution using Runge-Kutta to (close to) steady state        #'
-      print *, '#                                                                       #'
-      print *, '#########################################################################'
-      print *, ''
+   if (if_lyapunov) then
+      tmr_name = 'BPOD'
+      call global_lightROM_timer%add_timer(tmr_name, start=.true.)
+      Tendv = [ 10.0_dp, 50.0_dp, 100.0_dp ]
+      dtv  = logspace(-1.0_dp, 0.0_dp, 3, 10)
+      dtv  = dtv(size(dtv):1:-1) ! reverse vector
+      print '(1X,A)', 'POD:'
+      do it = 1, size(tolv)
+         T_POD = tolv(it)
+         print '(3X,A,F12.6)', '   Tend:', T_POD
+         do irep = 1, size(dtv)
+            tau = dtv(irep)
+            prop = exponential_prop(tau)
+            if (if_adj) then
+               allocate(X0(rk_C), source=CT)
+            else
+               allocate(X0(rk_B), source=B)
+            end if
+            call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, T_POD, if_adj)
+            nprint = min(8, size(svals))
+            do i = 1, ceiling(nprint*1.0_dp/irow)
+               is = (i-1)*irow+1; ie = min(i*irow, nprint)
+               print '(1X,A,F6.4,A,I2,A,I2,*(1X,F16.12))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+            end do
+            deallocate(X0)
+         end do
+      end do
+      call global_lightROM_timer%stop(tmr_name)
+   end if
+
+   if (run_eigenvalue_test .and. .not. if_lyapunov) then
+      dtv  = logspace(-4.0_dp, 0.0_dp, 5, 10)
+      dtv  = dtv(size(dtv):1:-1) ! reverse vector
+      tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
+      torder = 1
       
-      T_RK  = 50.0_dp
-      Tend  = 50.0_dp
-      nstep = 20
-      iref  = 20
+      ! eig A
+      tmr_name =  'eig A'
+      fname    = trim(home)//"spectrum_A.npy"
+      call eigenvalue_analysis(prop, tmr_name, fname)
+      
+      ! eig A - BK
+      X = LR_state()
+      call load_X_from_file(X, meta, trim(fname_SVD_base)//eq, U0)
+      rkintegrator = rks54_class_with_control()
+      prop_control = exponential_prop_with_control(1.0_dp, prop=rkintegrator)
+      call prop_control%init(X, B, Rinv)
+      
+      tmr_name = 'eig A-BK: exact'
+      fname    = trim(home)//"spectrum_A-BK.npy"
+      call eigenvalue_analysis_control(prop_control, tmr_name, fname)
 
-      if (run_fixed_rank_long_integration_time_test .or. &
-     & run_rank_adaptive_long_integration_time_test) then
-         if (if_lyapunov) then
-            inquire(file=fname_RK_lyapunov, exist=exist_file)
-            if (.not. save_and_load_RK_solution) then
-               ! Run RK integrator for the Lyapunov equation
-               call run_lyapunov_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
-            else
-               if (exist_file) then
-                  print *, 'Read reference data from '//trim(fname_RK_lyapunov)//'.'
-                  call load_npy(fname_RK_lyapunov, U_load)
-                  Xref_RK = U_load
-               else
-                  ! Run RK integrator for the Lyapunov equation
-                  call run_lyapunov_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref, if_adj)
-                  call save_npy(fname_RK_lyapunov, Xref_RK)
-               end if
+      ! deallocate and clean
+      deallocate(rkintegrator); deallocate(prop_control)
+      
+      do j = 1, size(tolv)
+         tol = tolv(j)
+         do k = 1, size(dtv)
+            tau = dtv(k)
+            fbase = make_filename(home, 'DLRA_ADAPT', eq, 'P', rk, torder, tau, Tend, tol)
+            exist_file = exist_X_file(fbase)
+            if (exist_file) then
+               ! load X state
+               call load_X_from_file(X, meta, fbase, U0)
+               ! recreate integrators
+               rkintegrator = rks54_class_with_control()
+               prop_control = exponential_prop_with_control(tau, prop=rkintegrator)
+               ! initialize integrators
+               call prop_control%init(X, B, Rinv)
+
+               fname =make_filename_eig(home, Tend, tau, tol)
+               write(tmr_name,'(*(A))')  'eig A-BK: ', trim(taustr), ' ', trim(Tstr), ' ', trim(tolstr)
+
+               ! eigendecomposition
+               call eigenvalue_analysis_control(prop_control, tmr_name, fname)
+               
+               ! deallocate and clean
+               deallocate(rkintegrator); deallocate(prop_control)
             end if
-         else
-            
-            inquire(file=fname_RK_riccati, exist=exist_file)
-            if (.not. save_and_load_RK_solution) then
-               ! Run RK integrator for the Riccati equation
-               call run_riccati_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref)
-            else
-               if (exist_file) then
-                  print *, 'Read reference data from '//trim(fname_RK_riccati)//'.'
-                  call load_npy(fname_RK_riccati, U_load)
-                  Xref_RK = U_load
-               else
-                  ! Run RK integrator for the Riccati equation
-                  call run_riccati_reference_RK(LTI, Xref, Xref_RK, U0, S0, T_RK, nstep, iref)
-                  call save_npy(fname_RK_riccati, Xref_RK)
-               end if
-            end if
-         end if
-      else
-         print *, 'Skip.'
-      end if
-
-      call global_lightROM_timer%stop('Steady-State: Runge-Kutta')
-      call global_lightROM_timer%add_timer('Steady-State: DLRA', start=.true.)
-
-      print *, ''
-      print *, '#########################################################################'
-      print *, '#                                                                       #'
-      print *, '#    IIb.  Solution using fixed-rank DLRA                               #'
-      print *, '#                                                                       #'
-      print *, '#########################################################################'
-      print *, ''
-
-      if (run_fixed_rank_long_integration_time_test) then
-         if (if_lyapunov) then
-            Tend = T_RK/nstep*iref
-            rkv = [ 10, 20, 40 ]
-            if (short_test) then
-               dtv = logspace(-1.0_dp, 0.0_dp, 2, 10)
-            else
-               dtv = logspace(-2.0_dp, 0.0_dp, 3, 10)
-            end if
-            dtv = dtv(size(dtv):1:-1) ! reverse vector
-            TOv  = [ 1, 2 ] 
-            nprint = 40
-            if_save_output = .true.
-            
-            ! DLRA with fixed rank
-            call run_lyapunov_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, if_adj, home, if_save_output)
-            call reset_lyapunov_solver()
-         else
-            Tend = T_RK/nstep*iref
-            rkv = [ 10, 20, 40 ]
-            if (short_test) then
-               dtv = logspace(-1.0_dp, 0.0_dp, 2, 10)
-            else
-               dtv = logspace(-2.0_dp, 0.0_dp, 3, 10)
-            end if
-            dtv = dtv(size(dtv):1:-1) ! reverse vector
-            TOv  = [ 1 ] 
-            nprint = 40
-            if_save_output = .true.
-            
-            ! DLRA with fixed rank
-            call run_riccati_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, home, if_save_output)
-            call reset_riccati_solver()
-         end if
-      else
-         print *, 'Skip.'
-      end if
-
-      call global_lightROM_timer%stop('Steady-State: DLRA')
-      call global_lightROM_timer%add_timer('Steady-State: rank-adaptive DLRA', start=.true.)
-
-      print *, ''
-      print *, '#########################################################################'
-      print *, '#                                                                       #'
-      print *, '#    IIc.  Solution using rank-adaptive DLRA                            #'
-      print *, '#                                                                       #'
-      print *, '#########################################################################'
-      print *, ''
-
-      if (run_rank_adaptive_long_integration_time_test) then
-         if (if_lyapunov) then
-            if (short_test) then
-               dtv = logspace(-3.0_dp, 0.0_dp, 2, 10)
-               tolv = [ 1e-2_dp, 1e-6_dp ]
-            else
-               dtv = logspace(-2.0_dp, 0.0_dp, 3, 10)
-               tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
-            end if
-            dtv = dtv(size(dtv):1:-1) ! reverse vector
-            TOv  = [ 1, 2 ]
-            nprint = 60
-            if_save_output = .true.
-            
-            ! DLRA with adaptive rank
-            call run_lyapunov_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, if_adj, home, if_save_output)
-            call reset_lyapunov_solver()
-         else
-            if (short_test) then
-               dtv = logspace(-3.0_dp, 0.0_dp, 2, 10)
-               tolv = [ 1e-2_dp, 1e-6_dp ]
-            else
-               dtv = logspace(-2.0_dp, 0.0_dp, 3, 10)
-               tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
-            end if
-            dtv = dtv(size(dtv):1:-1) ! reverse vector
-            TOv  = [ 1 ]
-            nprint = 60
-            if_save_output = .true.
-            
-            ! DLRA with adaptive rank
-            call run_riccati_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, home, if_save_output)
-            call reset_riccati_solver()
-         end if
-      else
-         print *, 'Skip.'
-      end if
+         end do
+         write(*,*)
+      end do
    end if
 
    ! Compute and print timer summary
