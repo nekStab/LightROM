@@ -40,7 +40,7 @@ contains
                   suffix = '_rel.dat'
                   info   = 'singular value relative difference'
             end select
-            write(fname,'(A,A)') trim(basename), trim(suffix)
+            fname = trim(basename)//trim(suffix)
             open (1234, file=fname, status='replace', action='write')
             write (1234, '(A8,A8,2(A15,1X),A4,4X,A)') 'icall', 'istep', 'time', 'lag', 'rk', trim(info)
             close (1234)
@@ -67,7 +67,7 @@ contains
             select case (i)
                case (1)
                   suffix = '_abs.dat'
-                  write(fname,'(A,A)') trim(basename), trim(suffix)
+                  fname = trim(basename)//trim(suffix)
                   ! SVD absolute
                   open (1234, file=fname, status='old', action='write', position='append')
                   write (1234, '(I8,1X,I7,2(1X,F15.9),I4)', ADVANCE='NO') icall, X%tot_step, X%tot_time, lag, X%rk
@@ -75,7 +75,7 @@ contains
                   close (1234)
                case (2)
                   suffix = '_rel.dat'
-                  write(fname,'(A,A)') trim(basename), trim(suffix)
+                  fname = trim(basename)//trim(suffix)
                   ! dSVD relative
                   open (1234, file=fname, status='old', action='write', position='append')
                   write (1234, '(I8,1X,I7,2(1X,F15.9),I4)', ADVANCE='NO') icall, X%tot_step, X%tot_time, lag, X%rk
@@ -87,15 +87,17 @@ contains
       return
    end subroutine stamp_logfiles
 
-   subroutine reset_logfiles(basename, if_rename)
+   subroutine reset_logfiles(basename, prefix, suffix, if_rename)
       character(*), intent(in) :: basename
+      character(len=*), optional, intent(in) :: prefix
+      character(len=*), optional, intent(in) :: suffix
       logical, optional, intent(in) :: if_rename
       ! parameters
       character(len=*), parameter :: this_procedure = 'reset_logfiles'
       ! internal
       integer :: i
       logical :: rename_logfiles, exist_origin, exist_target
-      character(len=128) :: fname, fname_new, suffix, msg
+      character(len=128) :: fname, fname_new, ext, msg, pre, suf
       if_overwrite = .true.
       rename_logfiles = optval(if_rename, .true.)
       if (rename_logfiles) then
@@ -103,12 +105,16 @@ contains
          do i = 1, 2
             select case (i)
                case (1)
-                  suffix = '_abs.dat'
+                  ext = '_abs.dat'
                case (2)
-                  suffix = '_rel.dat'
+                  ext = '_rel.dat'
             end select
-            write(fname,    '(A,A)')      trim(basename),                 trim(suffix)
-            write(fname_new,'(A,I3.3,A)') trim(basename), rename_counter, trim(suffix)
+            pre = ''
+            if (present(prefix)) pre = trim(prefix)
+            suf = ''
+            if (present(suffix)) suf = trim(suffix)
+            fname     = trim(basename)//trim(ext)
+            fname_new = trim(pre)//trim(basename)//trim(suf)//trim(ext)
             inquire(file=fname,     exist=exist_origin)
             inquire(file=fname_new, exist=exist_target)
             if (exist_origin) then
