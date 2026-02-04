@@ -43,7 +43,7 @@ module LightROM_RiccatiSolvers
    ! module name
    private :: this_module
    character(len=*), parameter :: this_module = 'LR_RiccSolvers'
-   character(len=*), parameter :: logfile_basename = 'Riccati_SVD'
+   character(len=*), parameter :: logfile_basename = 'Riccati_'
    integer :: RiccSolver_counter = 0
 
    public :: projector_splitting_DLRA_riccati_integrator
@@ -840,7 +840,7 @@ module LightROM_RiccatiSolvers
       character(len=512)                                    :: msg, fmt
 
       ! optional arguments
-      X%rk = optval(rk_init, 1)
+      X%rk = max(optval(rk_init, 1), 1)
       n = optval(nsteps, 5)
       rkmax = size(X%U)
 
@@ -891,17 +891,19 @@ module LightROM_RiccatiSolvers
       end if
 
       ! reset to the rank of the approximation which we use outside of the integrator & mark rank as initialized
-      X%rk = X%rk - 1
+      X%rk = max(X%rk - 1, 1)
       X%rank_is_initialised = .true.
    end subroutine set_initial_rank_riccati
 
-   subroutine reset_riccati_solver()
+   subroutine reset_riccati_solver(prefix, suffix)
+      character(len=*), optional, intent(in) :: prefix
+      character(len=*), optional, intent(in) :: suffix
       ! internal
       character(len=128) :: msg
       write(msg,'(A,I0,A)') 'Riccati solver called ', RiccSolver_counter, ' times. Resetting coutner to 0.'
       call log_message(msg, this_module, 'DLRA_main')
       RiccSolver_counter = 0
-      call reset_logfiles(logfile_basename)
+      call reset_logfiles(logfile_basename, prefix=prefix, suffix=suffix)
    end subroutine reset_riccati_solver
 
 end module LightROM_RiccatiSolvers

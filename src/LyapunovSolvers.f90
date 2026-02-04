@@ -27,7 +27,7 @@ module LightROM_LyapunovSolvers
    ! module name
    private :: this_module
    character(len=*), parameter :: this_module = 'LR_LyapSolvers'
-   character(len=*), parameter :: logfile_basename = 'Lyap_SVD'
+   character(len=*), parameter :: logfile_basename = 'Lyapunov_'
    integer :: LyapSolver_counter = 0
 
    public :: projector_splitting_DLRA_lyapunov_integrator
@@ -640,7 +640,7 @@ module LightROM_LyapunovSolvers
       character(len=512)                                    :: msg, fmt
 
       ! optional arguments
-      X%rk = optval(rk_init, 1)
+      X%rk = max(optval(rk_init, 1), 1)
       n = optval(nsteps, 5)
       rkmax = size(X%U)
 
@@ -662,8 +662,8 @@ module LightROM_LyapunovSolvers
          ! check if singular values are resolved
          svals = svdvals(X%S(:X%rk,:X%rk))
          found = .false.
-         tol_chk: do irk = 1, rk
-            if ( ssvd(irk) < tol ) then
+         tol_chk: do irk = 1, X%rk
+            if ( svals(irk) < tol ) then
                found = .true.
                exit tol_chk
             end if
@@ -692,7 +692,7 @@ module LightROM_LyapunovSolvers
       end if
 
       ! reset to the rank of the approximation which we use outside of the integrator & mark rank as initialized
-      X%rk = X%rk - 1
+      X%rk = max(X%rk - 1, 1)
       X%rank_is_initialised = .true.
    end subroutine set_initial_rank_lyapunov
 
@@ -771,13 +771,15 @@ module LightROM_LyapunovSolvers
       X%S(:rx,:rx) = Stmp
    end subroutine compute_splitting_error
 
-   subroutine reset_lyapunov_solver()
+   subroutine reset_lyapunov_solver(prefix, suffix)
+      character(len=*), optional, intent(in) :: prefix
+      character(len=*), optional, intent(in) :: suffix
       ! internal
       character(len=128) :: msg
       write(msg,'(A,I0,A)') 'Lyapunov solver called ', LyapSolver_counter, ' times. Resetting coutner to 0.'
       call log_message(msg, this_module, 'DLRA_main')
       LyapSolver_counter = 0
-      call reset_logfiles(logfile_basename)
+      call reset_logfiles(logfile_basename, prefix=prefix, suffix=suffix)
    end subroutine reset_lyapunov_solver
 
 end module LightROM_LyapunovSolvers
