@@ -102,7 +102,7 @@ contains
          etime = meta(1)
          note = '   < reference'
          call print_rklib_output(eq, irep, Tend, X_RK, Xref, etime, note, adjoint)
-         Xref_RK(:,:) = X_RK(:,:,iref)
+         Xref_RK(:,:) = X_RK(:,:,irep)
       else
          etime = 0.0_dp
          do irep = 1, nrep
