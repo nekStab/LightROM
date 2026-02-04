@@ -1,6 +1,7 @@
 module Ginzburg_Landau_Utils
    ! Standard Library.
    use stdlib_stats_distribution_normal, only: normal => rvs_normal
+   use stdlib_strings, only: padr
    use stdlib_io_npy, only: save_npy, load_npy
    use stdlib_strings, only: replace_all
    use stdlib_optval, only : optval
@@ -14,6 +15,7 @@ module Ginzburg_Landau_Utils
    ! LightROM
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
+   use LightROM_Timing
    ! Lyapunov Solver
    use LightROM_LyapunovSolvers
    use LightROM_LyapunovUtils
@@ -29,6 +31,10 @@ module Ginzburg_Landau_Utils
 
    character(len=*), parameter, private :: this_module = 'Ginzburg_Landau_Utils'
 
+   integer, parameter, public :: rkmax = 80
+   integer, parameter, public :: rk_X0_lyapunov = 10
+   integer, parameter, public :: rk_X0_riccati  = 10
+
    ! initialize mesh
    public :: initialize_parameters
    ! utilities for state_vectors
@@ -38,11 +44,14 @@ module Ginzburg_Landau_Utils
    ! misc
    public :: CALE, CARE
    ! readers
+   public :: exist_RK_file 
    public :: exist_X_file, load_X_from_file
    ! printing helpers
-   public :: print_header, print_rklib_output, print_dlra_output, print_svdvals
+   public :: print_test_header, print_test_info
+   public :: print_header, print_rklib_output, get_metadata, print_dlra_output, print_svdvals
    ! saving helpers
-   public :: save_LR_state_npy, make_filename
+   public :: save_RK_state_npy, save_LR_state_npy, save_metadata
+   public :: make_filename_eig, make_filename_RK, make_filename, make_filename_meta
 
    
 
@@ -252,44 +261,54 @@ contains
 
    end subroutine reconstruct_solution_US
 
-   logical function exist_X_file(fbase) result(exist_file)
+   logical function exist_X_file(fbase, load_W_) result(exist_file)
       character(len=*), intent(in) :: fbase
+      logical, optional, intent(in) :: load_W_
       ! internal
-      character(len=256) :: fname
+      logical :: load_W
       exist_file = .false.
-      fname = fbase(:index(fbase,'.npy')-1)//'_W.npy'
-      inquire(file=trim(fname), exist=exist_file)
-      fname = fbase(:index(fbase,'.npy')-1)//'_U.npy'
-      inquire(file=trim(fname), exist=exist_file)
-      fname = fbase(:index(fbase,'.npy')-1)//'_S.npy'
-      inquire(file=trim(fname), exist=exist_file)
+      load_W = optval(load_W_, .false.)
+      inquire(file=trim(fbase)//'_U.npy', exist=exist_file)
+      inquire(file=trim(fbase)//'_S.npy', exist=exist_file)
+      if (load_W) inquire(file=trim(fbase)//'_W.npy', exist=exist_file)
    end function exist_X_file
+   
+   logical function exist_RK_file(fbase) result(exist_file)
+      character(len=*), intent(in) :: fbase
+      exist_file = .false.
+      inquire(file=trim(fbase)//'_X.npy', exist=exist_file)
+      inquire(file=trim(fbase)//'_meta.npy', exist=exist_file)
+   end function exist_RK_file
 
-   subroutine load_X_from_file(X, fbase, U0)
-      type(LR_state),    intent(inout) :: X
+   subroutine load_X_from_file(X, meta, fbase, U0, load_W_)
+      type(LR_state), intent(inout) :: X
+      real(dp), allocatable, intent(out) :: meta(:)
       character(len=*), intent(in) :: fbase
       type(state_vector), intent(in) :: U0(:) ! for type reference
+      logical, optional, intent(in) :: load_W_
       ! internal
-      character(len=256) :: fname
-      real(dp), allocatable :: U_load(:,:)
       real(dp), allocatable :: W_load(:,:)
-      real(dp), allocatable :: S_load(:,:)
+      real(dp), allocatable :: M_load(:,:)
+      logical :: load_W, exist_file
       if (allocated(X%U)) deallocate(X%U)
       if (allocated(X%S)) deallocate(X%S)
 
-      ! W
-      fname = fbase(:index(fbase,'.npy')-1)//'_W.npy'
-      call load_npy(trim(fname), W_load)
+      load_W = optval(load_W_, .false.)
       ! U
-      fname = fbase(:index(fbase,'.npy')-1)//'_U.npy'
-      call load_npy(trim(fname), U_load)
-      X%rk = size(U_load, 2)
+      call load_npy(trim(fbase)//'_U.npy', M_load)
+      X%rk = size(M_load, 2)
       allocate(X%U(X%rk), source=U0(1))
-      call set_state(X%U, matmul(sqrt(W_load),U_load), 'load_X_from_file')
+      if (load_W) then
+         call load_npy(trim(fbase)//'_W.npy', W_load)
+         call set_state(X%U, matmul(sqrt(W_load),M_load), 'load_X_from_file')
+      else
+         call set_state(X%U, M_load, 'load_X_from_file')
+      end if
       ! S
-      fname = fbase(:index(fbase,'.npy')-1)//'_S.npy'
-      call load_npy(trim(fname), S_load)
-      allocate(X%S(X%rk,X%rk), source=S_load)
+      call load_npy(trim(fbase)//'_S.npy', M_load)
+      allocate(X%S(X%rk,X%rk), source=M_load)
+      inquire(file=trim(fbase)//'_meta.npy', exist=exist_file)
+      if (exist_file) call load_npy(trim(fbase)//'_meta.npy', meta)
 
    end subroutine load_X_from_file
 
@@ -354,13 +373,11 @@ contains
 
    end function CALE
 
-   function CARE(X, CTQcCW, BRinvBTW) result(res)
+   function CARE(X, adjoint) result(res)
       ! solution
       real(dp)          :: X(N,N)
-      ! inhomogeneity
-      real(dp)          :: CTQcCW(N,N)
-      ! inhomogeneity
-      real(dp)          :: BRinvBTW(N,N)
+      ! adjoint
+      logical, optional :: adjoint
       ! residual
       real(dp)          :: res(N,N)
       
@@ -371,14 +388,153 @@ contains
       call GL_mat(AHX, X,            adjoint = .true., transpose = .false.)
       call GL_mat(XA, transpose(X),  adjoint = .true., transpose = .true. )
 
-      ! construct Lyapunov equation
-      res = AHX + XA + CTQcCW - matmul(X, matmul(BRinvBTW, X))
+      ! construct Riccati equation
+      if (adjoint) then
+         res = 0.0_dp !AHX + XA + CTQcCW - matmul(X, matmul(BRinvBTW, X))
+      else
+         res = AHX + XA + CTQcCW - matmul(X, matmul(BRinvBTW, X))
+      end if
 
    end function CARE
 
    !-------------------------------------
    !-----      Printing helpers     -----
    !-------------------------------------
+
+   subroutine print_test_info(if_lyapunov, if_adj, main_run, run_fixed_rank_test, run_rank_adaptive_test, run_eigenvalue_test)
+      implicit none 
+      logical, intent(in) :: if_lyapunov
+      logical, intent(in) :: if_adj
+      logical, intent(in) :: main_run
+      logical, intent(in) :: run_fixed_rank_test
+      logical, intent(in) :: run_rank_adaptive_test
+      logical, intent(in) :: run_eigenvalue_test
+
+      print *, 'Cases to be run:'
+      print '(2X,A45,L4)', padr('if_lyapunov:',50), if_lyapunov
+      print '(2X,A45,L4)', padr('if_adj:',50), if_adj
+      print '(2X,A45,L4)', padr('main_run:',50), main_run
+      print '(2X,A45,L4)', padr('run_fixed_rank_test:',50), run_fixed_rank_test
+      print '(2X,A45,L4)', padr('run_rank_adaptive_test:',50), run_rank_adaptive_test
+      print '(2X,A45,L4)', padr('run_eigenvalue_test:',50), run_eigenvalue_test
+   end subroutine print_test_info
+
+   subroutine print_test_header(if_lyapunov, if_adj, eq, refid, rk_X0, Xref)
+      implicit none
+      logical, intent(in) :: if_lyapunov
+      logical, intent(in) :: if_adj
+      character(len=4), intent(out) :: eq
+      character(len=2), intent(out) :: refid
+      integer, intent(out) :: rk_X0
+      real(dp), intent(out) :: Xref(N,N)
+
+      ! internal
+      integer :: nprint, irow
+      character(len=128) :: oname
+      real(dp), allocatable :: U_load(:,:), svals(:)
+
+      print *, ''
+      call initialize_parameters()
+      print *, ''
+
+      print *, '#########################################################################'
+      print *, '#                                                                       #'
+      print *, '#               DYNAMIC LOW-RANK APPROXIMATION  -  DLRA                 #'
+      print *, '#                                                                       #'
+      print *, '#########################################################################'
+      print *, ''
+      print *, '             THE NON-PARALLEL LINEAR GINZBURG-LANDAU EQUATION:'
+      print *, ''
+      print *, '                 A = mu(x) * I + nu * D_x + gamma * D2_x'
+      print *, ''
+      print *, '                   with mu(x) = mu_0 * x + mu_2 * x^2'
+      print *, ''
+      if (if_lyapunov) then
+         print *, '                     Algebraic Lyapunov equation:'
+         print *, '                     0 = A @ X + X @ A.T + B @ B.T'
+         print *, '                                  or'               
+         print *, '                     0 = A.T @ X + X @ A + C.T @ C (adjoint)'
+         print *, ''               
+         print *, '                   Differential Lyapunov equation:'
+         print *, '                  \dot{X} = A @ X + X @ A.T + B @ B.T'
+         print *, '                                  or'               
+         print *, '                  \dot{X} = A.T @ X + X @ A + C.T @ C (adjoint)'
+         print *, ''
+         print *, ''
+         print '(13X,A,I4,"x",I4)', 'Complex problem size:          ', nx, nx
+         print '(13X,A,I4,"x",I4)', 'Equivalent real problem size:  ', N, N
+         print *, ''
+         print *, '            Initial condition: rank(X0)  =', rk_X0_lyapunov
+         print *, '            Inhomogeneity:     rank(B)   =', rk_B
+         print *, '            Inhomogeneity:     rank(C.T) =', rk_C
+         eq = 'lyap'
+         refid = 'BS'
+         rk_X0 = rk_X0_lyapunov
+         if (if_adj) then
+            svals = svdvals(CTCW)
+            print '(1X,A)', 'Inhomogeneity: CTCW'
+            print '(1X,A,*(F16.12,X))', 'SVD(1:3)     = ', svals(1:3)
+            print '(1X,A,F16.12)',      '|  CTCW  |/N = ', norm2(CTCW)/N
+         else
+            svals = svdvals(BBTW)
+            print '(1X,A)', 'Inhomogeneity: BBTW'
+            print '(1X,A,*(F16.12,X))', 'SVD(1:3)     = ', svals(1:3)
+            print '(1X,A,F16.12)',      '|  BBTW  |/N = ', norm2(BBTW)/N
+         end if
+         print *, ''
+         print *, 'Check residual computation with Bartels-Stuart solution:'
+         if (if_adj) then
+            oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Observability_Yref_BS_W.npy'
+         else
+            oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Controllability_Xref_BS_W.npy'
+         end if
+      else
+         print *, '                     Algebraic Riccati equation:'
+         print *, '     0 = A.T @ X + X @ A - X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
+         print *, ''               
+         print *, '                   Differential Riccati equation:'
+         print *, '   \dot{X} = A.T @ X + X @ A - X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
+         print *, ''
+         print '(13X,A,I4,"x",I4)', 'Complex problem size:                       ', nx, nx
+         print '(13X,A,I4,"x",I4)', 'Equivalent real problem size:               ', N, N
+         print *, ''
+         print *, '            Initial condition: rank(X0)               =', rk_X0_riccati
+         print *, '            Nonlinearity:      rank(B @ R^{-1} @ B.T) =', rk_B
+         print *, '            Inhomogeneity:     rank(C.T @ Qc @ C)     =', rk_C
+         eq = 'ricc'
+         refid = 'SD'
+         rk_X0 = rk_X0_riccati
+         svals = svdvals(CTQcCW)
+         print '(1X,A)', 'Inhomogeneity: CTQcCW'
+         print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
+         print '(1X,A,F16.12)',      '|  CTQcCW  |/N   = ', norm2(CTQcCW)/N
+         print *, ''
+         svals = svdvals(BRinvBTW)
+         print '(1X,A)', 'Nonlinearity: BRinvBTW'
+         print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
+         print '(1X,A,F16.12)',      '|  BRinvBTW  |/N = ', norm2(BRinvBTW)/N
+         print *, ''
+         oname = './example/DLRA_ginzburg_landau/CGL_Riccati_Pref_Schur_W.npy'
+      end if
+      print *, ''
+      print *, '#########################################################################'
+      print *, ''
+      call load_npy(oname, U_load)
+      Xref = U_load
+      print *, ''
+      if (if_lyapunov) then
+         print '(A,A,A,F16.12)', '  |  X_', refid, '  |/N = ', norm2(Xref)/N
+         print '(A,A,A,F16.12)', '  | res_', refid, ' |/N = ', norm2(CALE(Xref, if_adj))/N
+      else
+         print '(A,A,A,F16.12)', '  |  X_', refid, '  |/N = ', norm2(Xref)/N
+         print '(A,A,A,F16.12)', '  | res_', refid, ' |/N = ', norm2(CARE(Xref, if_adj))/N
+      end if
+      print *, ''
+      ! compute svd
+      nprint = 60
+      irow = 8
+      call print_svdvals(Xref, 'X_'//refid, nprint, irow)
+   end subroutine print_test_header
 
    subroutine print_header(case, eq)
       character(len=*), intent(in) :: case
@@ -413,7 +569,7 @@ contains
       real(dp),          intent(in) :: X_RK(:,:,:)
       real(dp),          intent(in) :: Xref(:,:)
       character(len=*),  intent(in) :: note
-      logical, optional, intent(in) :: adjoint
+      logical,           intent(in) :: adjoint
       ! internal
       integer :: N
       real(dp) :: nrm_x, nrm_diff, nrm_res
@@ -425,7 +581,7 @@ contains
       if (trim(eq) == 'lyap') then
          nrm_res  = norm2(CALE(X_RK(:,:,irep), adjoint)) / N
       else
-         nrm_res  = norm2(CARE(X_RK(:,:,irep), CTQcCW, BRinvBTW)) / N
+         nrm_res  = norm2(CARE(X_RK(:,:,irep), adjoint)) / N
       end if
 
       write(*,'(I7,F10.4,3(1X,E18.6),F10.4," s",A)') &
@@ -433,17 +589,18 @@ contains
 
    end subroutine print_rklib_output
 
-   subroutine print_dlra_output(eq, rk, torder, tau, nsteps, tend, X_out, Xref_RK, Xref, etime, note, adjoint)
+   subroutine get_metadata(meta, eq, rk, torder, tau, nsteps, tend, X_out, Xref_RK, Xref, etime, adjoint)
+      real(dp), allocatable, intent(out) :: meta(:)
       character(len=*),  intent(in) :: eq
       integer,           intent(in) :: rk, torder, nsteps
       real(dp),          intent(in) :: tau, tend, etime
       real(dp),          intent(in) :: X_out(:,:), Xref_RK(:,:), Xref(:,:)
-      character(len=*),  intent(in) :: note
-      logical, optional, intent(in) :: adjoint
+      logical,           intent(in) :: adjoint
       ! internal
       integer :: N
       real(dp) :: nrm_x, nrm_rk, nrm_bs, nrm_res
 
+      if (allocated(meta)) deallocate(meta)
       N = size(X_out,1)
 
       nrm_x   = norm2(X_out) / N
@@ -452,12 +609,19 @@ contains
       if (trim(eq) == 'lyap') then
          nrm_res = norm2(CALE(X_out, adjoint)) / N
       else
-         nrm_res = norm2(CARE(X_out, CTQcCW, BRinvBTW)) / N
+         nrm_res = norm2(CARE(X_out, adjoint)) / N
       end if
+      meta = [ etime, 1.0_dp*rk, 1.0_dp*torder, 1.0_dp*nsteps, tau, Tend, nrm_X, nrm_rk, nrm_bs, nrm_res ]
+   end subroutine get_metadata
 
+   subroutine print_dlra_output(eq, note, meta)
+      character(len=*),  intent(in) :: eq
+      character(len=*),  intent(in) :: note
+      real(dp),          intent(in) :: meta(:)
+      
       write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I8,F10.4,4(E19.8),F10.2," s")') &
-         1, note, 'OUTPUT', rk, torder, tau, nsteps, tend, &
-         nrm_x, nrm_rk, nrm_bs, nrm_res, etime
+         int(meta(3)), note, 'OUTPUT', int(meta(2)), int(meta(3)), meta(5), int(meta(4)), meta(6), &
+         meta(7), meta(8), meta(9), meta(10), meta(1)
 
    end subroutine print_dlra_output
 
@@ -486,35 +650,57 @@ contains
    !-----      Saving helpers     -----
    !-----------------------------------
 
-   subroutine save_LR_state_npy(filename, X, weight_mat)
-      
+   pure function make_filename_eig(fldr, Tend, tau, tol) result(name)
       implicit none
-   
-      character(len=*), intent(in) :: filename
-      type(LR_state),   intent(in) :: X
-      real(dp),         intent(in) :: weight_mat(:,:)
+      character(len=*), intent(in)           :: fldr
+      real(dp), intent(in)                   :: Tend, tau, tol
+
+      character(len=256) :: name
+      character(len=32)  :: Tstr, taustr, tolstr
+      
+      write(Tstr,'(I3.3)') int(Tend)
+      write(taustr,'(ES10.0)') tau
+      taustr = adjustl(trim(taustr))
+      taustr = replace_all(taustr, 'E', 'e')
+      taustr = replace_all(taustr, '+', '')
+      write(tolstr,'(ES10.0)') tol
+      tolstr = adjustl(trim(tolstr))
+      tolstr = replace_all(tolstr, 'E', 'e')
+      tolstr = replace_all(tolstr, '+', '')
+      write(name,'(*(A))'), trim(fldr), "spectrum_A-BK_Tend", trim(Tstr),"_tau", trim(taustr), "_tol", trim(tolstr), ".npy"
+   end function make_filename_eig
+
+   pure function make_filename_RK(fldr, fbase, eq, Tend) result(name)
+      implicit none
+      character(len=*), intent(in)           :: fldr
+      character(len=*), intent(in)           :: fbase
+      character(len=4), intent(in)           :: eq
+      real(dp), intent(in)                   :: Tend
+
+      character(len=256) :: name
+      character(len=32)  :: Tstr
+
+      write(Tstr,'(I3.3)') int(Tend)
+      write(name,'(A,A,A,"_Tend",A)') trim(fldr), trim(fbase), eq, Tstr
+   end function make_filename_RK
+
+   subroutine save_RK_state_npy(bname, X_mat, meta)
+      implicit none
+      character(len=*), intent(in) :: bname
+      real(dp),         intent(in) :: X_mat(:,:)
+      real(dp),         intent(in) :: meta(:)
       ! internal
-      character(len=*), parameter :: this_procedure = 'save_LR_state_npy'
-      real(dp), allocatable :: Uwrk(:,:)
-      character(len=:), allocatable :: base
-   
-      ! strip extension
-      base = trim(filename)
-      if (index(base, '.npy') > 0) base = base(:index(base,'.npy')-1)
+      character(len=*), parameter :: this_procedure = 'save_RK_state_npy'
    
       ! Save low-rank components
-      allocate(Uwrk(N, X%rk), source=zero_rdp)
-      call get_state(Uwrk, X%U(:X%rk), this_procedure)
-      call save_npy(base//'_U.npy', Uwrk)
-      call save_npy(base//'_S.npy', X%S(1:X%rk,1:X%rk))   
+      call save_npy(trim(bname)//'_X.npy', X_mat)
       ! Save weight matrix
-      call save_npy(base//'_W.npy', weight_mat)
+      call save_npy(trim(bname)//'_meta.npy', meta)
    
-   end subroutine save_LR_state_npy
+   end subroutine save_RK_state_npy
 
-   pure function make_filename(fldr, case, eq, note, rk, TO, tau, Tend, tol) result(name)
+   function make_filename(fldr, case, eq, note, rk, TO, tau, Tend, tol) result(name)
       implicit none
-
       character(len=*), intent(in)           :: fldr
       character(len=*), intent(in)           :: case
       character(len=*), intent(in)           :: eq
@@ -527,40 +713,132 @@ contains
       character(len=32)  :: tolstr, taustr
 
       ! ---- tau string ----------------------------------------------
-      taustr = ''
-      write(taustr,'(ES10.2)') tau
+      write(taustr,'(ES10.0)') tau
       taustr = adjustl(trim(taustr))
       taustr = replace_all(taustr, 'E', 'e')
-      taustr = replace_all(taustr, '+', '')
+      taustr = replace_all(taustr, '.', '')
 
       ! ---- tolerance string ----------------------------------------------
       tolstr = ''
-      if (present(tol)) then
-         write(tolstr,'(ES10.2)') tol
-         tolstr = adjustl(trim(tolstr))
-         tolstr = replace_all(tolstr, 'E', 'e')
-         tolstr = replace_all(tolstr, '+', '')
-      end if
 
       ! ---- assemble filename ---------------------------------------------
       if (present(tol)) then
+         write(tolstr,'(ES10.0)') tol
+         tolstr = adjustl(trim(tolstr))
+         tolstr = replace_all(tolstr, 'E', 'e')
+         tolstr = replace_all(tolstr, '.', '')
          if (len(trim(note)) == 0) then
-            write(name,'(A,A,"_",A,"_TO",I1,"_tau",A,"_Tend",I3.3,"_tol",A,".npy")') &
-               trim(fldr), trim(case), trim(eq), TO, trim(taustr), int(Tend), trim(tolstr)
+            write(name,'(A,A,"_",A,"_Tend",I3.3,"_TO",I1,"_tau",A,"_tol",A)') &
+               trim(fldr), trim(case), trim(eq), int(Tend), TO, trim(taustr), trim(tolstr)
          else
-            write(name,'(A,A,"_",A,"_TO",I1,"_tau",A,"_Tend",I3.3,"_tol",A,"_",A,".npy")') &
-               trim(fldr), trim(case), trim(eq), TO, trim(taustr), int(Tend), trim(tolstr), trim(note)
+            write(name,'(A,A,"_",A,"_Tend",I3.3,"_TO",I1,"_tau",A,"_tol",A,"_",A)') &
+               trim(fldr), trim(case), trim(eq), int(Tend), TO, trim(taustr), trim(tolstr), trim(note)
          end if
       else
          if (len(trim(note)) == 0) then
-            write(name,'(A,A,"_",A,"_rk",I3.3,"_TO",I1,"_tau",A,"_Tend",I3.3,".npy")') &
-               trim(fldr), trim(case), trim(eq), rk, TO, trim(taustr), int(Tend)
+            write(name,'(A,A,"_",A,"_Tend",I3.3,"_rk",I3.3,"_TO",I1,"_tau",A)') &
+               trim(fldr), trim(case), trim(eq), int(Tend), rk, TO, trim(taustr)
          else
-            write(name,'(A,A,"_",A,"_rk",I3.3,"_TO",I1,"_tau",A,"_Tend",I3.3,"_",A,".npy")') &
-               trim(fldr), trim(case), trim(eq), rk, TO, trim(taustr), int(Tend), trim(note)
+            write(name,'(A,A,"_",A,"_Tend",I3.3,"_rk",I3.3,"_TO",I1,"_tau",A,"_",A)') &
+               trim(fldr), trim(case), trim(eq), int(Tend), rk, TO, trim(taustr), trim(note)
          end if
       end if
    end function make_filename
 
+   subroutine save_LR_state_npy(bname, X, weight_mat, meta)
+      implicit none
+      character(len=*), intent(in) :: bname
+      type(LR_state),   intent(in) :: X
+      real(dp),         intent(in) :: weight_mat(:,:)
+      real(dp),         intent(in) :: meta(:)
+      ! internal
+      character(len=*), parameter :: this_procedure = 'save_LR_state_npy'
+      real(dp), allocatable :: Uwrk(:,:)
+      integer :: rk
+   
+      ! Save low-rank components
+      rk = max(1, X%rk)
+      allocate(Uwrk(N, rk), source=zero_rdp)
+      call get_state(Uwrk, X%U(:rk), this_procedure)
+      call save_npy(trim(bname)//'_U.npy', Uwrk)
+      call save_npy(trim(bname)//'_S.npy', X%S(1:rk,1:rk))   
+      ! Save weight matrix
+      call save_npy(trim(bname)//'_W.npy', weight_mat)
+      call save_npy(trim(bname)//'_meta.npy', meta)
+   
+   end subroutine save_LR_state_npy
+   
+   subroutine write_int(unit, key, value)
+      integer, intent(in) :: unit, value
+      character(*), intent(in) :: key
+      write(unit,'(A," = ",I0)') trim(key), value
+   end subroutine
+  
+   subroutine write_real(unit, key, value)
+      integer, intent(in) :: unit
+      real(dp), intent(in) :: value
+      character(*), intent(in) :: key
+      write(unit,'(A," = ",ES16.9)') trim(key), value
+   end subroutine
+
+   pure function make_filename_meta(fbase) result(name)
+      implicit none
+      character(len=*), intent(in)           :: fbase
+      character(len=256) :: name
+      name = trim(fbase)//'_meta.txt'
+   end function make_filename_meta
+
+   subroutine save_metadata(fbase, case, eq, rk, torder, tau, nsteps, Tend, adjoint)
+      implicit none
+      character(len=*), intent(in) :: fbase
+      character(len=*), intent(in) :: case
+      character(len=*), intent(in) :: eq
+      integer,          intent(in) :: rk, torder, nsteps
+      real(dp),         intent(in) :: tau, tend
+      logical,          intent(in) :: adjoint
+      ! internal
+      character(len=256) :: fname
+      character(len=20) :: str
+      integer :: i, unit, n_called
+      real(dp) :: etime, etmin, etmax, etimp
+      integer :: lcount, rcount, gcount
+      character(len=128), allocatable :: names(:)
+
+      ! write to file
+      fname = make_filename_meta(fbase)
+      open(newunit=unit, file=fname, status='replace', action='write')
+      
+      write(unit, '(A20,A)')     padr('case :',20), case
+      write(unit, '(A20,A)')     padr('equation :',20), eq
+      write(unit, '(A20,I16)')   padr('torder :',20), torder
+      str = merge('rk(adapt)', 'rk(fixed)', case == 'DLRA_ADAPT')
+      write(unit, '(A20,I16)')   padr(str,20), rk
+      write(unit, '(A20,F16.9)') padr('tau :',20), tau
+      write(unit, '(A20,F16.9)') padr('Tend :',20), Tend
+      write(unit, '(A20,L16)')   padr('adjoint :',20), adjoint
+      ! get timer that were called since last reset
+      call lk_timer%get_called(n_called, names)
+      write(unit, '(A50,2X,A12,*(1X,A13))') padr('TIMERS:',50), 'count', 'etime', 'min', 'max', 'paused', 'avg'
+      ! get timer info
+      do i = 1, n_called
+         call lk_timer%get_data(names(i), restart=.false., &
+                     & etime=etime, etmin=etmin, etmax=etmax, etimp=etimp, &
+                     & lcount=lcount, rcount=rcount, gcount=gcount)
+         
+         write(unit, '(A5,A45,2X,I12,*(1X,F13.6)))') 'LK % ', padr(trim(names(i)),45), & 
+               lcount, etime, etmin, etmax, etimp, etime/lcount
+      end do
+      call global_lightROM_timer%get_called(n_called, names)
+      ! get timer info
+      do i = 1, n_called
+         call global_lightROM_timer%get_data(names(i), restart=.false., &
+                     & etime=etime, etmin=etmin, etmax=etmax, etimp=etimp, &
+                     & lcount=lcount, rcount=rcount, gcount=gcount)
+         
+         write(unit, '(A5,A45,2X,I12,*(1X,F13.6)))') 'LR % ', padr(trim(names(i)),45), & 
+               lcount, etime, etmin, etmax, etimp, etime/lcount
+      end do
+      close(unit)
+   end subroutine save_metadata
 
 end module Ginzburg_Landau_Utils
