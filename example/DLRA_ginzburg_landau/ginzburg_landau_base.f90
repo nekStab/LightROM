@@ -191,7 +191,9 @@ contains
       select type (U)
       type is (state_vector)
          ! set time and optional args
-         self%time = 0.0_dp
+         self%tot_time = 0.0_dp
+         self%time     = 0.0_dp
+         self%step     = 0
 
          m = size(U)
          call assert_shape(S, [m,m], 'S', this_module, this_procedure)
