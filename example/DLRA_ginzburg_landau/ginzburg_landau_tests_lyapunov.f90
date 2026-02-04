@@ -1,5 +1,6 @@
 module Ginzburg_Landau_Tests_Lyapunov
    ! Standard Library.
+   use stdlib_strings, only : replace_all
    use stdlib_optval, only : optval
    use stdlib_linalg, only : diag, svd, svdvals
    use stdlib_io_npy, only : save_npy, load_npy
@@ -121,7 +122,7 @@ contains
             ! replace input
             call set_state(X_mat(1:1), X_RK(:,:,irep), 'Reset initial condition')
             ! print information
-            write(note,*) merge('   < reference', '              ', irep == iref)
+            note = merge('   < reference', '              ', irep == iref)
             call print_rklib_output(eq, irep, Tstep, X_RK, Xref, etime0, note, adjoint)
          enddo
          Xref_RK(:,:) = X_RK(:,:,iref)
@@ -163,7 +164,7 @@ contains
       logical                                      :: exist_file
       
       ! Internals
-      character(len=256)                           :: fbase
+      character(len=256)                           :: fbase, fchomp
       type(LR_state),                allocatable   :: X
       integer                                      :: info, i, j, k, rk, torder, irep, nrep, nsteps
       real(dp)                                     :: etime, tau, Tstep, Ttot
@@ -218,6 +219,7 @@ contains
                opts%mode = torder
 
                fbase = make_filename(home, case, eq, note, rk, torder, tau, Tend)
+               fchomp = replace_all(fbase, trim(home), '')
                exist_file = exist_X_file(fbase)
                if (exist_file) then
                   call load_X_from_file(X, meta, fbase, U0)
@@ -236,6 +238,7 @@ contains
                                                                & exptA=exptA, iftrans=.false., options=opts)
                   end if
                   call system_clock(count=clock_stop)      ! Stop Timer
+                  call reset_lyapunov_solver(home, fchomp)
                   etime = real(clock_stop-clock_start)/real(clock_rate)
                end if
                ! Reconstruct solution
@@ -290,7 +293,7 @@ contains
       logical :: exist_file
 
       ! Internals
-      character(len=256)                           :: fbase
+      character(len=256)                           :: fbase, fchomp
       type(LR_state),                allocatable   :: X
       integer                                      :: info, i, j, k, rk, torder, nsteps
       real(dp)                                     :: etime, tau
@@ -345,6 +348,7 @@ contains
                opts%mode = torder
 
                fbase = make_filename(home, case, eq, note, rk, torder, tau, Tend, opts%tol)
+               fchomp = replace_all(fbase, trim(home), '')
                exist_file = exist_X_file(fbase)
                if (exist_file) then
                   call load_X_from_file(X, meta, fbase, U0)
@@ -363,6 +367,7 @@ contains
                                                                   & exptA=exptA, iftrans=.false., options=opts)
                   end if
                   call system_clock(count=clock_stop)      ! Stop Timer
+                  call reset_lyapunov_solver(home, fchomp)
                   etime = real(clock_stop-clock_start)/real(clock_rate)
                end if
                ! Reconstruct solution
