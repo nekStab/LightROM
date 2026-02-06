@@ -30,13 +30,13 @@ program demo
 
    character(len=*), parameter :: this_module = 'Ginzburg_Landau_Main'
 
-   character(len=128), parameter :: home = 'example/DLRA_ginzburg_landau/local/'
+   real(dp), parameter :: Tend_long  = 50.0
+   real(dp), parameter :: Tend_short = 0.01
+   character(len=128), parameter :: home_base = 'example/DLRA_ginzburg_landau/local/'
    ! reference solutiions using SVD
-   character(len=128), parameter :: fname_SVD_base = trim(home)//'Xref_SVD_'
+   character(len=128), parameter :: fname_SVD_base = trim(home_base)//'Xref_SVD_'
    ! rk_B & rk_C are set in ginzburg_landau_base.f90
 
-   real(dp), parameter :: Tend_long  = 1.0
-   real(dp), parameter :: Tend_short = 0.01
    integer  :: nrk, ntau, rk,  torder
    real(dp) :: tau, T_POD, Tend
    ! vector of dt values
@@ -88,9 +88,9 @@ program demo
    character(len=128),           allocatable :: names(:)
    real(dp),                     allocatable :: svals(:)
    real(dp)                                  :: tol
-   integer, parameter                        :: irow = 8
    integer                                   :: nprint
    logical                                   :: exist_file
+   character(len=128)                        :: home
 
    !--------------------------------
    ! Define which examples to run:
@@ -136,6 +136,13 @@ program demo
    ! Check the control efficacy using the eigenvalues of the controlled system matrix
    !
    !--------------------------------
+   Tend = merge(Tend_long, Tend_short, main_run)
+   eq   = merge('lyap', 'ricc', if_lyapunov)
+   if (main_run) then
+      write(home,'(A,A,I3.3,A,A,A)') trim(home_base), 'Tend', int(Tend), '_', eq, '/'
+   else
+      home = home_base
+   end if
 
    ! Setup logging
    call logger_setup(logfile=trim(home)//'lightkrylov.log', log_level=error_level, log_stdout=.false., log_timestamp=.true.)
@@ -164,14 +171,14 @@ program demo
    ! Define initial condition
    allocate(U0(rk_X0), source=B(1)); call zero_basis(U0)
    allocate(S0(rk_X0,rk_X0)); S0 = 0.0_dp
-   print *, 'Define initial condition'
+   print '(4X,A)', 'Define initial condition'
    call generate_random_initial_condition(U0, S0, rk_X0)
    call reconstruct_solution(X_out, U0, S0)
    print *, ''
    print '(A,F16.12)', '  |  X_0  |/N = ', norm2(X_out)/N
    print '(A,F16.12)', '  | res_0 |/N = ', norm2(CALE(X_out, if_adj))/N
    print *, ''
-   call print_svdvals(X_out, ' X0 ', 60, irow)
+   call print_svdvals(X_out, ' X0 ', 60)
    
    if (main_run) then
       Tend = Tend_long
@@ -198,11 +205,11 @@ program demo
       end if
    end if
    nprint = 60
-
+  
    !
    !        RK long time horizon
    !
-   call integrate_RK(eq, LTI, Xref, Xref_RK, U0, S0, Tend, if_adj, home, main_run)
+   call integrate_RK(eq, LTI, Xref, Xref_RK, U0, S0, Tend, if_adj, home_base, main_run)
    
    !
    !        rank-adaptive DLRA long time horizon
@@ -238,10 +245,7 @@ program demo
             end if
             call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, T_POD, if_adj)
             nprint = min(8, size(svals))
-            do i = 1, ceiling(nprint*1.0_dp/irow)
-               is = (i-1)*irow+1; ie = min(i*irow, nprint)
-               print '(1X,A,F6.4,A,I2,A,I2,*(1X,F16.12))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
-            end do
+            call print_svdvals(svals, 'XTX', nprint)
             deallocate(X0)
          end do
       end do
