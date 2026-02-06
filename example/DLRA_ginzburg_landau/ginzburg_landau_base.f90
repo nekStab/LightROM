@@ -37,9 +37,9 @@ module Ginzburg_Landau_Base
    integer,  parameter :: nx = 128     ! Number of grid points (excluding boundaries).
    real(dp)            :: dx           ! Grid size.
 
-   !-------------------------------------------
-   !-----     LIGHTKRYLOV VECTOR TYPE     -----
-   !-------------------------------------------
+   !--------------------------------------------
+   !-----     LIGHTKRYLOV VECTOR TYPES     -----
+   !--------------------------------------------
 
    type, extends(abstract_vector_rdp), public :: state_vector
       real(dp) :: state(2*nx) = 0.0_dp
@@ -52,6 +52,19 @@ module Ginzburg_Landau_Base
       procedure, pass(self), public :: rand
       procedure, pass(self), public :: get_size
    end type state_vector
+
+   type, extends(abstract_vector_rdp), public :: state_error_vector
+      type(state_vector) :: state
+      type(state_vector) :: error
+   contains
+      private
+      procedure, pass(self), public :: zero => se_zero
+      procedure, pass(self), public :: dot => se_dot
+      procedure, pass(self), public :: scal => se_scal
+      procedure, pass(self), public :: axpby => se_axpby
+      procedure, pass(self), public :: rand => se_rand
+      procedure, pass(self), public :: get_size => se_get_size
+   end type state_error_vector
 
    !-------------------------------------------------------
    !-----     LIGHTKRYLOV SYM LOW RANK STATE TYPE     -----
@@ -129,7 +142,7 @@ contains
       type is(state_vector)
          alpha = dot_product(self%state, weight*vec%state)
       class default
-         call stop_error('vec must be a state_vector', this_module, 'dot')
+         call type_error('vec', 'state_vector', 'IN', this_module, 'dot')
       end select
    end function dot
 
@@ -152,7 +165,7 @@ contains
       type is(state_vector)
          self%state = beta*self%state + alpha*vec%state
       class default
-         call stop_error('vec must be a state_vector', this_module, 'axpby')
+         call type_error('vec', 'state_vector', 'IN', this_module, 'axpby')
       end select
    end subroutine axpby
 
@@ -169,9 +182,72 @@ contains
       self%state = normal(mean,std)
       if (normalize) then
          alpha = self%norm()
-         call self%scal(1.0/alpha)
+         call self%scal(1.0_dp/alpha)
       endif
    end subroutine rand
+
+   !----------------------------------------------------
+   !-----     TYPE-BOUND PROCEDURE FOR VECTORS     -----
+   !----------------------------------------------------
+
+   subroutine se_zero(self)
+      class(state_error_vector), intent(inout) :: self
+      call self%state%zero()
+      call self%error%zero()
+   end subroutine se_zero
+
+   real(dp) function se_dot(self, vec) result(alpha)
+      ! weighted inner product
+      class(state_error_vector),  intent(in) :: self
+      class(abstract_vector_rdp), intent(in) :: vec
+      select type(vec)
+      type is(state_error_vector)
+         alpha = self%state%dot(vec%state) + self%error%dot(vec%error)
+      class default
+         call type_error('vec', 'state_error_vector', 'IN', this_module, 'dot')
+      end select
+   end function se_dot
+
+   integer function se_get_size(self) result(N)
+     class(state_error_vector), intent(in) :: self
+     N = 2*nx
+   end function se_get_size
+
+   subroutine se_scal(self, alpha)
+      class(state_error_vector), intent(inout) :: self
+      real(dp),            intent(in)    :: alpha
+      call self%state%scal(alpha)
+      call self%error%scal(alpha)
+   end subroutine se_scal
+
+   subroutine se_axpby(alpha, vec, beta, self)
+      class(state_error_vector),        intent(inout) :: self
+      class(abstract_vector_rdp), intent(in)    :: vec
+      real(dp),                   intent(in)    :: alpha, beta
+      select type(vec)
+      type is(state_error_vector)
+         call self%state%axpby(alpha, vec%state, beta)
+         call self%error%axpby(alpha, vec%error, beta)
+      class default
+         call type_error('vec', 'state_error_vector', 'IN', this_module, 'axpby')
+      end select
+   end subroutine se_axpby
+
+   subroutine se_rand(self, ifnorm)
+      class(state_error_vector), intent(inout) :: self
+      logical, optional,   intent(in)    :: ifnorm
+      ! internals
+      logical :: normalize
+      real(dp) :: alpha
+      normalize = optval(ifnorm,.true.)
+      call self%state%rand(ifnorm=.false.)
+      call self%error%rand(ifnorm=.false.)
+      if (normalize) then
+         alpha = self%state%norm() + self%error%norm()
+         call self%state%scal(1.0_dp/alpha)
+         call self%error%scal(1.0_dp/alpha)
+      endif
+   end subroutine se_rand
 
    !------------------------------------------------------
    !-----     TYPE BOUND PROCEDURES FOR LR STATES    -----
