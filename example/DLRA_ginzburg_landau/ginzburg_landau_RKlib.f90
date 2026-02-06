@@ -53,7 +53,7 @@ module Ginzburg_Landau_RKlib
    contains
       private
       procedure, pass(self), public :: matvec => direct_solver_ricc
-      procedure, pass(self), public :: rmatvec => direct_solver_ricc
+      procedure, pass(self), public :: rmatvec => adjoint_solver_ricc
    end type RK_riccati
 
 contains
@@ -175,17 +175,17 @@ contains
       real(dp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(dp),        dimension(N,N) :: X, AX, XAH
+      real(dp),        dimension(N,N) :: X, AX, XAT
 
       f_flat = 0.0_dp
-      AX = 0.0_dp; XAH = 0.0_dp;
+      AX = 0.0_dp; XAT = 0.0_dp;
       X = reshape(x_flat, [N,N])
       ! A @ X
       call GL_mat(AX, X,              adjoint = .false., transpose = .false.)
       ! build ( A @ X.T ).T = X @ A.T
-      call GL_mat(XAH, transpose(X),  adjoint = .false., transpose = .true.)
+      call GL_mat(XAT, transpose(X),  adjoint = .false., transpose = .true.)
       ! construct Lyapunov equation
-      f_flat = reshape(AX + XAH + BBTW, [ N**2 ])
+      f_flat = reshape(AX + XAT + BBTW, [ N**2 ])
 
    end subroutine rhs_lyap
 
@@ -200,17 +200,17 @@ contains
       real(dp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(dp),        dimension(N,N) :: X, AHX, XA
+      real(dp),        dimension(N,N) :: X, ATX, XA
 
       f_flat = 0.0_dp
-      AHX = 0.0_dp; XA = 0.0_dp;
+      ATX = 0.0_dp; XA = 0.0_dp;
       X = reshape(x_flat, [N,N])
       ! A.T @ X
-      call GL_mat(AHX, X,            adjoint = .true., transpose = .false.)
+      call GL_mat(ATX, X,            adjoint = .true., transpose = .false.)
       ! build ( A.T @ X.T ).T = X @ A
       call GL_mat( XA, transpose(X), adjoint = .true., transpose = .true.)
       ! construct Lyapunov equation
-      f_flat = reshape(AHX + XA + CTCW, [ N**2 ])
+      f_flat = reshape(ATX + XA + CTCW, [ N**2 ])
 
    end subroutine adjoint_rhs_lyap
 
@@ -225,19 +225,44 @@ contains
       real(dp),        dimension(:), intent(out) :: f_flat
 
       ! internals
-      real(dp),        dimension(N,N)  :: X, AHX, XA
+      real(dp),        dimension(N,N)  :: X, ATX, XA
 
       f_flat = 0.0_dp
-      AHX = 0.0_dp; XA = 0.0_dp;
+      ATX = 0.0_dp; XA = 0.0_dp;
       X = reshape(x_flat, [N,N])
       ! A.T @ X
-      call GL_mat(AHX, X,             adjoint = .true., transpose = .false.)
+      call GL_mat(ATX, X,             adjoint = .true., transpose = .false.)
       ! build ( A.T @ X.T ).T = X @ A
       call GL_mat( XA, transpose(X),  adjoint = .true., transpose = .true.)
       ! construct Lyapunov equation
-      f_flat = reshape(AHX + XA + CTQcCW - matmul(X, matmul(BRinvBTW, X)), [ N**2 ])
+      f_flat = reshape(ATX + XA + CTQcCW - matmul(X, matmul(BRinvBTW, X)), [ N**2 ])
 
    end subroutine rhs_ricc
+
+   subroutine adjoint_rhs_ricc(me, t, x_flat, f_flat)
+      ! Time-integrator.
+      class(rk_class), intent(inout)             :: me
+      ! Current time.
+      real(dp),        intent(in)                :: t
+      ! State vector.
+      real(dp),        dimension(:), intent(in)  :: x_flat
+      ! Time-derivative.
+      real(dp),        dimension(:), intent(out) :: f_flat
+
+      ! internals
+      real(dp),        dimension(N,N)  :: X, AX, XAT
+
+      f_flat = 0.0_dp
+      AX = 0.0_dp; XAT = 0.0_dp;
+      X = reshape(x_flat, [N,N])
+      ! A @ X
+      call GL_mat(AX, X,              adjoint = .false., transpose = .false.)
+      ! build ( A @ X.T ).T = X @ A.T
+      call GL_mat(XAT, transpose(X),  adjoint = .false., transpose = .true.)
+      ! construct Lyapunov equation
+      f_flat = reshape(AX + XAT + BQeBTW - matmul(X, matmul(CTVinvCW, X)), [ N**2 ])
+
+   end subroutine adjoint_rhs_ricc
 
    !------------------------------------------------------------------------
    !-----     TYPE-BOUND PROCEDURES FOR THE EXPONENTIAL PROPAGATOR     -----
@@ -310,7 +335,7 @@ contains
       class(abstract_vector_rdp),  intent(out) :: vec_out
 
       ! Time-integrator.
-      character(len=*), parameter :: this_procedure = 'adjoint_solver_ricc'
+      character(len=*), parameter :: this_procedure = 'direct_solver_ricc'
       type(rks54_class) :: prop
       real(kind=dp)     :: dt = 1.0_dp
 
@@ -330,5 +355,35 @@ contains
       end select
       return
    end subroutine direct_solver_ricc
+
+   subroutine adjoint_solver_ricc(self, vec_in, vec_out)
+      ! Linear Operator.
+      class(rk_riccati) ,          intent(inout)  :: self
+      ! Input vector.
+      class(abstract_vector_rdp),  intent(in)  :: vec_in
+      ! Output vector.
+      class(abstract_vector_rdp),  intent(out) :: vec_out
+
+      ! Time-integrator.
+      character(len=*), parameter :: this_procedure = 'adjoint_solver_ricc'
+      type(rks54_class) :: prop
+      real(kind=dp)     :: dt = 1.0_dp
+
+      select type(vec_in)
+      type is(state_matrix)
+         select type(vec_out)
+         type is(state_matrix)
+            ! Initialize propagator.
+            call prop%initialize(n=N**2, f=adjoint_rhs_ricc)
+            ! Integrate forward in time.
+            call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
+         class default
+            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
+         end select
+      class default
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
+      end select
+      return
+   end subroutine adjoint_solver_ricc
 
 end module Ginzburg_Landau_RKlib
