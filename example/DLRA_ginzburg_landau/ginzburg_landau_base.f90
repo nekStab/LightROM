@@ -22,9 +22,11 @@ module Ginzburg_Landau_Base
    public  :: L, nx, N, dx
    public  :: nu, gamma, mu_0, c_mu, mu_2, mu
    public  :: rk_b, x_b, s_b, rk_c, x_c, s_c
-   public  :: B, CT, weight, weight_mat
+   public  :: B, CT, Bw
+   public  :: weight, weight_mat
    public  :: BBTW, CTCW
-   public  :: Qc, Rinv, CTQcCW, BRinvBTW
+   public  :: Qc, Rinv, Qe, Vinv
+   public  :: CTQcCW, BRinvBTW, CTVinvCW, BQeBTW
    
    !-------------------------------
    !-----     PARAMETERS 1    -----
@@ -66,6 +68,7 @@ module Ginzburg_Landau_Base
    !-------------------------------
 
    ! Physical parameters.
+   integer,  parameter    :: N = 2*nx           ! Number of grid points (excluding boundaries).
    complex(dp), parameter :: nu    = cmplx(2.0_dp, 0.2_dp, dp)
    complex(dp), parameter :: gamma = cmplx(1.0_dp, -1.0_dp, dp)
    real(dp),    parameter :: mu_0  = 0.38_dp
@@ -74,27 +77,31 @@ module Ginzburg_Landau_Base
    real(dp)               :: mu(nx)
 
    ! Input-Output system parameters
-   real(dp)               :: weight(2*nx)       ! integration weights
+   real(dp)               :: weight(N)          ! integration weights
    integer,  parameter    :: rk_b = 2           ! number of inputs to the system
    real(dp), parameter    :: x_b = -11.0_dp     ! location of input Gaussian
    real(dp), parameter    :: s_b = 1.0_dp       ! variance of input Gaussian
    type(state_vector)     :: B(rk_b)
+   type(state_vector)     :: Bw(rk_b)
    real(dp), parameter    :: x_c = sqrt(-2.0_dp*(mu_0 - c_mu**2)/mu_2) ! location of input Gaussian
    real(dp), parameter    :: s_c = 1.0_dp       ! variance of input Gaussian
    integer,  parameter    :: rk_c = 2           ! number of outputs to the system
    type(state_vector)     :: CT(rk_c)
-   real(dp)               :: Qc(rk_c,rk_c)
-   real(dp)               :: Rinv(rk_b,rk_b)
+   real(dp)               :: Qc(rk_c,rk_c)      ! State energy
+   real(dp)               :: Rinv(rk_b,rk_b)    ! Inverse control cost
+   real(dp)               :: Vinv(rk_c,rk_c)    ! Variance of the sensor noise
+   real(dp)               :: Qe(rk_b,rk_b)      ! Variance of the actuator noise
 
    ! Data matrices for RK lyap
-   integer,  parameter    :: N = 2*nx           ! Number of grid points (excluding boundaries).
    real(dp)               :: weight_mat(N,N)    ! integration weights matrix
-   real(dp)               :: weight_flat(N**2)    ! integration weights flat
+   real(dp)               :: weight_flat(N**2)  ! integration weights flat
    real(dp)               :: BBTW(N,N)
    real(dp)               :: CTCW(N,N)
    ! Data matrices for Riccati
-   real(dp)               :: CTQcCW(N,N)
+   real(dp)               :: CTVinvCW(N,N)
+   real(dp)               :: BQeBTW(N,N)
    real(dp)               :: BRinvBTW(N,N)
+   real(dp)               :: CTQcCW(N,N)
 
 contains
 
