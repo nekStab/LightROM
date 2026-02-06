@@ -130,7 +130,7 @@ program demo
    ! such that the error on the singular values does not exceed a chosen tolerance. This rank
    ! depends on the tolerance but also the chosen time-step.
    !
-   logical, parameter :: run_eigenvalue_test = .false.
+   logical, parameter :: run_eigenvalue_test = .true.
    !
    ! Check the control efficacy using the eigenvalues of the controlled system matrix
    !
@@ -261,13 +261,14 @@ program demo
       tmr_name =  'eig A'
       fname    = trim(home)//"spectrum_A.npy"
       call eigenvalue_analysis(prop, tmr_name, fname)
+      print *, ''
       
       ! eig A - BK
       X = LR_state()
       if (if_adj) then
-         note = '_adjoint'
          tmr_name = 'eig A-LC: exact'
          fname    = trim(home)//"spectrum_A-LC.npy"
+         note = '_adjoint'
       else
          tmr_name = 'eig A-BK: exact'
          fname    = trim(home)//"spectrum_A-BK.npy"
@@ -276,13 +277,14 @@ program demo
       call load_X_from_file(X, meta, trim(fname_SVD_base)//eq//trim(note), U0)
       rkintegrator = rks54_class_with_control()
       prop_control = exponential_prop_with_control(1.0_dp, prop=rkintegrator)
-      call prop_control%init(X, B, Rinv)
+      call prop_control%init(X, B, Rinv, adjoint=if_adj, enable_control=.true.)
       
-      call eigenvalue_analysis_control(prop_control, tmr_name, fname)
+      call eigenvalue_analysis(prop_control, tmr_name, fname)
 
       ! deallocate and clean
       deallocate(rkintegrator); deallocate(prop_control)
       
+      print *, ''
       do j = 1, size(tolv)
          tol = tolv(j)
          do k = 1, size(dtv)
@@ -295,16 +297,17 @@ program demo
                call load_X_from_file(X, meta, fbase, U0)
                ! recreate integrators
                rkintegrator = rks54_class_with_control()
-               prop_control = exponential_prop_with_control(tau, prop=rkintegrator)
+               prop_control = exponential_prop_with_control(1.0_dp, prop=rkintegrator)
                ! initialize integrators
-               call prop_control%init(X, B, Rinv)
-
-               fname = make_filename_eig(home, Tend, tau, tol)
-               note = merge('eig A-LC: ', 'eig A-BK: ', if_adj)
-               write(tmr_name,'(*(A))')  trim(note), trim(taustr), ' ', trim(Tstr), ' ', trim(tolstr)
-
+               call prop_control%init(X, B, Rinv, adjoint=if_adj, enable_control=.true.)
+               
+               call make_labels(Tstr, taustr, tolstr, Tend, tau, tol)
+               note = merge('A-LC', 'A-BK', if_adj)
+               fname = trim(home)//'spectrum_'//trim(note)//'_Tend'//trim(Tstr)//'_tau'//trim(taustr)//'_tol'//trim(tolstr)//'.npy'
+               write(tmr_name,'(*(A))')  'eig ', trim(note), ':   Tend= ', trim(Tstr), '   tau= ', trim(taustr), '   tol= ', trim(tolstr)
+               
                ! eigendecomposition
-               call eigenvalue_analysis_control(prop_control, tmr_name, fname)
+               call eigenvalue_analysis(prop_control, tmr_name, fname)
                
                ! deallocate and clean
                deallocate(rkintegrator); deallocate(prop_control)
