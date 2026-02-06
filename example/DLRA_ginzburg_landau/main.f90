@@ -84,8 +84,7 @@ program demo
    character(len=2)                          :: refid
    character(len=4)                          :: eq
    character(len=32)                         :: tolstr, taustr, Tstr
-   character(len=256)                        :: fbase, fname, tmr_name
-   character(len=128),           allocatable :: names(:)
+   character(len=256)                        :: fbase, fname, tmr_name, note
    real(dp),                     allocatable :: svals(:)
    real(dp)                                  :: tol
    integer                                   :: nprint
@@ -265,13 +264,20 @@ program demo
       
       ! eig A - BK
       X = LR_state()
-      call load_X_from_file(X, meta, trim(fname_SVD_base)//eq, U0)
+      if (if_adj) then
+         note = '_adjoint'
+         tmr_name = 'eig A-LC: exact'
+         fname    = trim(home)//"spectrum_A-LC.npy"
+      else
+         tmr_name = 'eig A-BK: exact'
+         fname    = trim(home)//"spectrum_A-BK.npy"
+         note = '_direct'
+      end if
+      call load_X_from_file(X, meta, trim(fname_SVD_base)//eq//trim(note), U0)
       rkintegrator = rks54_class_with_control()
       prop_control = exponential_prop_with_control(1.0_dp, prop=rkintegrator)
       call prop_control%init(X, B, Rinv)
       
-      tmr_name = 'eig A-BK: exact'
-      fname    = trim(home)//"spectrum_A-BK.npy"
       call eigenvalue_analysis_control(prop_control, tmr_name, fname)
 
       ! deallocate and clean
@@ -281,7 +287,8 @@ program demo
          tol = tolv(j)
          do k = 1, size(dtv)
             tau = dtv(k)
-            fbase = make_filename(home, 'DLRA_ADAPT', eq, 'P', rk, torder, tau, Tend, tol)
+            note = merge('Padj', 'Pdir', if_adj)
+            fbase = make_filename(home, 'DLRA_ADAPT', eq, trim(note), rk, torder, tau, Tend, tol)
             exist_file = exist_X_file(fbase)
             if (exist_file) then
                ! load X state
@@ -292,8 +299,9 @@ program demo
                ! initialize integrators
                call prop_control%init(X, B, Rinv)
 
-               fname =make_filename_eig(home, Tend, tau, tol)
-               write(tmr_name,'(*(A))')  'eig A-BK: ', trim(taustr), ' ', trim(Tstr), ' ', trim(tolstr)
+               fname = make_filename_eig(home, Tend, tau, tol)
+               note = merge('eig A-LC: ', 'eig A-BK: ', if_adj)
+               write(tmr_name,'(*(A))')  trim(note), trim(taustr), ' ', trim(Tstr), ' ', trim(tolstr)
 
                ! eigendecomposition
                call eigenvalue_analysis_control(prop_control, tmr_name, fname)

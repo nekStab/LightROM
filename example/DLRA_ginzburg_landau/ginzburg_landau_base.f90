@@ -199,6 +199,7 @@ contains
          ! set time and optional args
          self%tot_time = 0.0_dp
          self%time     = 0.0_dp
+         self%tot_step = 0
          self%step     = 0
 
          m = size(U)
