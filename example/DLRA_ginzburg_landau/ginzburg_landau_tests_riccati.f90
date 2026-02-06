@@ -92,7 +92,7 @@ contains
       call reconstruct_solution(X_out, U0, S0)
       call set_state(X_mat(1:1), X_out, 'Set initial condition')
       
-      fbase = make_filename_RK(home, fname_RK_base, eq, Tend)
+      fbase = make_filename_RK(home, fname_RK_base, eq, Tend, adjoint)
       exist_file = exist_RK_file(fbase)
       if (exist_file) then
          call load_npy(trim(fbase)//'_X.npy', U_load)
