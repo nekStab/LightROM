@@ -41,8 +41,8 @@ module Ginzburg_Landau_Operators
    !-----     EXPONENTIAL PROPAGATOR     -----
    !------------------------------------------
 
-   type, extends(abstract_linop_rdp), public :: exponential_prop
-      real(dp) :: tau ! Integration time.
+   type, extends(abstract_expta_linop_rdp), public :: exponential_prop
+      !real(dp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec => direct_solver

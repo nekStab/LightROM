@@ -11,7 +11,7 @@ module Ginzburg_Landau_Tests
    character(len=*), parameter, private :: this_module = 'Ginzburg_Landau_Tests'
 
    public :: eigenvalue_analysis
-   public :: eigenvalue_analysis_control
+   !public :: eigenvalue_analysis_control
    public :: integrate_DLRA_fixed
    public :: integrate_DLRA_adaptive
 
@@ -19,12 +19,13 @@ contains
 
    subroutine eigenvalue_analysis(prop, tmr_name, fname)
       implicit none
-      type(exponential_prop), intent(inout) :: prop
+      class(abstract_exptA_linop_rdp), intent(inout) :: prop
       character(len=*), optional, intent(in) :: tmr_name
       character(len=*), optional, intent(in) :: fname
 
       ! internals
       character(len=*), parameter :: this_procedure = 'eigenvalue_analysis'
+      character(len=64)                         :: label
       integer                                   :: nev, info
       type(state_vector),           allocatable :: V(:)
       complex(dp),                  allocatable :: lambda(:)
@@ -37,37 +38,16 @@ contains
       call check_info(info, 'eigs', this_module, this_procedure)
       
       lambda = log(lambda)/prop%tau
-      print '(A64,A,F21.7)', padr('eig A', 64), ': ', maxval(real(lambda))
+      if (present(tmr_name)) then
+         label = trim(tmr_name)
+      else
+         label ='eig A'
+      end if
+      print '(A64,A,F21.7)', padr(trim(label), 64), ': ', maxval(real(lambda))
 
       if (present(fname)) call save_npy(fname, lambda)
       if (present(tmr_name)) call global_lightROM_timer%stop(tmr_name)
    end subroutine eigenvalue_analysis
-
-   subroutine eigenvalue_analysis_control(prop, tmr_name, fname)
-      implicit none
-      type(exponential_prop_with_control), intent(inout) :: prop
-      character(len=*), optional, intent(in) :: tmr_name
-      character(len=*), optional, intent(in) :: fname
-
-      ! internals
-      character(len=*), parameter :: this_procedure = 'eigenvalue_analysis_control'
-      integer                                   :: nev, info
-      type(state_vector),           allocatable :: V(:)
-      complex(dp),                  allocatable :: lambda(:)
-      real(dp),                     allocatable :: residuals(:)
-
-      if (present(tmr_name)) call global_lightROM_timer%add_timer(tmr_name, start=.true.)
-
-      nev = 50; allocate(V(nev)); call zero_basis(V)
-      call eigs(prop, V, lambda, residuals, info, kdim=2*nev)
-      call check_info(info, 'eigs', this_module, this_procedure)
-      
-      lambda = log(lambda)/prop%tau
-      print '(A64,A,F21.7)', padr('eig A-BK', 64), ': ', maxval(real(lambda))
-
-      if (present(fname)) call save_npy(fname, lambda)
-      if (present(tmr_name)) call global_lightROM_timer%stop(tmr_name)
-   end subroutine eigenvalue_analysis_control
    
    subroutine integrate_RK(eq, LTI, Xref, Xref_RK, U0, S0, Tend, adjoint, home, main_run)
       implicit none

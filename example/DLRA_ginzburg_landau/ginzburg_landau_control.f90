@@ -42,8 +42,8 @@ module Ginzburg_Landau_Control
    !-----     EXPONENTIAL PROPAGATOR WITH FEEDBACK CONTROL    -----
    !---------------------------------------------------------------
 
-   type, extends(abstract_linop_rdp), public :: exponential_prop_with_control
-      real(dp) :: tau ! Integration time.
+   type, extends(abstract_expta_linop_rdp), public :: exponential_prop_with_control
+      !real(dp) :: tau ! Integration time.
       type(rks54_class_with_control) :: prop
       logical :: control_enabled = .false.
       logical, private :: initialised = .false.
@@ -81,8 +81,8 @@ module Ginzburg_Landau_Control
    !-----     EXPONENTIAL PROPAGATOR WITH FEEDBACK CONTROL AND ESTIMATION    -----
    !------------------------------------------------------------------------------
 
-   type, extends(abstract_linop_rdp), public :: exponential_prop_LQG
-      real(dp) :: tau ! Integration time.
+   type, extends(abstract_exptA_linop_rdp), public :: exponential_prop_LQG
+      !real(dp) :: tau ! Integration time.
       type(rks54_class_LQG) :: prop
       logical :: control_enabled = .false.
       logical, private :: initialised = .false.
