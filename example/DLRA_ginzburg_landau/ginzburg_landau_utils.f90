@@ -31,9 +31,10 @@ module Ginzburg_Landau_Utils
 
    character(len=*), parameter, private :: this_module = 'Ginzburg_Landau_Utils'
 
-   integer, parameter, public :: rkmax = 80
    integer, parameter, public :: rk_X0_lyapunov = 10
    integer, parameter, public :: rk_X0_riccati  = 10
+   integer, parameter, public :: rkmax = 80
+   integer, parameter, public :: irow = 8
 
    ! initialize mesh
    public :: initialize_parameters
@@ -53,12 +54,15 @@ module Ginzburg_Landau_Utils
    public :: save_RK_state_npy, save_LR_state_npy, save_metadata
    public :: make_filename_eig, make_filename_RK, make_filename, make_filename_meta
 
-   
-
    interface reconstruct_solution
       module procedure reconstruct_solution_X
       module procedure reconstruct_solution_US
    end interface
+
+   interface print_svdvals
+      module procedure print_svdvals_from_matrix
+      module procedure print_svdvals_direct
+   end interface 
 
 contains
 
@@ -94,8 +98,8 @@ contains
 
       ! actuator is a Guassian centered just upstream of branch I
       ! column 1
-      x2       = 0.0_dp
-      x2(1:nx) = x(2:nx+1)
+      x2            = 0.0_dp
+      x2(1:nx)      = x(2:nx+1)
       B(1)%state = exp(-((x2 - x_b)/s_b)**2)
       ! column 2
       x2            = 0.0_dp
@@ -112,22 +116,26 @@ contains
       x2(nx+1:2*nx) = x(2:nx+1)
       CT(2)%state = exp(-((x2 - x_c)/s_c)**2)
 
-      ! RK lyap & riccati
-      Qc   = eye(rk_c)
-      Rinv = eye(rk_b)
+      ! RK lyapunov and riccati
+      Qc   = eye(rk_c)        ! state energy
+      Rinv = eye(rk_b)        ! inverse control cost
+      Vinv = eye(rk_c)        ! variance of sensor noise
+      Qe   = eye(rk_b)        ! variance of actuator noise
 
-      allocate(mat(N, rk_b), matW(N, rk_b))
+      ! apply weights
+      allocate(mat(N, rk_b), matW(N, rk_b), sqrtW(N, rk_b))
       call get_state(mat(:,:rk_b), B(:rk_b), this_procedure)
       matW = matmul(mat, weight_mat(:rk_b,:rk_b)) ! incorporate weights
-      BBTW = matmul(mat, transpose(matW))
-      BRinvBTW  = matmul(mat, matmul(Rinv, transpose(matW)))
-      deallocate(mat, matW)
-
+      BBTW     = matmul(mat, transpose(matW))
+      BRinvBTW = matmul(mat, matmul(Rinv, transpose(matW)))
+      BQeBTW   = matmul(mat, matmul(Qe, transpose(matW))) !
+      deallocate(mat, matW, sqrtW)
       allocate(mat(N, rk_c), matW(N, rk_c))
       call get_state(mat(:,:rk_c), CT(:rk_c), this_procedure)
       matW = matmul(mat, weight_mat(:rk_c,:rk_c)) ! incorporate weights
-      CTCW = matmul(mat, transpose(matW))
-      CTQcCW =  matmul(mat, matmul(Qc, transpose(matW)))
+      CTCW     = matmul(mat, transpose(matW))
+      CTQcCW   = matmul(mat, matmul(Qc, transpose(matW)))
+      CTVinvCW = matmul(mat, matmul(Vinv, transpose(matW)))
       deallocate(mat, matW)
 
       print '(A)', ' ----------------------------------------'
@@ -382,17 +390,19 @@ contains
       real(dp)          :: res(N,N)
       
       ! internals
-      real(dp), dimension(N,N) :: AHX, XA
+      real(dp), dimension(N,N) :: LX, XL
+      logical :: flip
 
-      AHX = 0.0_dp; XA = 0.0_dp
-      call GL_mat(AHX, X,            adjoint = .true., transpose = .false.)
-      call GL_mat(XA, transpose(X),  adjoint = .true., transpose = .true. )
+      LX = 0.0_dp; XL = 0.0_dp
+      flip = .not. adjoint
+      call GL_mat(LX, X,            adjoint = flip, transpose = .false.)
+      call GL_mat(XL, transpose(X), adjoint = flip, transpose = .true. )
 
       ! construct Riccati equation
       if (adjoint) then
-         res = 0.0_dp !AHX + XA + CTQcCW - matmul(X, matmul(BRinvBTW, X))
+         res = LX + XL + BQeBTW - matmul(X, matmul(CTVinvCW, X))
       else
-         res = AHX + XA + CTQcCW - matmul(X, matmul(BRinvBTW, X))
+         res = LX + XL + CTQcCW - matmul(X, matmul(BRinvBTW, X))
       end if
 
    end function CARE
@@ -429,7 +439,7 @@ contains
       real(dp), intent(out) :: Xref(N,N)
 
       ! internal
-      integer :: nprint, irow
+      integer :: nprint
       character(len=128) :: oname
       real(dp), allocatable :: U_load(:,:), svals(:)
 
@@ -451,14 +461,18 @@ contains
       print *, ''
       if (if_lyapunov) then
          print *, '                     Algebraic Lyapunov equation:'
-         print *, '                     0 = A @ X + X @ A.T + B @ B.T'
-         print *, '                                  or'               
-         print *, '                     0 = A.T @ X + X @ A + C.T @ C (adjoint)'
+         if (if_adj) then
+            print *, '                     0 = A.T @ X + X @ A + C.T @ C'
+         else
+            print *, '                     0 = A @ X + X @ A.T + B @ B.T'
+         end if
          print *, ''               
          print *, '                   Differential Lyapunov equation:'
-         print *, '                  \dot{X} = A @ X + X @ A.T + B @ B.T'
-         print *, '                                  or'               
-         print *, '                  \dot{X} = A.T @ X + X @ A + C.T @ C (adjoint)'
+         if (if_adj) then
+            print *, '                  \dot{X} = A.T @ X + X @ A + C.T @ C'
+         else
+            print *, '                  \dot{X} = A @ X + X @ A.T + B @ B.T'
+         end if
          print *, ''
          print *, ''
          print '(13X,A,I4,"x",I4)', 'Complex problem size:          ', nx, nx
@@ -467,54 +481,75 @@ contains
          print *, '            Initial condition: rank(X0)  =', rk_X0_lyapunov
          print *, '            Inhomogeneity:     rank(B)   =', rk_B
          print *, '            Inhomogeneity:     rank(C.T) =', rk_C
-         eq = 'lyap'
-         refid = 'BS'
-         rk_X0 = rk_X0_lyapunov
          if (if_adj) then
             svals = svdvals(CTCW)
             print '(1X,A)', 'Inhomogeneity: CTCW'
             print '(1X,A,*(F16.12,X))', 'SVD(1:3)     = ', svals(1:3)
             print '(1X,A,F16.12)',      '|  CTCW  |/N = ', norm2(CTCW)/N
+            oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Observability_Yref_BS_W.npy'
          else
             svals = svdvals(BBTW)
             print '(1X,A)', 'Inhomogeneity: BBTW'
             print '(1X,A,*(F16.12,X))', 'SVD(1:3)     = ', svals(1:3)
             print '(1X,A,F16.12)',      '|  BBTW  |/N = ', norm2(BBTW)/N
+            oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Controllability_Xref_BS_W.npy'
          end if
          print *, ''
          print *, 'Check residual computation with Bartels-Stuart solution:'
-         if (if_adj) then
-            oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Observability_Yref_BS_W.npy'
-         else
-            oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Controllability_Xref_BS_W.npy'
-         end if
+         eq = 'lyap'
+         refid = 'BS'
+         rk_X0 = rk_X0_lyapunov
       else
          print *, '                     Algebraic Riccati equation:'
-         print *, '     0 = A.T @ X + X @ A - X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
+         if (if_adj) then
+            print *, '     0 = A @ X + X @ A.T - X @ C.T @ V^{-1} @ C @ X + B @ Qe @ B.T'
+         else
+            print *, '     0 = A.T @ X + X @ A - X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
+         end if
          print *, ''               
          print *, '                   Differential Riccati equation:'
-         print *, '   \dot{X} = A.T @ X + X @ A - X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
+         if (if_adj) then
+            print *, '   \dot{X} = A @ X + X @ A.T - X @ C,T @ V^{-1} @ C @ X + B @ Qe @ B.T'
+         else
+            print *, '   \dot{X} = A.T @ X + X @ A - X @ B @ R^{-1} @ B.T @ X + C.T @ Qc @ C'
+         end if
          print *, ''
          print '(13X,A,I4,"x",I4)', 'Complex problem size:                       ', nx, nx
          print '(13X,A,I4,"x",I4)', 'Equivalent real problem size:               ', N, N
          print *, ''
          print *, '            Initial condition: rank(X0)               =', rk_X0_riccati
-         print *, '            Nonlinearity:      rank(B @ R^{-1} @ B.T) =', rk_B
-         print *, '            Inhomogeneity:     rank(C.T @ Qc @ C)     =', rk_C
+         if (if_adj) then
+            print *, '            Nonlinearity:      rank(C.T @ V^{-1} @ C) =', rk_C
+            print *, '            Inhomogeneity:     rank(B @ Qe @ B.T)     =', rk_B
+            svals = svdvals(BQeBTW)
+            print '(1X,A)', 'Inhomogeneity: BQeBTW'
+            print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
+            print '(1X,A,F16.12)',      '|  BQeBTW  |/N   = ', norm2(BQeBTW)/N
+            print *, ''
+            svals = svdvals(CTVinvCW)
+            print '(1X,A)', 'Nonlinearity: CTVinvCW'
+            print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
+            print '(1X,A,F16.12)',      '|  CTVinvCW  |/N = ', norm2(CTVinvCW)/N
+            print *, ''
+            oname = './example/DLRA_ginzburg_landau/CGL_Riccati_Pref_Schur_Adjoint_W.npy'
+         else
+            print *, '            Nonlinearity:      rank(B @ R^{-1} @ B.T) =', rk_B
+            print *, '            Inhomogeneity:     rank(C.T @ Qc @ C)     =', rk_C
+            svals = svdvals(CTQcCW)
+            print '(1X,A)', 'Inhomogeneity: CTQcCW'
+            print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
+            print '(1X,A,F16.12)',      '|  CTQcCW  |/N   = ', norm2(CTQcCW)/N
+            print *, ''
+            svals = svdvals(BRinvBTW)
+            print '(1X,A)', 'Nonlinearity: BRinvBTW'
+            print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
+            print '(1X,A,F16.12)',      '|  BRinvBTW  |/N = ', norm2(BRinvBTW)/N
+            print *, ''
+            oname = './example/DLRA_ginzburg_landau/CGL_Riccati_Pref_Schur_Direct_W.npy'
+         end if
          eq = 'ricc'
          refid = 'SD'
          rk_X0 = rk_X0_riccati
-         svals = svdvals(CTQcCW)
-         print '(1X,A)', 'Inhomogeneity: CTQcCW'
-         print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
-         print '(1X,A,F16.12)',      '|  CTQcCW  |/N   = ', norm2(CTQcCW)/N
-         print *, ''
-         svals = svdvals(BRinvBTW)
-         print '(1X,A)', 'Nonlinearity: BRinvBTW'
-         print '(1X,A,*(F16.12,X))', 'SVD(1:3)         = ', svals(1:3)
-         print '(1X,A,F16.12)',      '|  BRinvBTW  |/N = ', norm2(BRinvBTW)/N
-         print *, ''
-         oname = './example/DLRA_ginzburg_landau/CGL_Riccati_Pref_Schur_W.npy'
       end if
       print *, ''
       print *, '#########################################################################'
@@ -532,8 +567,7 @@ contains
       print *, ''
       ! compute svd
       nprint = 60
-      irow = 8
-      call print_svdvals(Xref, 'X_'//refid, nprint, irow)
+      call print_svdvals(Xref, 'X_'//refid, nprint)
    end subroutine print_test_header
 
    subroutine print_header(case, eq)
@@ -625,10 +659,28 @@ contains
 
    end subroutine print_dlra_output
 
-   subroutine print_svdvals(A, label, nprint, irow)
+   subroutine print_svdvals_direct(svals, label, nprint)
+      real(dp),          intent(in) :: svals(:)
+      character(len=*),  intent(in) :: label
+      integer,           intent(in) :: nprint
+      ! internal
+      integer :: k, j, is, ie, nblocks
+   
+      nblocks = ceiling(nprint * one_rdp / irow)
+   
+      do k = 1, nblocks
+         is = (k-1)*irow + 1
+         ie = min(k*irow, size(svals))
+         print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD('//label//') ', is, '-', ie, ( svals(j), j = is, ie )
+      end do
+      print *, ''
+   
+   end subroutine print_svdvals_direct
+
+   subroutine print_svdvals_from_matrix(A, label, nprint)
       real(dp),          intent(in) :: A(:,:)
       character(len=*),  intent(in) :: label
-      integer,           intent(in) :: nprint, irow
+      integer,           intent(in) :: nprint
       ! internal
       real(dp), allocatable :: svals(:)
       integer :: k, j, is, ie, nblocks
@@ -644,7 +696,7 @@ contains
       end do
       print *, ''
    
-   end subroutine print_svdvals
+   end subroutine print_svdvals_from_matrix
 
    !-----------------------------------
    !-----      Saving helpers     -----

@@ -82,7 +82,6 @@ module Ginzburg_Landau_Base
    real(dp), parameter    :: x_b = -11.0_dp     ! location of input Gaussian
    real(dp), parameter    :: s_b = 1.0_dp       ! variance of input Gaussian
    type(state_vector)     :: B(rk_b)
-   type(state_vector)     :: Bw(rk_b)
    real(dp), parameter    :: x_c = sqrt(-2.0_dp*(mu_0 - c_mu**2)/mu_2) ! location of input Gaussian
    real(dp), parameter    :: s_c = 1.0_dp       ! variance of input Gaussian
    integer,  parameter    :: rk_c = 2           ! number of outputs to the system
