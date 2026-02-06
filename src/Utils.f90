@@ -24,6 +24,7 @@ module LightROM_Utils
    public :: project_onto_common_basis
    public :: Balancing_Transformation
    public :: LQR_gain
+   public :: LQE_gain
    public :: ROM_Petrov_Galerkin_Projection
    public :: ROM_Galerkin_Projection
    public :: Proper_Orthogonal_Decomposition
@@ -34,6 +35,10 @@ module LightROM_Utils
 
    interface LQR_gain
       module procedure LQR_gain_rdp
+   end interface
+
+   interface LQE_gain
+      module procedure LQE_gain_rdp
    end interface
 
    interface ROM_Petrov_Galerkin_Projection
@@ -163,11 +168,32 @@ contains
       ! internal variables
       real(wp), allocatable :: proj(:,:), wrk(:,:)
 
+      ! K = R^{-1} @ B.T @ P
       proj = innerprod(B, X%U(:X%rk))
       wrk  = matmul(Rinv, matmul(proj, X%S(:X%rk,:X%rk)))
       call linear_combination(KT, X%U(:X%rk), transpose(wrk))  ! we compute K.T = (wrk @ U.T).T = U @ wrk.T
       
    end subroutine LQR_gain_rdp
+   
+   subroutine LQE_gain_rdp(L, X, CT, Vinv)
+      class(abstract_vector_rdp), allocatable, intent(out) :: L(:)
+      !! Kalman gains
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
+      !! Low rank solution of current solution
+      class(abstract_vector_rdp), intent(in) :: CT(:)
+      !! Sensors
+      real(wp), intent(in) :: Vinv(:,:)
+      !! Inverse sensor noise variance
+
+      ! internal variables
+      real(wp), allocatable :: proj(:,:)
+
+      ! L = P @ C.T @ V^{-1}
+      call linear_combination(L, CT, Vinv)
+      proj = innerprod(X%U(:X%rk), L)
+      call linear_combination(L, X%U(:X%rk), matmul(X%S(:X%rk,:X%rk), proj))
+      
+   end subroutine LQE_gain_rdp
 
    subroutine ROM_Petrov_Galerkin_Projection_rdp(Ahat, Bhat, Chat, D, LTI, T, Tinv)
       !! Computes the Reduced-Order Model of the input LTI dynamical system via Petrov-Galerkin projection 
