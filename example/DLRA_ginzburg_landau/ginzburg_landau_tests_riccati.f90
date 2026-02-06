@@ -22,7 +22,6 @@ module Ginzburg_Landau_Tests_Riccati
    character(len=*), parameter, private :: this_module = 'Ginzburg_Landau_Tests_Riccati'
    ! reference solutiions using RK
    character(len=128), parameter :: fname_RK_base = 'Xref_RK_'
-   public  :: rkmax, rk_X0_riccati
 
 contains
 
@@ -53,7 +52,6 @@ contains
       type(rk_riccati) ,             allocatable   :: RK_propagator
       type(state_matrix)                           :: X_mat(2)
       real(dp),                      allocatable   :: X_RK(:,:,:), U_load(:,:), meta(:)
-      real(dp)                                     :: U0_mat(N,N)
       integer                                      :: irep
       real(dp)                                     :: etime, etime0, Tstep
       ! OUTPUT
@@ -68,14 +66,6 @@ contains
 
       call system_clock(count_rate=clock_rate)
 
-      Tstep = Tend/nrep
-      allocate(X_RK(N, N, nrep))
-      ! initialize exponential propagator
-      RK_propagator = RK_riccati(Tstep)
-      ! Set initial condition for RK
-      call reconstruct_solution(X_out, U0, S0)
-      call set_state(X_mat(1:1), X_out, 'Set initial condition')
-
       print *, ''
       print *, '#######################################################'
       print *, '#                                                     #'
@@ -88,11 +78,20 @@ contains
       print '(2X,A,I3)', 'iref = ', iref
       print '(2X,A,L3)', 'save = ', if_save_output
       print *, ''
-
+      
       call print_header(case, eq)
       write(*,'(I7,F10.4,3(1X,E18.6),F10.4," s",A)') 0, 0.0, norm2(X_out)/N, norm2(X_out - Xref)/N, &
-                                                            & norm2(CARE(X_out, adjoint))/N, 0.0, ''
-                                                            
+                                    & norm2(CARE(X_out, adjoint))/N, 0.0, ''
+      
+      ! init
+      allocate(X_RK(N, N, nrep))
+      Tstep = Tend/nrep
+      ! initialize exponential propagator
+      RK_propagator = RK_riccati(Tstep)
+      ! Set initial condition for RK
+      call reconstruct_solution(X_out, U0, S0)
+      call set_state(X_mat(1:1), X_out, 'Set initial condition')
+      
       fbase = make_filename_RK(home, fname_RK_base, eq, Tend)
       exist_file = exist_RK_file(fbase)
       if (exist_file) then
@@ -154,40 +153,31 @@ contains
       integer,                       intent(in)    :: TOv(:)
       ! number of singular values to print
       integer,                       intent(in)    :: nprint
+      ! Adjoint mode ?
       logical,                       intent(in)    :: adjoint
+      ! Home folder
       character(len=128),            intent(in)    :: home
+      ! save data tp python format?
       logical,                       intent(in)    :: if_save_output
-      ! IO
-      real(wp),                      allocatable   :: U_load(:,:), meta(:)
-      logical :: exist_file
-
+      
       ! Internals
-      character(len=256)                           :: fbase, fchomp
       type(LR_state),                allocatable   :: X
-      type(state_matrix)                           :: X_mat(2)
       integer                                      :: info, i, j, k, rk, torder, nrep, nsteps
       real(dp)                                     :: etime, tau, Tstep, Ttot
-      ! OUTPUT
-      real(dp)                                     :: X_out(N,N)
-
-      ! SVD                         
-      integer,                         parameter   :: irow = 8
-      real(dp),                        allocatable :: svals(:)
-      character(len=128)                           :: note
-      ! DLRA options
+      ! Settings
       type(dlra_opts)                              :: opts
-      ! timer
+      logical                                      :: expta_adj
+      ! IO
+      character(len=256)                           :: fbase, fchomp
+      real(dp)                                     :: X_out(N,N)
+      logical                                      :: exist_file
+      real(wp),                      allocatable   :: meta(:)
+      character(len=128)                           :: note
+      ! timing
       integer                                      :: clock_rate, clock_start, clock_stop
       
       character(len=*), parameter :: case = 'DLRA_FIXED'
       character(len=*), parameter :: eq   = 'ricc'
-      
-      Tstep = one_rdp
-
-      note = 'P'
-
-      ! basic opts
-      opts = dlra_opts(chktime=one_rdp, inc_tol=atol_dp, if_rank_adaptive=.false.)
 
       call system_clock(count_rate=clock_rate)
 
@@ -202,9 +192,15 @@ contains
       print '(2X,A6,*(I6,1X))',    padr('rk  =',6), rkv
       print '(2X,A6,*(ES6.0,1X))', padr('tau =',6), dtv
       print *, ''
-
       call print_header(case, eq)
+
+      ! init
       X = LR_state()
+      Tstep = one_rdp
+      note = merge('Padj', 'Pdir', adjoint)
+      expta_adj = .not. adjoint     ! the adjoint Riccati equation uses the direct expta solver
+      opts = dlra_opts(chktime=one_rdp, inc_tol=atol_dp, if_rank_adaptive=.false.)
+
       do i = 1, size(rkv)
          rk = rkv(i)
          do j = 1, size(TOv)
@@ -230,10 +226,10 @@ contains
                   call system_clock(count=clock_start)     ! Start Timer
                   if (adjoint) then
                      call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%CT, LTI%B, Qc, Rinv, Tend, tau, info, &
-                                                               & exptA=exptA, iftrans=.false., options=opts)
+                                                               & exptA=exptA, iftrans=expta_adj, options=opts)
                   else
                      call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
-                                                               & exptA=exptA, iftrans=.true., options=opts)
+                                                               & exptA=exptA, iftrans=expta_adj, options=opts)
                   end if
                   call system_clock(count=clock_stop)      ! Stop Timer
                   call reset_riccati_solver(home, fchomp)
@@ -257,9 +253,9 @@ contains
          end do
       end do
       if (nprint > 0) then
-         call print_svdvals(Xref,     'X_SD', nprint, irow)
-         call print_svdvals(Xref_RK,  'X_RK', nprint, irow)
-         call print_svdvals(X_out,    'X_D ', nprint, irow)
+         call print_svdvals(Xref,    'X_SD', nprint)
+         call print_svdvals(Xref_RK, 'X_RK', nprint)
+         call print_svdvals(X_out,   'X_D ', nprint)
       end if
    end subroutine run_riccati_DLRA_test
 
@@ -282,38 +278,33 @@ contains
       real(dp),                      intent(in)    :: tolv(:)
       ! number of singular values to print
       integer,                       intent(in)    :: nprint
+      ! Adjoint mode?
       logical,                       intent(in)    :: adjoint
+      ! Home folder
       character(len=128),            intent(in)    :: home
+      ! save data to python format?
       logical,                       intent(in)    :: if_save_output
-      ! IO
-      real(wp),                      allocatable   :: U_load(:,:), meta(:)
-      logical :: exist_file
 
       ! Internals
-      character(len=256)                           :: fbase, fchomp
       type(LR_state),                allocatable   :: X
       integer                                      :: info, i, j, k, rk, torder, nsteps
       real(dp)                                     :: etime, tau
-      ! OUTPUT
-      real(dp)                                     :: X_out(N,N)
-      ! timer
-      integer,                         parameter   :: irow = 8
-      real(dp),                        allocatable :: svals(:)
-      character(len=128)                           :: note
-      ! DLRA options
+      ! Settings
       type(dlra_opts)                              :: opts
-      ! timer
+      logical                                      :: expta_adj
+      ! IO
+      character(len=256)                           :: fbase, fchomp
+      real(dp)                                     :: X_out(N,N)
+      logical                                      :: exist_file
+      character(len=128)                           :: note
+      real(wp),                      allocatable   :: meta(:)
+      ! timing
       integer                                      :: clock_rate, clock_start, clock_stop
 
       character(len=*), parameter :: case = 'DLRA_ADAPT'
       character(len=*), parameter :: eq   = 'ricc'
-
-      ! basic opts
-      opts = dlra_opts(chktime=one_rdp, inc_tol=atol_dp, if_rank_adaptive=.true.)
-
+      
       call system_clock(count_rate=clock_rate)
-
-      note = 'P'
 
       print *, ''
       print *, '#######################################################'
@@ -327,8 +318,13 @@ contains
       print '(2X,A6,*(ES6.0,1X))', padr('tau =',6), dtv
       print *, ''
     
-      rk = rk_X0_riccati
+      ! init
       X = LR_state()
+      rk = rk_X0_riccati
+      note = merge('Padj', 'Pdir', adjoint)
+      expta_adj = .not. adjoint     ! the adjoint Riccati equation uses the direct expta solver
+      opts = dlra_opts(chktime=one_rdp, inc_tol=atol_dp, if_rank_adaptive=.true.)
+
       do i = 1, size(tolv)
          call print_header(case, eq)
          opts%tol = tolv(i)
@@ -357,10 +353,10 @@ contains
                   call system_clock(count=clock_start)     ! Start Timer
                   if (adjoint) then
                      call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%CT, LTI%B, Qc, Rinv, Tend, tau, info, &
-                                                                  & exptA=exptA, iftrans=.false., options=opts)
+                                                                  & exptA=exptA, iftrans=expta_adj, options=opts)
                   else
                      call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
-                                                                  & exptA=exptA, iftrans=.true., options=opts)
+                                                                  & exptA=exptA, iftrans=expta_adj, options=opts)
                   end if
                   call system_clock(count=clock_stop)      ! Stop Timer
                   call reset_riccati_solver(home, fchomp)
@@ -382,9 +378,9 @@ contains
             end do
             print *, ''
          end do
-         call print_svdvals(Xref,     'X_SD', nprint, irow)
-         call print_svdvals(Xref_RK,  'X_RK', nprint, irow)
-         call print_svdvals(X_out,    'X_D ', nprint, irow)
+         call print_svdvals(Xref,    'X_SD', nprint)
+         call print_svdvals(Xref_RK, 'X_RK', nprint)
+         call print_svdvals(X_out,   'X_D ', nprint)
       end do
 
    end subroutine run_riccati_DLRArk_test
