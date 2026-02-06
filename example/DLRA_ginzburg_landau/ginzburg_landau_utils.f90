@@ -123,13 +123,13 @@ contains
       Qe   = eye(rk_b)        ! variance of actuator noise
 
       ! apply weights
-      allocate(mat(N, rk_b), matW(N, rk_b), sqrtW(N, rk_b))
+      allocate(mat(N, rk_b), matW(N, rk_b))
       call get_state(mat(:,:rk_b), B(:rk_b), this_procedure)
       matW = matmul(mat, weight_mat(:rk_b,:rk_b)) ! incorporate weights
       BBTW     = matmul(mat, transpose(matW))
       BRinvBTW = matmul(mat, matmul(Rinv, transpose(matW)))
       BQeBTW   = matmul(mat, matmul(Qe, transpose(matW))) !
-      deallocate(mat, matW, sqrtW)
+      deallocate(mat, matW)
       allocate(mat(N, rk_c), matW(N, rk_c))
       call get_state(mat(:,:rk_c), CT(:rk_c), this_procedure)
       matW = matmul(mat, weight_mat(:rk_c,:rk_c)) ! incorporate weights

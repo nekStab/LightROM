@@ -22,7 +22,7 @@ module Ginzburg_Landau_Base
    public  :: L, nx, N, dx
    public  :: nu, gamma, mu_0, c_mu, mu_2, mu
    public  :: rk_b, x_b, s_b, rk_c, x_c, s_c
-   public  :: B, CT, Bw
+   public  :: B, CT
    public  :: weight, weight_mat
    public  :: BBTW, CTCW
    public  :: Qc, Rinv, Qe, Vinv
