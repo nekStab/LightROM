@@ -52,7 +52,7 @@ module Ginzburg_Landau_Utils
    public :: print_header, print_rklib_output, get_metadata, print_dlra_output, print_svdvals
    ! saving helpers
    public :: save_RK_state_npy, save_LR_state_npy, save_metadata
-   public :: make_filename_eig, make_filename_RK, make_filename, make_filename_meta
+   public :: make_labels, make_filename_RK, make_filename, make_filename_meta
 
    interface reconstruct_solution
       module procedure reconstruct_solution_X
@@ -702,38 +702,42 @@ contains
    !-----      Saving helpers     -----
    !-----------------------------------
 
-   pure function make_filename_eig(fldr, Tend, tau, tol) result(name)
+   subroutine make_labels(Tstr, taustr, tolstr, Tend, tau, tol)
       implicit none
-      character(len=*), intent(in)           :: fldr
-      real(dp), intent(in)                   :: Tend, tau, tol
+      character(len=32), intent(out)  :: Tstr, taustr, tolstr
+      real(dp), intent(in)            :: Tend, tau, tol
 
       character(len=256) :: name
-      character(len=32)  :: Tstr, taustr, tolstr
       
       write(Tstr,'(I3.3)') int(Tend)
       write(taustr,'(ES10.0)') tau
       taustr = adjustl(trim(taustr))
       taustr = replace_all(taustr, 'E', 'e')
-      taustr = replace_all(taustr, '+', '')
+      taustr = replace_all(taustr, '.', '')
       write(tolstr,'(ES10.0)') tol
       tolstr = adjustl(trim(tolstr))
       tolstr = replace_all(tolstr, 'E', 'e')
-      tolstr = replace_all(tolstr, '+', '')
-      write(name,'(*(A))'), trim(fldr), "spectrum_A-BK_Tend", trim(Tstr),"_tau", trim(taustr), "_tol", trim(tolstr), ".npy"
-   end function make_filename_eig
+      tolstr = replace_all(tolstr, '.', '')
+   end subroutine make_labels
 
-   pure function make_filename_RK(fldr, fbase, eq, Tend) result(name)
+   pure function make_filename_RK(fldr, fbase, eq, Tend, adjoint) result(name)
       implicit none
       character(len=*), intent(in)           :: fldr
       character(len=*), intent(in)           :: fbase
       character(len=4), intent(in)           :: eq
       real(dp), intent(in)                   :: Tend
+      logical, intent(in)                    :: adjoint
 
       character(len=256) :: name
-      character(len=32)  :: Tstr
+      character(len=32)  :: Tstr, mode
 
       write(Tstr,'(I3.3)') int(Tend)
-      write(name,'(A,A,A,"_Tend",A)') trim(fldr), trim(fbase), eq, Tstr
+      if (adjoint) then
+         mode = '_adjoint'
+      else
+         mode = '_direct'
+      end if
+      write(name,'(A,A,A,A,"_Tend",A)') trim(fldr), trim(fbase), eq, trim(mode), Tstr
    end function make_filename_RK
 
    subroutine save_RK_state_npy(bname, X_mat, meta)
@@ -762,37 +766,25 @@ contains
       real(dp),         intent(in), optional :: tol
 
       character(len=256) :: name
-      character(len=32)  :: tolstr, taustr
+      character(len=32)  :: Tstr, tolstr, taustr
 
-      ! ---- tau string ----------------------------------------------
-      write(taustr,'(ES10.0)') tau
-      taustr = adjustl(trim(taustr))
-      taustr = replace_all(taustr, 'E', 'e')
-      taustr = replace_all(taustr, '.', '')
-
-      ! ---- tolerance string ----------------------------------------------
-      tolstr = ''
-
-      ! ---- assemble filename ---------------------------------------------
       if (present(tol)) then
-         write(tolstr,'(ES10.0)') tol
-         tolstr = adjustl(trim(tolstr))
-         tolstr = replace_all(tolstr, 'E', 'e')
-         tolstr = replace_all(tolstr, '.', '')
+         call make_labels(Tstr, taustr, tolstr, Tend, tau, tol)
          if (len(trim(note)) == 0) then
-            write(name,'(A,A,"_",A,"_Tend",I3.3,"_TO",I1,"_tau",A,"_tol",A)') &
-               trim(fldr), trim(case), trim(eq), int(Tend), TO, trim(taustr), trim(tolstr)
+            write(name,'(A,A,"_",A,"_Tend",A,"_TO",I1,"_tau",A,"_tol",A)') &
+               trim(fldr), trim(case), trim(eq), trim(Tstr), TO, trim(taustr), trim(tolstr)
          else
-            write(name,'(A,A,"_",A,"_Tend",I3.3,"_TO",I1,"_tau",A,"_tol",A,"_",A)') &
-               trim(fldr), trim(case), trim(eq), int(Tend), TO, trim(taustr), trim(tolstr), trim(note)
+            write(name,'(A,A,"_",A,"_Tend",A,"_TO",I1,"_tau",A,"_tol",A,"_",A)') &
+               trim(fldr), trim(case), trim(eq), trim(Tstr), TO, trim(taustr), trim(tolstr), trim(note)
          end if
       else
+         call make_labels(Tstr, taustr, tolstr, Tend, tau, 0.0_dp)
          if (len(trim(note)) == 0) then
-            write(name,'(A,A,"_",A,"_Tend",I3.3,"_rk",I3.3,"_TO",I1,"_tau",A)') &
-               trim(fldr), trim(case), trim(eq), int(Tend), rk, TO, trim(taustr)
+            write(name,'(A,A,"_",A,"_Tend",A,"_rk",I3.3,"_TO",I1,"_tau",A)') &
+               trim(fldr), trim(case), trim(eq), trim(Tstr), rk, TO, trim(taustr)
          else
-            write(name,'(A,A,"_",A,"_Tend",I3.3,"_rk",I3.3,"_TO",I1,"_tau",A,"_",A)') &
-               trim(fldr), trim(case), trim(eq), int(Tend), rk, TO, trim(taustr), trim(note)
+            write(name,'(A,A,"_",A,"_Tend",A,"_rk",I3.3,"_TO",I1,"_tau",A,"_",A)') &
+               trim(fldr), trim(case), trim(eq), trim(Tstr), rk, TO, trim(taustr), trim(note)
          end if
       end if
    end function make_filename
@@ -877,8 +869,7 @@ contains
                      & etime=etime, etmin=etmin, etmax=etmax, etimp=etimp, &
                      & lcount=lcount, rcount=rcount, gcount=gcount)
          
-         write(unit, '(A5,A45,2X,I12,*(1X,F13.6)))') 'LK % ', padr(trim(names(i)),45), & 
-               lcount, etime, etmin, etmax, etimp, etime/lcount
+         write(unit, '(A5,A45,2X,I12,*(1X,F13.6)))') 'LK % ', padr(trim(names(i)),45), lcount, etime, etmin, etmax, etimp, etime/lcount
       end do
       call global_lightROM_timer%get_called(n_called, names)
       ! get timer info
@@ -887,8 +878,7 @@ contains
                      & etime=etime, etmin=etmin, etmax=etmax, etimp=etimp, &
                      & lcount=lcount, rcount=rcount, gcount=gcount)
          
-         write(unit, '(A5,A45,2X,I12,*(1X,F13.6)))') 'LR % ', padr(trim(names(i)),45), & 
-               lcount, etime, etmin, etmax, etimp, etime/lcount
+         write(unit, '(A5,A45,2X,I12,*(1X,F13.6)))') 'LR % ', padr(trim(names(i)),45), lcount, etime, etmin, etmax, etimp, etime/lcount
       end do
       close(unit)
    end subroutine save_metadata
