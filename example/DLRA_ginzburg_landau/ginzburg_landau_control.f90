@@ -133,18 +133,23 @@ contains
       type is (LR_state)
          select type (input)
          type is (state_vector)
-            ! copy input matrix
-            allocate(self%input(N, size(input)), source=zero_rdp)
-            call get_state(self%input, input, this_procedure)
-            ! compute LQR/LQE gains and store them
+            ! copy input matrix, compute LQR/LQE gains and store them
+            allocate(self%input(size(input), N), source=zero_rdp)
+            allocate(wrk(N, size(input)), source=zero_rdp)
             if (adjoint) then
-               call LQE_gain(gain, X, input, W) ! will allocate gain as a state vector
+               ! self%input = C, input = C.T
+               call get_state(wrk, input, this_procedure)
+               self%input = transpose(wrk)
+               ! self%gain = L
                allocate(self%gain(N, size(input)), source=zero_rdp)
+               call LQE_gain(gain, X, input, W) ! will allocate gain as a state vector
                call get_state(self%gain, gain, this_procedure)
             else
-               call LQR_gain(gain, X, input, W) ! will allocate K as a state vector
+               ! self%input = B
+               call get_state(self%input, input, this_procedure)
+               ! self%gain = K, gain = K.T
                allocate(self%gain(size(input), N), source=zero_rdp)
-               allocate(wrk(N, size(input)), source=zero_rdp)
+               call LQR_gain(gain, X, input, W) ! will allocate K as a state vector
                call get_state(wrk, gain, this_procedure)
                self%gain = transpose(wrk)
             end if
@@ -173,7 +178,13 @@ contains
       if (.not. self%is_initialised()) then
          call stop_error("The controller is not initialised", this_module, this_procedure)
       end if
-      u = -matmul(self%gain, x)
+      if (self%adjoint) then
+         ! u = -Cx
+         u = -matmul(self%input, x)
+      else
+         ! u = -Kx
+         u = -matmul(self%gain, x)
+      end if
    end subroutine eval_control
 
    subroutine rhs_with_control(me, t, x, f)
@@ -190,7 +201,13 @@ contains
          if (me%control_enabled) then
             ! add control
             call me%eval(me%u_control, x)
-            f = f + matmul(me%input, me%u_control)
+            if (me%adjoint) then
+               ! f = -Lu
+               f = f + matmul(me%gain, me%u_control)
+            else
+               ! f = -Bu
+               f = f + matmul(me%input, me%u_control)
+            end if
          end if
       class default
          call type_error('me', 'rks54_class_with_control', 'INOUT', this_module, this_procedure)
