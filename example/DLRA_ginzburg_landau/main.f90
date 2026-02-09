@@ -100,7 +100,7 @@ program demo
    !
    ! if_lyapunov = .false.: Solve the Riccati equation:    0 = A @ X + X @ A.T + X @ B @ @ R^{-1} @ B.T @ W @ X + Q
    !
-   logical, parameter :: if_adj = .false.
+   logical, parameter :: if_adj = .true.
    ! Only considered if if_lyapunov = .true.
    !
    ! Adjoint = .true.:      Solve the adjoint Lyapunov equation:  0 = A.T @ X + X @ A + C.T @ C @ W
@@ -256,65 +256,9 @@ program demo
       dtv  = dtv(size(dtv):1:-1) ! reverse vector
       tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
       torder = 1
-      
-      ! eig A
-      tmr_name =  'eig A'
-      fname    = trim(home)//"spectrum_A.npy"
-      call eigenvalue_analysis(prop, tmr_name, fname)
-      print *, ''
-      
-      ! eig A - BK
-      X = LR_state()
-      if (if_adj) then
-         tmr_name = 'eig A-LC: exact'
-         fname    = trim(home)//"spectrum_A-LC.npy"
-         note = '_adjoint'
-      else
-         tmr_name = 'eig A-BK: exact'
-         fname    = trim(home)//"spectrum_A-BK.npy"
-         note = '_direct'
-      end if
-      call load_X_from_file(X, meta, trim(fname_SVD_base)//eq//trim(note), U0)
-      rkintegrator = rks54_class_with_control()
-      prop_control = exponential_prop_with_control(1.0_dp, prop=rkintegrator)
-      call prop_control%init(X, B, Rinv, adjoint=if_adj, enable_control=.true.)
-      
-      call eigenvalue_analysis(prop_control, tmr_name, fname)
 
-      ! deallocate and clean
-      deallocate(rkintegrator); deallocate(prop_control)
+      call check_eigenvalues(eq, prop, LTI, U0, Tend, dtv, torder, tolv, if_adj, fname_SVD_base, home)
       
-      print *, ''
-      do j = 1, size(tolv)
-         tol = tolv(j)
-         do k = 1, size(dtv)
-            tau = dtv(k)
-            note = merge('Padj', 'Pdir', if_adj)
-            fbase = make_filename(home, 'DLRA_ADAPT', eq, trim(note), rk, torder, tau, Tend, tol)
-            exist_file = exist_X_file(fbase)
-            if (exist_file) then
-               ! load X state
-               call load_X_from_file(X, meta, fbase, U0)
-               ! recreate integrators
-               rkintegrator = rks54_class_with_control()
-               prop_control = exponential_prop_with_control(1.0_dp, prop=rkintegrator)
-               ! initialize integrators
-               call prop_control%init(X, B, Rinv, adjoint=if_adj, enable_control=.true.)
-               
-               call make_labels(Tstr, taustr, tolstr, Tend, tau, tol)
-               note = merge('A-LC', 'A-BK', if_adj)
-               fname = trim(home)//'spectrum_'//trim(note)//'_Tend'//trim(Tstr)//'_tau'//trim(taustr)//'_tol'//trim(tolstr)//'.npy'
-               write(tmr_name,'(*(A))')  'eig ', trim(note), ':   Tend= ', trim(Tstr), '   tau= ', trim(taustr), '   tol= ', trim(tolstr)
-               
-               ! eigendecomposition
-               call eigenvalue_analysis(prop_control, tmr_name, fname)
-               
-               ! deallocate and clean
-               deallocate(rkintegrator); deallocate(prop_control)
-            end if
-         end do
-         write(*,*)
-      end do
    end if
 
    ! Compute and print timer summary

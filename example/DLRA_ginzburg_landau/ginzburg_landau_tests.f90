@@ -3,7 +3,7 @@ module Ginzburg_Landau_Tests
    ! Ginzburg Landau
    use Ginzburg_Landau_Base, only : state_vector
    use Ginzburg_Landau_Operators, only : exponential_prop
-   use Ginzburg_Landau_Control, only : exponential_prop_with_control
+   use Ginzburg_Landau_Control, only : exponential_prop_with_control, rks54_class_with_control
    use Ginzburg_Landau_Tests_Lyapunov
    use Ginzburg_Landau_Tests_Riccati
    implicit none
@@ -48,6 +48,110 @@ contains
       if (present(fname)) call save_npy(fname, lambda)
       if (present(tmr_name)) call global_lightROM_timer%stop(tmr_name)
    end subroutine eigenvalue_analysis
+
+   subroutine check_eigenvalues(eq, prop, LTI, U0, Tend, dtv, torder, tolv, adjoint, fname_SVD_base, home)
+      implicit none
+      character(len=4),              intent(in)    :: eq
+      ! propagator
+      type(exponential_prop),        intent(inout) :: prop
+      ! LTI system
+      type(lti_system),              intent(inout) :: LTI
+      ! Initial condition
+      type(state_vector),            intent(inout) :: U0(:)
+      ! End time
+      real(dp),                      intent(in)    :: Tend
+      ! vector of dt values
+      real(dp),                      intent(in)    :: dtv(:)
+      ! vector of torders
+      integer,                       intent(in)    :: torder
+      ! vector of adaptation tolerance
+      real(dp),                      intent(in)    :: tolv(:)
+      ! number of singular values to print
+      logical,                       intent(in)    :: adjoint
+      character(len=*),              intent(in)    :: fname_SVD_base
+      character(len=128),            intent(in)    :: home
+
+      ! internal
+      type(LR_state),                      allocatable :: X
+      integer                                          :: j, k
+      real(dp)                                         :: tol, tau
+      ! Exponential propagator (with control)
+      type(rks54_class_with_control),      allocatable :: rkintegrator
+      type(exponential_prop_with_control), allocatable :: prop_control
+      character(len=256)                               :: fbase, fname, tmr_name, note
+      character(len=32)                                :: tolstr, taustr, Tstr
+      ! IO
+      integer,                              parameter  :: rk_dummy = 10
+      logical                                          :: exist_file
+      real(dp),                            allocatable :: meta(:)
+
+      ! eig A
+      tmr_name =  'eig A'
+      fname    = trim(home)//"spectrum_A.npy"
+      call eigenvalue_analysis(prop, tmr_name, fname)
+      print *, ''
+
+      ! eig A - BK
+      X = LR_state()
+      if (adjoint) then
+         tmr_name = 'eig A-LC: exact'
+         fname    = trim(home)//"spectrum_A-LC.npy"
+         note = '_adjoint'
+      else
+         tmr_name = 'eig A-BK: exact'
+         fname    = trim(home)//"spectrum_A-BK.npy"
+         note = '_direct'
+      end if
+      call load_X_from_file(X, meta, trim(fname_SVD_base)//eq//trim(note), U0)
+      rkintegrator = rks54_class_with_control()
+      prop_control = exponential_prop_with_control(1.0_dp, prop=rkintegrator)
+      if (adjoint) then
+         call prop_control%init(X, LTI%CT, Vinv, adjoint=adjoint, enable_control=.true.)
+      else
+         call prop_control%init(X, LTI%B, Rinv, adjoint=adjoint, enable_control=.true.)
+      end if
+      
+      call eigenvalue_analysis(prop_control, tmr_name, fname)
+
+      ! deallocate and clean
+      deallocate(rkintegrator); deallocate(prop_control)
+
+      print *, ''
+      do j = 1, size(tolv)
+         tol = tolv(j)
+         do k = 1, size(dtv)
+            tau = dtv(k)
+            note = merge('Padj', 'Pdir', adjoint)
+            fbase = make_filename(home, 'DLRA_ADAPT', eq, trim(note), rk_dummy, torder, tau, Tend, tol)
+            exist_file = exist_X_file(fbase)
+            if (exist_file) then
+               ! load X state
+               call load_X_from_file(X, meta, fbase, U0)
+               ! recreate integrators
+               rkintegrator = rks54_class_with_control()
+               prop_control = exponential_prop_with_control(1.0_dp, prop=rkintegrator)
+               ! initialize integrators
+               if (adjoint) then
+                  call prop_control%init(X, LTI%CT, Vinv, adjoint=adjoint, enable_control=.true.)
+               else
+                  call prop_control%init(X, LTI%B, Rinv, adjoint=adjoint, enable_control=.true.)
+               end if
+               
+               call make_labels(Tstr, taustr, tolstr, Tend, tau, tol)
+               note = merge('A-LC', 'A-BK', adjoint)
+               fname = trim(home)//'spectrum_'//trim(note)//'_Tend'//trim(Tstr)//'_tau'//trim(taustr)//'_tol'//trim(tolstr)//'.npy'
+               write(tmr_name,'(*(A))')  'eig ', trim(note), ':   Tend= ', trim(Tstr), '   tau= ', trim(taustr), '   tol= ', trim(tolstr)
+               
+               ! eigendecomposition
+               call eigenvalue_analysis(prop_control, tmr_name, fname)
+               
+               ! deallocate and clean
+               deallocate(rkintegrator); deallocate(prop_control)
+            end if
+         end do
+         write(*,*)
+      end do
+   end subroutine check_eigenvalues
    
    subroutine integrate_RK(eq, LTI, Xref, Xref_RK, U0, S0, Tend, adjoint, home, main_run)
       implicit none
