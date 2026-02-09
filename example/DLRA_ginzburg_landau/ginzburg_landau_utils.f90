@@ -411,7 +411,7 @@ contains
    !-----      Printing helpers     -----
    !-------------------------------------
 
-   subroutine print_test_info(if_lyapunov, if_adj, main_run, run_fixed_rank_test, run_rank_adaptive_test, run_eigenvalue_test)
+   subroutine print_test_info(if_lyapunov, if_adj, main_run, run_fixed_rank_test, run_rank_adaptive_test, run_eigenvalue_test, run_LQG_test)
       implicit none 
       logical, intent(in) :: if_lyapunov
       logical, intent(in) :: if_adj
@@ -419,6 +419,7 @@ contains
       logical, intent(in) :: run_fixed_rank_test
       logical, intent(in) :: run_rank_adaptive_test
       logical, intent(in) :: run_eigenvalue_test
+      logical, intent(in) :: run_LQG_test
 
       print *, 'Cases to be run:'
       print '(2X,A45,L4)', padr('if_lyapunov:',50), if_lyapunov
@@ -427,6 +428,7 @@ contains
       print '(2X,A45,L4)', padr('run_fixed_rank_test:',50), run_fixed_rank_test
       print '(2X,A45,L4)', padr('run_rank_adaptive_test:',50), run_rank_adaptive_test
       print '(2X,A45,L4)', padr('run_eigenvalue_test:',50), run_eigenvalue_test
+      print '(2X,A45,L4)', padr('run_LQG_test:',50), run_LQG_test
    end subroutine print_test_info
 
    subroutine print_test_header(if_lyapunov, if_adj, eq, refid, rk_X0, Xref)
