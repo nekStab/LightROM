@@ -11,15 +11,16 @@ module Ginzburg_Landau_Tests
    character(len=*), parameter, private :: this_module = 'Ginzburg_Landau_Tests'
 
    public :: eigenvalue_analysis
-   !public :: eigenvalue_analysis_control
+   public :: check_eigenvalues
    public :: integrate_DLRA_fixed
    public :: integrate_DLRA_adaptive
 
 contains
 
-   subroutine eigenvalue_analysis(prop, tmr_name, fname)
+   subroutine eigenvalue_analysis(prop, mold, tmr_name, fname)
       implicit none
       class(abstract_exptA_linop_rdp), intent(inout) :: prop
+      class(abstract_vector_rdp), intent(in) :: mold(:)
       character(len=*), optional, intent(in) :: tmr_name
       character(len=*), optional, intent(in) :: fname
 
@@ -27,13 +28,13 @@ contains
       character(len=*), parameter :: this_procedure = 'eigenvalue_analysis'
       character(len=64)                         :: label
       integer                                   :: nev, info
-      type(state_vector),           allocatable :: V(:)
+      class(abstract_vector_rdp),           allocatable :: V(:)
       complex(dp),                  allocatable :: lambda(:)
       real(dp),                     allocatable :: residuals(:)
 
       if (present(tmr_name)) call global_lightROM_timer%add_timer(tmr_name, start=.true.)
 
-      nev = 50; allocate(V(nev)); call zero_basis(V)
+      nev = 50; allocate(V(nev), source=mold(1)); call zero_basis(V)
       call eigs(prop, V, lambda, residuals, info, kdim=2*nev)
       call check_info(info, 'eigs', this_module, this_procedure)
       
@@ -88,7 +89,7 @@ contains
       ! eig A
       tmr_name =  'eig A'
       fname    = trim(home)//"spectrum_A.npy"
-      call eigenvalue_analysis(prop, tmr_name, fname)
+      call eigenvalue_analysis(prop, U0, tmr_name, fname)
       print *, ''
 
       ! eig A - BK
@@ -111,7 +112,7 @@ contains
          call prop_control%init(X, LTI%B, Rinv, adjoint=adjoint, enable_control=.true.)
       end if
       
-      call eigenvalue_analysis(prop_control, tmr_name, fname)
+      call eigenvalue_analysis(prop_control, U0, tmr_name, fname)
 
       ! deallocate and clean
       deallocate(rkintegrator); deallocate(prop_control)
@@ -143,7 +144,7 @@ contains
                write(tmr_name,'(*(A))')  'eig ', trim(note), ':   Tend= ', trim(Tstr), '   tau= ', trim(taustr), '   tol= ', trim(tolstr)
                
                ! eigendecomposition
-               call eigenvalue_analysis(prop_control, tmr_name, fname)
+               call eigenvalue_analysis(prop_control, U0, tmr_name, fname)
                
                ! deallocate and clean
                deallocate(rkintegrator); deallocate(prop_control)
