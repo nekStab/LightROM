@@ -52,15 +52,22 @@ program demo
    type(rks54_class_with_control), allocatable :: rkintegrator
    type(exponential_prop_with_control), allocatable :: prop_control
 
+   ! LQG
+   type(rks54_class_LQG), allocatable :: rk_LQG
+   type(exponential_prop_LQG), allocatable :: prop_control_LQG
+
    ! LTI system
    type(lti_system)                          :: LTI
    type(dlra_opts)                           :: opts
    
    type(LR_state),               allocatable :: X
+   type(LR_state),               allocatable :: Xdir
+   type(LR_state),               allocatable :: Xadj
 
    ! Initial condition
-   type(state_vector),           allocatable :: U0(:)!, output(:)
+   type(state_vector),           allocatable :: U0(:)
    real(dp),                     allocatable :: S0(:,:)
+   type(state_error_vector),     allocatable :: vector_mold(:)
    
    ! OUTPUT
    real(dp)                                  :: X_out(N,N)
@@ -131,6 +138,7 @@ program demo
    ! depends on the tolerance but also the chosen time-step.
    !
    logical, parameter :: run_eigenvalue_test = .true.
+   logical, parameter :: run_LQG_test = .true.
    !
    ! Check the control efficacy using the eigenvalues of the controlled system matrix
    !
@@ -153,7 +161,7 @@ program demo
    ! Enumerate timers to check proper initialization
    call enumerate_timers()
 
-   call print_test_info(if_lyapunov, if_adj, main_run, run_fixed_rank_test, run_rank_adaptive_test, run_eigenvalue_test)
+   call print_test_info(if_lyapunov, if_adj, main_run, run_fixed_rank_test, run_rank_adaptive_test, run_eigenvalue_test, run_LQG_test)
    call print_test_header(if_lyapunov, if_adj, eq, refid, rk_X0, Xref)
    
    ! Initialize propagator
@@ -258,7 +266,41 @@ program demo
       torder = 1
 
       call check_eigenvalues(eq, prop, LTI, U0, Tend, dtv, torder, tolv, if_adj, fname_SVD_base, home)
-      
+   end if
+
+   if (run_LQG_test .and. .not. if_lyapunov) then
+
+      Xdir = LR_state()
+      Xadj = LR_state()
+      do j = 1, size(tolv)
+         tol = tolv(j)
+         do k = 1, size(dtv)
+            tau = dtv(k)
+            note = 'Pdir'
+            fbase = make_filename(home, 'DLRA_ADAPT', eq, trim(note), rk, torder, tau, Tend, tol)
+            exist_file = exist_X_file(fbase)
+            tmr_name = 'test'
+            allocate(vector_mold(1))
+            if (exist_file) then
+               ! load X state
+               call load_X_from_file(Xdir, meta, fbase, U0)
+               note = 'Padj'
+               fbase = make_filename(home, 'DLRA_ADAPT', eq, trim(note), rk, torder, tau, Tend, tol)
+               exist_file = exist_X_file(fbase)
+               if (exist_file) then
+                  ! load X state
+                  call load_X_from_file(Xadj, meta, fbase, U0)
+                  rk_LQG = rks54_class_LQG()
+                  prop_control_LQG = exponential_prop_LQG(1.0_dp, prop=rk_LQG)
+                  call prop_control_LQG%init(Xdir, Xadj, LTI%B, LTI%CT, Rinv, Vinv, enable_control=.true.)
+                  call eigenvalue_analysis(prop_control_LQG, vector_mold, tmr_name, fname)
+                  print *, ''
+               end if
+            end if
+            ! deallocate and clean
+            deallocate(rk_LQG); deallocate(prop_control_LQG)
+         end do
+      end do
    end if
 
    ! Compute and print timer summary
