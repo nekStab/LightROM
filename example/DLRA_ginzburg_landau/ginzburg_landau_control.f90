@@ -300,11 +300,13 @@ contains
       self%control_enabled = linop_setting
    end subroutine check_LQG_enabled
 
-   subroutine setup_LQG(self, X, B, CT, Rinv, Vinv)
+   subroutine setup_LQG(self, Xdir, Xadj, B, CT, Rinv, Vinv)
       class(rks54_class_LQG), intent(inout) :: self
       !! Controller
-      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
-      !! Riccati matrix representation
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: Xdir
+      !! Riccati matrix representation of solution to direct problem (LQR)
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: Xadj
+      !! Riccati matrix representation of solution to adjoint problem (LQE)
       class(abstract_vector_rdp), intent(in) :: B(:)
       !! Input matrix
       class(abstract_vector_rdp), intent(in) :: CT(:)
@@ -317,44 +319,49 @@ contains
       character(len=*), parameter :: this_procedure = 'setup_LQG'
       class(abstract_vector_rdp), allocatable :: gain(:)
       real(dp), allocatable :: wrk(:,:)
-      select type (X)
+      select type (Xdir)
       type is (LR_state)
-         select type (B)
-         type is (state_vector)
-            select type (CT)
+         select type (Xadj)
+         type is (LR_state)
+            select type (B)
             type is (state_vector)
-               ! copy input matrices
-               allocate(self%B(N, size(B)), source=zero_rdp)
-               call get_state(self%B, B, this_procedure)
-               allocate(self%C(N, size(CT)), source=zero_rdp)
-               allocate(wrk(N, size(CT)), source=zero_rdp)
-               call get_state(wrk, CT, this_procedure)
-               self%C = transpose(wrk)
-               deallocate(wrk)
-               ! compute LQE gains and store them
-               call LQE_gain(gain, X, CT, Vinv) ! will allocate gain as a state vector
-               allocate(self%L(N, size(CT)), source=zero_rdp)
-               call get_state(self%L, gain, this_procedure)
-               ! compute LQR gains and store them
-               call LQR_gain(gain, X, B, Rinv) ! will allocate gain as a state vector
-               allocate(self%K(size(B), N), source=zero_rdp)
-               allocate(wrk(N, size(B)), source=zero_rdp)
-               call get_state(wrk, gain, this_procedure)
-               self%K = transpose(wrk)
-               deallocate(wrk)
-               ! set init flag
-               allocate(self%xu_control(size(B)))
-               allocate(self%xe_control(size(B)))
-               allocate(self%e_measure(size(CT)))
-               self%initialised = .true.
+               select type (CT)
+               type is (state_vector)
+                  ! copy input matrices
+                  allocate(self%B(N, size(B)), source=zero_rdp)
+                  call get_state(self%B, B, this_procedure)
+                  allocate(self%C(N, size(CT)), source=zero_rdp)
+                  allocate(wrk(N, size(CT)), source=zero_rdp)
+                  call get_state(wrk, CT, this_procedure)
+                  self%C = transpose(wrk)
+                  deallocate(wrk)
+                  ! compute LQE gains and store them
+                  call LQE_gain(gain, Xadj, CT, Vinv) ! will allocate gain as a state vector
+                  allocate(self%L(N, size(CT)), source=zero_rdp)
+                  call get_state(self%L, gain, this_procedure)
+                  ! compute LQR gains and store them
+                  call LQR_gain(gain, Xdir, B, Rinv) ! will allocate gain as a state vector
+                  allocate(self%K(size(B), N), source=zero_rdp)
+                  allocate(wrk(N, size(B)), source=zero_rdp)
+                  call get_state(wrk, gain, this_procedure)
+                  self%K = transpose(wrk)
+                  deallocate(wrk)
+                  ! set init flag
+                  allocate(self%xu_control(size(B)))
+                  allocate(self%xe_control(size(B)))
+                  allocate(self%e_measure(size(CT)))
+                  self%initialised = .true.
+               class default
+                  call type_error('CT', 'state_vector', this_module, this_procedure)
+               end select
             class default
-               call type_error('CT', 'state_vector', this_module, this_procedure)
+               call type_error('B', 'state_vector', this_module, this_procedure)
             end select
          class default
-            call type_error('B', 'state_vector', this_module, this_procedure)
+            call type_error('Xadj', 'LR_state', this_module, this_procedure)
          end select
       class default
-         call type_error('X', 'LR_state', this_module, this_procedure)
+         call type_error('Xdir', 'LR_state', this_module, this_procedure)
       end select
    end subroutine setup_LQG
 
@@ -423,11 +430,13 @@ contains
       initialised = self%initialised
    end function exptA_LQG_is_initialised
 
-   subroutine init_exptA_LQG(self, X, B, CT, Rinv, Vinv, enable_control)
+   subroutine init_exptA_LQG(self, Xdir, Xadj, B, CT, Rinv, Vinv, enable_control)
       class(exponential_prop_LQG), intent(inout)  :: self
       !! Linear Operator.
-      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
-      !! Riccati matrix representation
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: Xdir
+      !! Riccati matrix representation of solution to direct problem (LQR)
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: Xadj
+      !! Riccati matrix representation of solution to adjoint problem (LQE)
       class(abstract_vector_rdp), intent(in) :: B(:)
       !! Input matrix
       class(abstract_vector_rdp), intent(in) :: CT(:)
@@ -443,7 +452,7 @@ contains
       ! Initialize propagator.
       call self%prop%initialize(n=2*N, f=rhs_LQG)
       ! setup internal propagator to compute K/L
-      call self%prop%setup(X, B, CT, Rinv, Vinv)
+      call self%prop%setup(Xdir, Xadj, B, CT, Rinv, Vinv)
       ! Choose whether to enable control
       self%control_enabled = optval(enable_control, .true.)
       ! set initialisation flag
