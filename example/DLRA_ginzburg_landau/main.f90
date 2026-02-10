@@ -264,7 +264,7 @@ program demo
       dtv  = dtv(size(dtv):1:-1) ! reverse vector
       tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
       torder = 1
-
+   
       call check_eigenvalues(eq, prop, LTI, U0, Tend, dtv, torder, tolv, if_adj, fname_SVD_base, home)
    end if
 
@@ -272,6 +272,8 @@ program demo
 
       Xdir = LR_state()
       Xadj = LR_state()
+      torder = 1
+      allocate(vector_mold(1))
       do j = 1, size(tolv)
          tol = tolv(j)
          do k = 1, size(dtv)
@@ -279,8 +281,6 @@ program demo
             note = 'Pdir'
             fbase = make_filename(home, 'DLRA_ADAPT', eq, trim(note), rk, torder, tau, Tend, tol)
             exist_file = exist_X_file(fbase)
-            tmr_name = 'test'
-            allocate(vector_mold(1))
             if (exist_file) then
                ! load X state
                call load_X_from_file(Xdir, meta, fbase, U0)
@@ -288,18 +288,20 @@ program demo
                fbase = make_filename(home, 'DLRA_ADAPT', eq, trim(note), rk, torder, tau, Tend, tol)
                exist_file = exist_X_file(fbase)
                if (exist_file) then
+                  call make_labels(Tstr, taustr, tolstr, Tend, tau, tol)
+                  write(tmr_name,'(*(A))')  'LQG:   Tend= ', trim(Tstr), '   tau= ', trim(taustr), '   tol= ', trim(tolstr)
                   ! load X state
                   call load_X_from_file(Xadj, meta, fbase, U0)
                   rk_LQG = rks54_class_LQG()
                   prop_control_LQG = exponential_prop_LQG(1.0_dp, prop=rk_LQG)
                   call prop_control_LQG%init(Xdir, Xadj, LTI%B, LTI%CT, Rinv, Vinv, enable_control=.true.)
                   call eigenvalue_analysis(prop_control_LQG, vector_mold, tmr_name, fname)
-                  print *, ''
+                  ! deallocate and clean
+                  deallocate(rk_LQG); deallocate(prop_control_LQG)
                end if
             end if
-            ! deallocate and clean
-            deallocate(rk_LQG); deallocate(prop_control_LQG)
          end do
+         write(*,*)
       end do
    end if
 
