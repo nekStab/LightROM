@@ -1,6 +1,6 @@
 module LightROM_Timing
    use LightKrylov
-   use LightKrylov, only : dp, wp => dp
+   use LightKrylov, only : dp
    use LightKrylov_Logger, only: log_message, log_information, log_warning, log_debug, check_info
    use LightKrylov_Timing
    implicit none
@@ -59,9 +59,11 @@ contains
       call self%set_watch_name('LightROM_timer')
       ! timers for LightKrylov_LyapunovSolvers
       call self%add_timer('DLRA_lyapunov_integrator_rdp', count=istart)
-      call self%add_timer('DLRA_lyapunov_step_rdp')
-      call self%add_timer('M_forward_map_rdp')
-      call self%add_timer('G_forward_map_lyapunov_rdp')
+      !call self%add_timer('DLRA_lyapunov_step_rdp')
+      call self%add_timer('rank_adaptive_projector_splitting_DLRA_step_lyapunov_rdp')
+      call self%add_timer('fixed_rank_projector_splitting_DLRA_step_lyapunov_rdp')
+      call self%add_timer('M_map_rdp')
+      call self%add_timer('G_map_lyapunov_rdp')
       call self%add_timer('K_step_lyapunov_rdp')
       call self%add_timer('S_step_lyapunov_rdp')
       call self%add_timer('L_step_lyapunov_rdp', count=iend)
@@ -69,8 +71,10 @@ contains
       call self%add_group('LyapunovSolvers', istart=istart, iend=iend)
       ! timers for LightKrylov_RiccatiSolvers
       call self%add_timer('DLRA_riccati_integrator_rdp', count=istart)
-      call self%add_timer('DLRA_riccati_step_rdp')
-      call self%add_timer('G_forward_map_riccati_rdp')
+      !call self%add_timer('DLRA_riccati_step_rdp')
+      call self%add_timer('rank_adaptive_projector_splitting_DLRA_step_riccati_rdp')
+      call self%add_timer('fixed_rank_projector_splitting_DLRA_step_riccati_rdp')
+      call self%add_timer('G_map_riccati_rdp')
       call self%add_timer('K_step_riccati_rdp')
       call self%add_timer('S_step_riccati_rdp')
       call self%add_timer('L_step_riccati_rdp', count=iend)
