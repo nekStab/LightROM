@@ -125,6 +125,12 @@ contains
          write(msg,'(2(A,E12.5))') 'Invalid Tend/tau combination specified. Tend = ', self%Tend, ', tau = ', self%tau
          call stop_error(msg, this_module, this_procedure)
       end if 
+      if (self%nsteps /= 0 .and. self%nsteps /= itmp) then
+         write(msg,'(2(A,E12.5))') 'Specified nsteps does not match Tend/tau: Tend = ', self%Tend, ', tau = ', self%tau
+         call log_warning(msg, this_module, this_procedure)
+         write(msg,'(A,I0)') 'Resetting. nsteps = ', itmp
+         call log_warning(msg, this_module, this_procedure)
+      end if
       self%nsteps = itmp
       tau_eff = self%Tend/self%nsteps
       if (abs(self%tau-tau_eff) < tol) then

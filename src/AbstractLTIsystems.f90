@@ -76,6 +76,7 @@ module LightROM_AbstractLTIsystems
       logical                                  :: rank_is_initialised = .false.
    contains
       procedure, pass(self), public :: reset => abstract_sym_low_rank_state_reset
+      procedure, pass(self), public :: increment_counters => abstract_sym_low_rank_state_increment_counters
    end type abstract_sym_low_rank_state_rdp
 
 contains
@@ -96,4 +97,12 @@ contains
       end if
    end subroutine abstract_sym_low_rank_state_reset
 
+   subroutine abstract_sym_low_rank_state_increment_counters(self, tau)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
+      real(dp), intent(in) :: tau
+      self%time = self%time + tau
+      self%step = self%step + 1
+      self%tot_time = self%tot_time + tau
+      self%tot_step = self%tot_step + 1
+   end subroutine abstract_sym_low_rank_state_increment_counters
 end module LightROM_AbstractLTIsystems

@@ -146,7 +146,7 @@ module LightROM_LyapunovSolvers
       !! Low-Rank inhomogeneity.
       real(dp),                                intent(in)    :: Tend
       !! Integration time horizon.
-      real(dp),                                intent(inout) :: tau
+      real(dp),                                intent(in)    :: tau
       !! Desired time step. The avtual time-step will be computed such as to reach Tend in an integer number
       !! of steps.
       integer,                                 intent(out)   :: info
@@ -173,53 +173,55 @@ module LightROM_LyapunovSolvers
       LyapSolver_counter = LyapSolver_counter + 1
 
       ! Optional arguments
-      trans = optval(iftrans, .false.)
+!      trans = optval(iftrans, .false.)
+!
+!      ! Options
+!      if (present(options)) then
+!         opts = options
+!      else ! default
+!         opts = dlra_opts()
+!      end if
+!
+!      ! Set tolerance
+!      !tol = opts%tol
+!      opts%tau = tau
+!      opts%Tend = Tend
+!
+!      ! Check compatibility of options and determine chk/IO step
+!      !all check_options(X, opts)
+!      call opts%init()
+!
+!      ! Initialize
+!      call X%reset()
+!      ! Compute number of steps
+!      if_lastep = .false.
+!      !opts%nsteps = nint(Tend/tau)
+!
+!      rkmax = size(X%U)
+!      ! Allocate memory for SVD & lagged fields
+!      allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
 
-      ! Options
-      if (present(options)) then
-         opts = options
-      else ! default
-         opts = dlra_opts()
-      end if
+!      call log_message('Initializing Lyapunov solver', this_module, 'DLRA_main')
+!      write(msg,'(A,I0,A,F10.8)') 'Integration over ', opts%nsteps, ' steps with dt= ', opts%tau
+!      call log_information(msg, this_module, 'DLRA_main')
+!      ! Prepare logfile
+!      call write_logfile_headers(logfile_basename)
+!
+!      ! determine initial rank if rank-adaptive
+!      if (opts%if_rank_adaptive) then
+!         rk_reduction_lock = opts%rk_reduction_lock  ! initialize rank reduction lock
+!         if (.not. X%rank_is_initialised) then
+!            call log_message('Determine initial rank:', this_module, 'DLRA_main')
+!            call set_initial_rank(X, A, B, opts%tau, opts%mode, exptA, trans, opts%tol)
+!         end if
+!      end if
 
-      ! Set tolerance
-      !tol = opts%tol
-      opts%tau = tau
-      opts%Tend = Tend
-
-      ! Check compatibility of options and determine chk/IO step
-      !all check_options(X, opts)
-      call opts%init()
-
-      ! Initialize
-      rk_reduction_lock = 10
-      call X%reset()
-      ! Compute number of steps
-      if_lastep = .false.
-      !opts%nsteps = nint(Tend/tau)
-
-      rkmax = size(X%U)
-      ! Allocate memory for SVD & lagged fields
-      allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
-
-      call log_message('Initializing Lyapunov solver', this_module, 'DLRA_main')
-      write(msg,'(A,I0,A,F10.8)') 'Integration over ', opts%nsteps, ' steps with dt= ', opts%tau
-      call log_information(msg, this_module, 'DLRA_main')
-      ! Prepare logfile
-      call write_logfile_headers(logfile_basename)
-
-      ! determine initial rank if rank-adaptive
-      if (opts%if_rank_adaptive) then
-         rk_reduction_lock = 10  ! initialize rank reduction lock
-         if (.not. X%rank_is_initialised) then
-            call log_message('Determine initial rank:', this_module, 'DLRA_main')
-            call set_initial_rank(X, A, B, opts%tau, opts%mode, exptA, trans, opts%tol)
-         end if
-      end if
-
-      call log_settings(X, Tend, opts)
+!      call log_settings(X, Tend, opts)
+      call init_lyap(X, A, B,  Tend, tau, exptA, opts, iftrans, options)
       call log_message('Starting DLRA integration', this_module, 'DLRA_main')
 
+      if_lastep = .false.
+      if (opts%if_rank_adaptive) rk_reduction_lock = opts%rk_reduction_lock
       dlra : do istep = 1, opts%nsteps
 
          call log_step(X, istep, opts%nsteps)
@@ -237,10 +239,7 @@ module LightROM_LyapunovSolvers
          end if
 
          ! update time & step counters
-         X%time = X%time + opts%tau
-         X%step = X%step + 1
-         X%tot_time = X%tot_time + opts%tau
-         X%tot_step = X%tot_step + 1
+         call X%increment_counters(opts%tau)
 
          ! here we can do some checks such as whether we have reached steady state
          if ( X%rk > 0 .and. (mod(istep, opts%chkstep) == 0 .or. istep == opts%nsteps) ) then
@@ -268,6 +267,72 @@ module LightROM_LyapunovSolvers
       deallocate(Usvd, ssvd, VTsvd)
       if (time_lightROM()) call lr_timer%stop('DLRA_lyapunov_integrator_rdp')
    end subroutine projector_splitting_DLRA_lyapunov_integrator_rdp
+
+   subroutine init_lyap(X, A, B,  Tend, tau, exptA, opts, iftrans, options)
+      class(abstract_sym_low_rank_state_rdp),  intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_linop_rdp),               intent(inout) :: A
+      !! Linear operator
+      class(abstract_vector_rdp),              intent(in)    :: B(:)
+      !! Low-Rank inhomogeneity.
+      real(dp),                                intent(in)    :: Tend
+      !! Integration time horizon.
+      real(dp),                                intent(in)    :: tau
+      !! Desired time step. The avtual time-step will be computed such as to reach Tend in an integer number
+      !! of steps.
+      procedure(abstract_exptA_rdp)                          :: exptA
+      !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
+      type(dlra_opts),                         intent(out)   :: opts
+      !! Checked opts
+      logical,                       optional, intent(in)    :: iftrans
+      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      type(dlra_opts),               optional, intent(in)    :: options
+      !! Options for solver configuration
+      ! internal
+      character(len=128)                  :: msg
+      integer :: rkmax
+      logical                                                :: trans
+      
+      
+      trans = optval(iftrans, .false.)
+
+      ! Options
+      if (present(options)) then
+         opts = options
+      else ! default
+         opts = dlra_opts()
+      end if
+
+      ! Set tolerance
+      !tol = opts%tol
+      opts%tau = tau
+      opts%Tend = Tend
+
+      ! Check compatibility of options and determine chk/IO step
+      !all check_options(X, opts)
+      call opts%init()
+
+      ! Initialize
+      call X%reset()
+
+      rkmax = size(X%U)
+      ! Allocate memory for SVD & lagged fields
+      allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
+
+      call log_message('Initializing Lyapunov solver', this_module, 'DLRA_main')
+      write(msg,'(A,I0,A,F10.8)') 'Integration over ', opts%nsteps, ' steps with dt= ', opts%tau
+      call log_information(msg, this_module, 'DLRA_main')
+      ! Prepare logfile
+      call write_logfile_headers(logfile_basename)
+
+      ! determine initial rank if rank-adaptive
+      if (opts%if_rank_adaptive .and. .not. X%rank_is_initialised) then
+         call log_message('Determine initial rank:', this_module, 'DLRA_main')
+         call set_initial_rank(X, A, B, opts%tau, opts%mode, exptA, trans, opts%tol)
+      end if
+
+      call log_settings(X, Tend, opts)
+   end subroutine init_lyap
 
    !-----------------------
    !-----     PSI     -----
