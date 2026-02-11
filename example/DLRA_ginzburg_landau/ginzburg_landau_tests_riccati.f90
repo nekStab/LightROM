@@ -9,9 +9,7 @@ module Ginzburg_Landau_Tests_Riccati
    use LightKrylov_Utils ! svd, sqrtm
    ! LightROM
    use LightROM_Utils ! Balancing_Transformation
-   ! Riccati Solver
-   !use LightROM_RiccatiSolvers
-   use LightROM_RiccatiUtils
+   use LightROM_DLRAIntegrators
    ! Ginzburg Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators

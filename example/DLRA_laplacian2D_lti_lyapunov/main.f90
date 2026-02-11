@@ -13,8 +13,7 @@ program demo
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
    use LightROM_Timing
-   use LightROM_LyapunovSolvers
-   use LightROM_LyapunovUtils
+   use LightROM_DLRAIntegrators
    ! Laplacian
    use Laplacian2D_LTI_Lyapunov_Base
    use Laplacian2D_LTI_Lyapunov_Operators

@@ -16,9 +16,8 @@ program demo
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
    use LightROM_Timing
-   use LightROM_LyapunovSolvers
-   use LightROM_LyapunovUtils
-   ! GInzburg-Landau
+   use LightROM_DLRAIntegrators
+   ! Ginzburg-Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators
    use Ginzburg_Landau_Control
@@ -101,13 +100,13 @@ program demo
    !--------------------------------
    ! Define which examples to run:
    !
-   logical, parameter :: if_lyapunov = .false.
+   logical, parameter :: if_lyapunov = .true.
    !
    ! if_lyapunov = .true.:  Solve the Lyapunov equation:   0 = A @ X + X @ A.T + Q
    !
    ! if_lyapunov = .false.: Solve the Riccati equation:    0 = A @ X + X @ A.T + X @ B @ @ R^{-1} @ B.T @ W @ X + Q
    !
-   logical, parameter :: if_adj = .true.
+   logical, parameter :: if_adj = .false.
    ! Only considered if if_lyapunov = .true.
    !
    ! Adjoint = .true.:      Solve the adjoint Lyapunov equation:  0 = A.T @ X + X @ A + C.T @ C @ W

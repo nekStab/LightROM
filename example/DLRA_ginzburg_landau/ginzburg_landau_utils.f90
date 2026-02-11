@@ -16,12 +16,10 @@ module Ginzburg_Landau_Utils
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
    use LightROM_Timing
-   ! Lyapunov Solver
-   use LightROM_LyapunovSolvers
-   use LightROM_LyapunovUtils
-   ! Riccati Solver
-   use LightROM_RiccatiSolvers
-   use LightROM_RiccatiUtils
+   ! DLRA Integrators
+   !use LightROM_LyapunovUtils
+   !use LightROM_RiccatiUtils
+   use LightROM_DLRAIntegrators
    ! Ginzburg Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators

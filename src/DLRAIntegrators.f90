@@ -1,4 +1,4 @@
-module LightROM_LyapunovSolvers
+module LightROM_DLRAIntegrators
    !! This module provides the implementation of the Krylov-based solvers for the Differential Lyapunov
    !! equation based on the dynamic low-rank approximation and operator splitting.
    ! Standard library
@@ -457,4 +457,4 @@ contains
 
    end subroutine generic_DLRA_integrator_rdp
 
-end module LightROM_LyapunovSolvers
+end module LightROM_DLRAIntegrators

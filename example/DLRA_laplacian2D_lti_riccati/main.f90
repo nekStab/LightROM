@@ -15,9 +15,7 @@ program demo
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
    use LightROM_Timing
-   use LightROM_LyapunovSolvers
-   use LightROM_LyapunovUtils
-   !use LightROM_RiccatiSolvers
+   use LightROM_DLRAIntegrators
    ! Laplacian
    use Laplacian2D_LTI_Riccati_Base
    use Laplacian2D_LTI_Riccati_Operators

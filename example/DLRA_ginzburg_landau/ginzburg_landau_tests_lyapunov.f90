@@ -9,9 +9,7 @@ module Ginzburg_Landau_Tests_Lyapunov
    use LightKrylov_Utils ! svd, sqrtm
    ! LightROM
    use LightROM_Utils ! Balancing_Transformation
-   ! Lyapunov Solver
-   use LightROM_LyapunovSolvers
-   use LightROM_LyapunovUtils
+   use LightROM_DLRAIntegrators
    ! Ginzburg Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators
