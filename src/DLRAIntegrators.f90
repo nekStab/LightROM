@@ -2,7 +2,6 @@ module LightROM_DLRAIntegrators
    !! This module provides the implementation of the Krylov-based solvers for the Differential Lyapunov
    !! equation based on the dynamic low-rank approximation and operator splitting.
    ! Standard library
-   use stdlib_linalg, only : eye, diag, svd, svdvals
    use stdlib_optval, only : optval
    ! LightKrylov modules
    use LightKrylov
@@ -14,8 +13,6 @@ module LightROM_DLRAIntegrators
    ! LightROM modules
    use LightROM_AbstractLTIsystems
    use LightROM_SolverUtils
-   use LightROM_LyapunovUtils
-   use LightROM_Utils
    use LightROM_LoggerUtils
    use LightROM_Timing, only: lr_timer => global_lightROM_timer, time_lightROM
    
@@ -28,7 +25,7 @@ module LightROM_DLRAIntegrators
    integer :: RiccatiSolver_counter = 0
 
    public :: Lyapunov_integrator
-   public :: reset_solver
+   public :: Riccati_integrator
 
    interface Lyapunov_integrator
       module procedure Lyapunov_Integrator_rdp
