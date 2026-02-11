@@ -1,13 +1,9 @@
 module LightROM_AbstractLTIsystems
    ! Use the abstract linear operator types defined in LightKrylov.
-   use LightKrylov, only : abstract_linop_rdp, abstract_vector_rdp, wp => dp
-   use LightKrylov_AbstractVectors, only: innerprod
-   use LightKrylov_Constants, only : zero_rdp
+   use LightKrylov, only : abstract_linop_rdp, abstract_vector_rdp, dp
    implicit none
 
-   private
-
-   character(len=*), parameter :: this_module = 'LR_AbsLTIsys'
+   character(len=*), parameter, private :: this_module = 'LR_AbsLTIsys'
 
    !-------------------------------------------------------
    !-----     ABSTRACT LTI SYSTEM TYPE DEFINITION     -----
@@ -28,7 +24,7 @@ module LightROM_AbstractLTIsystems
       ! State-to-output matrix.
       class(abstract_vector_rdp), allocatable :: CT(:)
       ! Feedthrough matrix.
-      real(wp),                   allocatable :: D(:, :)
+      real(dp),                   allocatable :: D(:, :)
    contains
    end type abstract_lti_system_rdp
 
@@ -41,11 +37,9 @@ module LightROM_AbstractLTIsystems
       ! State-to-output matrix.
       class(abstract_vector_rdp), allocatable :: CT(:)
       ! Feedthrough matrix.
-      real(wp),                   allocatable :: D(:, :)
+      real(dp),                   allocatable :: D(:, :)
       ! Sampling period.
-      real(wp)                                :: dt = 1.0_wp
-   contains
-     private
+      real(dp)                                :: dt = 1.0_dp
    end type abstract_dlti_system_rdp
 
    !--------------------------------------------------------------------
@@ -64,13 +58,13 @@ module LightROM_AbstractLTIsystems
       ! Low-Rank basis.
       class(abstract_vector_rdp),  allocatable :: U(:)
       ! Coefficients
-      real(wp),                    allocatable :: S(:, :)
+      real(dp),                    allocatable :: S(:, :)
       ! Current approximation rank
       integer                                  :: rk = 1
       ! Simulation time
-      real(wp)                                 :: time = 0.0_wp
+      real(dp)                                 :: time = 0.0_dp
       ! Total cumulative simulation time
-      real(wp)                                 :: tot_time = 0.0_wp
+      real(dp)                                 :: tot_time = 0.0_dp
       ! Simulation step counter
       integer                                  :: step = 0
       ! Total cumulative simulation step counter
@@ -79,7 +73,6 @@ module LightROM_AbstractLTIsystems
       logical                                  :: is_converged = .false.
       ! Has rank been initialized? (for rank-adaptive DLRA)
       logical                                  :: rank_is_initialised = .false.
-   contains
    end type abstract_sym_low_rank_state_rdp
 
 end module LightROM_AbstractLTIsystems

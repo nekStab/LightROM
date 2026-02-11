@@ -2,7 +2,7 @@ module LightROM_LyapunovUtils
    use stdlib_optval, only : optval
    ! LightKrylov
    use LightKrylov
-   use LightKrylov, only: wp => dp
+   use LightKrylov, only: dp
    use LightKrylov_Constants
    use LightKrylov_Logger
    use LightKrylov_AbstractVectors
@@ -41,7 +41,7 @@ contains
       class(abstract_vector_rdp), intent(in)  :: A(:)
       class(abstract_vector_rdp), intent(in)  :: b
       ! Intermediate basis
-      real(wp) :: wrk(size(A))
+      real(dp) :: wrk(size(A))
       wrk = innerprod(A, b)
       block
          class(abstract_vector_rdp), allocatable :: xwrk
@@ -65,7 +65,7 @@ contains
       class(abstract_vector_rdp), intent(in)  :: A(:)
       class(abstract_vector_rdp), intent(in)  :: B(:)
       ! Intermediate basis
-      real(wp) :: wrk(size(A),size(B))
+      real(dp) :: wrk(size(A),size(B))
       wrk = innerprod(A, B)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)

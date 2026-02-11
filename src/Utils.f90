@@ -5,7 +5,7 @@ module LightROM_Utils
    use stdlib_optval, only : optval
    ! LightKrylov for Linear Algebra
    use LightKrylov
-   use LightKrylov, only : dp, wp => dp
+   use LightKrylov, only : dp
    use LightKrylov_Logger, only: log_message, log_information, log_warning, log_debug, check_info, stop_error
    use LightKrylov_AbstractVectors
    use LightKrylov_BaseKrylov, only : orthogonalize_against_basis
@@ -14,9 +14,7 @@ module LightROM_Utils
    use LightROM_AbstractLTIsystems
    
    implicit none 
-
-   private :: this_module
-   character(len=*), parameter :: this_module     = 'LR_Utils'
+   character(len=*), parameter, private :: this_module = 'LR_Utils'
 
    public :: dlra_opts
    public :: coefficient_matrix_norm, increment_norm, low_rank_CALE_residual_norm
@@ -73,11 +71,11 @@ module LightROM_Utils
       !
       integer :: chkstep = 10
       !! Time step interval at which convergence is checked and runtime information is printed (default: 10)
-      real(wp) :: chktime = 1.0_wp
+      real(dp) :: chktime = 1.0_dp
       !! Simulation time interval at which convergence is checked and runtime information is printed (default: 1.0)
       logical :: chkctrl_time = .true.
       !! Use time instead of timestep control (default: .true.)
-      real(wp) :: inc_tol = 1e-6_wp
+      real(dp) :: inc_tol = 1e-6_dp
       !! Tolerance on the increment for convergence (default: 1e-6)
       logical :: relative_inc = .true.
       !! Tolerance control: Use relative values for convergence (default = .true.)
@@ -86,7 +84,7 @@ module LightROM_Utils
       !
       logical :: if_rank_adaptive = .true.
       !! Allow rank-adaptivity
-      real(wp) :: tol = 1e-6_wp
+      real(dp) :: tol = 1e-6_dp
       !! Tolerance on the extra singular value to determine rank-adaptation
       logical :: use_err_est = .false.
       !! Choose whether to base the tolerance on 'tol' or on the splitting error estimate
@@ -115,7 +113,7 @@ contains
       !! Note: In the current implementation, the numerical rank of the SVD is not considered.
       class(abstract_vector_rdp),          intent(out)   :: T(:)
       !! Balancing transformation
-      real(wp),                            intent(out)   :: S(:)
+      real(dp),                            intent(out)   :: S(:)
       !! Singular values of the BT
       class(abstract_vector_rdp),          intent(out)   :: Tinv(:)
       !! Inverse balancing transformation
@@ -126,10 +124,10 @@ contains
 
       ! internal variables
       integer                                :: i, rkc, rko, rk, rkmin
-      real(wp),                  allocatable :: LRCrossGramian(:,:)
-      real(wp),                  allocatable :: Swrk(:,:)
-      real(wp),                  allocatable :: Sigma(:)
-      real(wp),                  allocatable :: V(:,:), W(:,:)
+      real(dp),                  allocatable :: LRCrossGramian(:,:)
+      real(dp),                  allocatable :: Swrk(:,:)
+      real(dp),                  allocatable :: Sigma(:)
+      real(dp),                  allocatable :: V(:,:), W(:,:)
 
       rkc   = size(Xc)
       rko   = size(Yo)
@@ -162,11 +160,11 @@ contains
       !! Low rank solution of current solution
       class(abstract_vector_rdp), intent(in) :: B(:)
       !! System inputs
-      real(wp), intent(in) :: Rinv(:,:)
+      real(dp), intent(in) :: Rinv(:,:)
       !! Inverse control cost
 
       ! internal variables
-      real(wp), allocatable :: proj(:,:), wrk(:,:)
+      real(dp), allocatable :: proj(:,:), wrk(:,:)
 
       ! K = R^{-1} @ B.T @ P
       proj = innerprod(B, X%U(:X%rk))
@@ -182,11 +180,11 @@ contains
       !! Low rank solution of current solution
       class(abstract_vector_rdp), intent(in) :: CT(:)
       !! Sensors
-      real(wp), intent(in) :: Vinv(:,:)
+      real(dp), intent(in) :: Vinv(:,:)
       !! Inverse sensor noise variance
 
       ! internal variables
-      real(wp), allocatable :: proj(:,:)
+      real(dp), allocatable :: proj(:,:)
 
       ! L = P @ C.T @ V^{-1}
       call linear_combination(L, CT, Vinv)
@@ -209,13 +207,13 @@ contains
       !!     \hat{\mathbf{C}} = \mathbf{C} \mathbf{V}, \qquad
       !!     \hat{\mathbf{D}} = \mathbf{D} .
       !! \]
-      real(wp),            allocatable, intent(out)    :: Ahat(:, :)
+      real(dp),            allocatable, intent(out)    :: Ahat(:, :)
       !! Reduced-order dynamics matrix.
-      real(wp),            allocatable, intent(out)    :: Bhat(:, :)
+      real(dp),            allocatable, intent(out)    :: Bhat(:, :)
       !! Reduced-order input-to-state matrix.
-      real(wp),            allocatable, intent(out)    :: Chat(:, :)
+      real(dp),            allocatable, intent(out)    :: Chat(:, :)
       !! Reduced-order state-to-output matrix.
-      real(wp),            allocatable, intent(out)    :: D(:, :)
+      real(dp),            allocatable, intent(out)    :: D(:, :)
       !! Feed-through matrix
       class(abstract_lti_system_rdp),   intent(inout)  :: LTI
       !! Large-scale LTI to project
@@ -227,17 +225,17 @@ contains
       ! internal variables
       integer                                          :: i, rk, rkc, rkb
       class(abstract_vector_rdp),       allocatable    :: Uwrk(:)
-      real(wp),                         allocatable    :: Cwrk(:, :)
+      real(dp),                         allocatable    :: Cwrk(:, :)
 
       rk  = size(T)
       rkb = size(LTI%B)
       rkc = size(LTI%CT)
       allocate(Uwrk(rk), source=T(1)); call zero_basis(Uwrk)
-      allocate(Ahat(1:rk, 1:rk ));                  Ahat = 0.0_wp
-      allocate(Bhat(1:rk, 1:rkb));                  Bhat = 0.0_wp
-      allocate(Cwrk(1:rk, 1:rkc));                  Cwrk = 0.0_wp
-      allocate(Chat(1:rkc,1:rk ));                  Chat = 0.0_wp
-      allocate(D(1:size(LTI%D,1),1:size(LTI%D,2))); D    = 0.0_wp
+      allocate(Ahat(1:rk, 1:rk ));                  Ahat = 0.0_dp
+      allocate(Bhat(1:rk, 1:rkb));                  Bhat = 0.0_dp
+      allocate(Cwrk(1:rk, 1:rkc));                  Cwrk = 0.0_dp
+      allocate(Chat(1:rkc,1:rk ));                  Chat = 0.0_dp
+      allocate(D(1:size(LTI%D,1),1:size(LTI%D,2))); D    = 0.0_dp
 
       do i = 1, rk
          call LTI%A%matvec(Tinv(i), Uwrk(i))
@@ -262,13 +260,13 @@ contains
       !!     \hat{\mathbf{C}} = \mathbf{C} \mathbf{V}, \qquad
       !!     \hat{\mathbf{D}} = \mathbf{D} .
       !! \]
-      real(wp),            allocatable, intent(out)    :: Ahat(:, :)
+      real(dp),            allocatable, intent(out)    :: Ahat(:, :)
       !! Reduced-order dynamics matrix.
-      real(wp),            allocatable, intent(out)    :: Bhat(:, :)
+      real(dp),            allocatable, intent(out)    :: Bhat(:, :)
       !! Reduced-order input-to-state matrix.
-      real(wp),            allocatable, intent(out)    :: Chat(:, :)
+      real(dp),            allocatable, intent(out)    :: Chat(:, :)
       !! Reduced-order state-to-output matrix.
-      real(wp),            allocatable, intent(out)    :: D(:, :)
+      real(dp),            allocatable, intent(out)    :: D(:, :)
       !! Feed-through matrix
       class(abstract_lti_system_rdp),   intent(inout)  :: LTI
       !! Large-scale LTI to project
@@ -492,14 +490,14 @@ contains
       !!     \mathbf{U}^T \mathbf{V}, \qquad \text{and }  \qquad \mathbf{V_perp}^T \mathbf{V}
       !!     \hat{\mathbf{D}} = \mathbf{D} .
       !! \]
-      real(wp),                   allocatable, intent(out) :: UTV(:,:)
-      real(wp),                   allocatable, intent(out) :: VpTV(:,:)
+      real(dp),                   allocatable, intent(out) :: UTV(:,:)
+      real(dp),                   allocatable, intent(out) :: VpTV(:,:)
       class(abstract_vector_rdp),              intent(in)  :: U(:)
       class(abstract_vector_rdp),              intent(in)  :: V(:)
 
       ! internals
       class(abstract_vector_rdp),             allocatable  :: Vp(:)
-      real(wp),                               allocatable  :: wrk(:,:)
+      real(dp),                               allocatable  :: wrk(:,:)
       integer :: ru, rv, r, info
 
       ru = size(U)
@@ -507,13 +505,13 @@ contains
       r  = ru + rv
 
       allocate(Vp(rv), source=V) ! Vp = V
-      allocate(UTV( ru,rv)); UTV  = 0.0_wp
-      allocate(VpTV(rv,rv)); VpTV = 0.0_wp
+      allocate(UTV( ru,rv)); UTV  = 0.0_dp
+      allocate(VpTV(rv,rv)); VpTV = 0.0_dp
 
       ! orthonormalize second basis against first
       call orthogonalize_against_basis(Vp, U, info, if_chk_orthonormal=.false., beta=UTV)
       call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='project_onto_common_basis_rdp')
-      allocate(wrk(rv,rv)); wrk = 0.0_wp
+      allocate(wrk(rv,rv)); wrk = 0.0_dp
       call qr(Vp, wrk, info)
       call check_info(info, 'qr', module=this_module, procedure='project_onto_common_basis_rdp')
 
@@ -529,15 +527,15 @@ contains
       !! Low rank solution of current solution
       class(abstract_vector_rdp)              :: U_lag(:)
       !! Low-rank basis of lagged solution
-      real(wp)                                :: S_lag(:,:)
+      real(dp)                                :: S_lag(:,:)
       !! Coefficients of lagged solution
       logical, optional, intent(in) :: ifnorm
       logical                       :: ifnorm_
       !! Normalize solution by vector size?
 
       ! internals
-      real(wp), dimension(:,:),                 allocatable :: D, V1, V2
-      real(wp), dimension(:),                   allocatable :: svals       
+      real(dp), dimension(:,:),                 allocatable :: D, V1, V2
+      real(dp), dimension(:),                   allocatable :: svals       
       integer :: rk, rl
 
       ifnorm_ = optval(ifnorm, .true.)
@@ -549,7 +547,7 @@ contains
       call project_onto_common_basis_rdp(V1, V2, U_lag, X%U(:rk))
 
       ! project second low-rank state onto common basis and construct difference
-      allocate(D(rk+rl,rk+rl)); D = 0.0_wp
+      allocate(D(rk+rl,rk+rl)); D = 0.0_dp
       D(    :rl   ,      :rl   ) = S_lag - matmul(V1, matmul(X%S(:rk,:rk), transpose(V1)))
       D(rl+1:rl+rk,      :rl   ) =       - matmul(V2, matmul(X%S(:rk,:rk), transpose(V1)))
       D(    :rl   ,  rl+1:rl+rk) =       - matmul(V1, matmul(X%S(:rk,:rk), transpose(V2)))
@@ -630,9 +628,9 @@ contains
       !! Result of the check.
       integer, intent(out) :: irk
       !! Index of the first singular value below tolerance
-      real(wp), intent(in) :: svals(:)
+      real(dp), intent(in) :: svals(:)
       !! Singular values to search
-      real(wp), intent(in) :: tol
+      real(dp), intent(in) :: tol
       !! Tolerance for the smallest resolved singular value
 
       found = .false.
@@ -663,14 +661,14 @@ contains
          X%rk = X%rk + 1
          rk = X%rk ! this is only to make the code more readable
          ! set coefficients to zero (for redundancy)
-         X%S(:rk, rk) = 0.0_wp 
-         X%S( rk,:rk) = 0.0_wp
+         X%S(:rk, rk) = 0.0_dp 
+         X%S( rk,:rk) = 0.0_dp
          ! add random vector ...
          call X%U(rk)%rand(.false.)
          ! ... and orthonormalize
          call orthogonalize_against_basis(X%U(rk), X%U(:rk-1), info, if_chk_orthonormal=.false.)
          call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure=this_procedure)
-         call X%U(rk)%scal(1.0_wp / X%U(rk)%norm())
+         call X%U(rk)%scal(1.0_dp / X%U(rk)%norm())
 
       end if
 
@@ -679,9 +677,9 @@ contains
    subroutine decrease_rank(X, U, svals, rk)
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
-      real(wp), intent(in) :: U(:,:)
+      real(dp), intent(in) :: U(:,:)
       !! Left singular vectors of X
-      real(wp), intent(in) :: svals(:)
+      real(dp), intent(in) :: svals(:)
       !! Singular values of S
       integer, intent(in) :: rk
       !! Desired output rank
@@ -709,9 +707,9 @@ contains
    subroutine print_svals(X, svals, svals_lag, istep, nsteps)
       class(abstract_sym_low_rank_state_rdp), intent(in) :: X
       !! Low-Rank factors of the solution.
-      real(wp), dimension(:), intent(in) :: svals
+      real(dp), dimension(:), intent(in) :: svals
       !! Current singular values
-      real(wp), dimension(:), intent(in) :: svals_lag
+      real(dp), dimension(:), intent(in) :: svals_lag
       !! Lagged singular values
       integer, intent(in) :: istep
       !! Current step
@@ -722,7 +720,7 @@ contains
       integer, parameter                  :: iline = 4       ! # data points per line
       integer                             :: i, j, is, ie, irk, ifmt, irkfmt
       character(len=128)                  :: msg, fmt_sval
-      real(wp), dimension(:), allocatable :: dsvals
+      real(dp), dimension(:), allocatable :: dsvals
 
       ! Pretty output
       ifmt = max(5,ceiling(log10(real(nsteps))))
@@ -749,14 +747,14 @@ contains
    logical function is_converged(X, svals, svals_lag, opts, if_lastep) result(converged)
       !! This function checks the convergence of the solution based on the (relative) increment in the singular values
       class(abstract_sym_low_rank_state_rdp) :: X
-      real(wp)                   :: svals(:)
-      real(wp)                   :: svals_lag(:)
+      real(dp)                   :: svals(:)
+      real(dp)                   :: svals_lag(:)
       type(dlra_opts)            :: opts
       logical                    :: if_lastep
       ! internals
-      real(wp), allocatable :: dsvals(:)
+      real(dp), allocatable :: dsvals(:)
       integer :: i
-      real(wp) :: norm, norm_lag, dnorm
+      real(dp) :: norm, norm_lag, dnorm
       character(len=128) :: msg, prefix
       character(len=128), parameter :: fmt = '(A,I8,F15.8,A,2(E15.7,1X),A,E15.7)'
 
@@ -788,7 +786,7 @@ contains
 
    subroutine check_options(chkstep, tau, X, opts)
       integer,                                 intent(out)   :: chkstep
-      real(wp),                                intent(in)    :: tau
+      real(dp),                                intent(in)    :: tau
       class(abstract_sym_low_rank_state_rdp),  intent(inout) :: X
       type(dlra_opts),                         intent(inout) :: opts
 
@@ -800,7 +798,7 @@ contains
       ! CONVERGENCE CHECK
       !
       if (opts%chkctrl_time) then
-         if (opts%chktime <= 0.0_wp) then
+         if (opts%chktime <= 0.0_dp) then
             opts%chktime = opts_default%chktime
             write(msg,'(A,E12.5,A)') 'Invalid chktime. Reset to default (',  opts%chktime,')'
             call log_warning(msg, module=this_module, procedure='DLRA_check_options')

@@ -3,7 +3,7 @@ module LightROM_LoggerUtils
    use stdlib_strings, only: padl
    use stdlib_optval, only : optval
    ! LightKrylov
-   use LightKrylov, only : dp, wp => dp
+   use LightKrylov, only : dp
    use LightKrylov_Constants, only: io_rank
    use LightKrylov_Logger, only: log_message, log_information, log_warning, log_debug, check_info, stop_error
    ! LightROM
@@ -215,7 +215,7 @@ contains
       character(len=*), parameter :: this_procedure = 'log_svals'
       ! internal
       integer :: i, j, is, ie, irk, ifmt, irkfmt
-      real(wp), dimension(:), allocatable :: dsvals
+      real(dp), dimension(:), allocatable :: dsvals
       character(len=128) :: msg, fmt
 
       irk = min(size(svals), size(svals_lag))
