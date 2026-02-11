@@ -10,7 +10,7 @@ module Ginzburg_Landau_Tests_Riccati
    ! LightROM
    use LightROM_Utils ! Balancing_Transformation
    ! Riccati Solver
-   use LightROM_RiccatiSolvers
+   !use LightROM_RiccatiSolvers
    use LightROM_RiccatiUtils
    ! Ginzburg Landau
    use Ginzburg_Landau_Base
@@ -225,14 +225,14 @@ contains
                   ! run integrator
                   call system_clock(count=clock_start)     ! Start Timer
                   if (adjoint) then
-                     call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%CT, LTI%B, Qc, Rinv, Tend, tau, info, &
-                                                               & exptA=exptA, iftrans=expta_adj, options=opts)
+                     call Riccati_integrator(X, LTI%prop, LTI%CT, LTI%B, Qc, Rinv, Tend, tau, info, &
+                                           & exptA=exptA, iftrans=expta_adj, options=opts)
                   else
-                     call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
-                                                               & exptA=exptA, iftrans=expta_adj, options=opts)
+                     call Riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
+                                           & exptA=exptA, iftrans=expta_adj, options=opts)
                   end if
                   call system_clock(count=clock_stop)      ! Stop Timer
-                  call reset_riccati_solver(home, fchomp)
+                  call reset_solver(RiccatiSolver_counter, 'Riccati', 'Riccati_', home, fchomp)
                   etime = real(clock_stop-clock_start)/real(clock_rate)
                end if
                ! Reconstruct solution
@@ -352,14 +352,14 @@ contains
                   ! run integrator
                   call system_clock(count=clock_start)     ! Start Timer
                   if (adjoint) then
-                     call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%CT, LTI%B, Qc, Rinv, Tend, tau, info, &
-                                                                  & exptA=exptA, iftrans=expta_adj, options=opts)
+                     call Riccati_integrator(X, LTI%prop, LTI%CT, LTI%B, Qc, Rinv, Tend, tau, info, &
+                                            & exptA=exptA, iftrans=expta_adj, options=opts)
                   else
-                     call projector_splitting_DLRA_riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
-                                                                  & exptA=exptA, iftrans=expta_adj, options=opts)
+                     call Riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
+                                            & exptA=exptA, iftrans=expta_adj, options=opts)
                   end if
                   call system_clock(count=clock_stop)      ! Stop Timer
-                  call reset_riccati_solver(home, fchomp)
+                  call reset_solver(RiccatiSolver_counter, 'Riccati', 'Riccati_', home, fchomp)
                   etime = real(clock_stop-clock_start)/real(clock_rate)
                end if
                ! Reconstruct solution

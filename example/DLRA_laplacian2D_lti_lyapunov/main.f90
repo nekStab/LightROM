@@ -315,9 +315,9 @@ program demo
                ! run step
                opts = dlra_opts(mode=torder, if_rank_adaptive=.false.)
                call system_clock(count=clock_start)     ! Start Timer
-               call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, &
-                                                                  & Tend, dt, info, &
-                                                                  & exptA=exptA, options=opts)
+               call Lyapunov_integrator(X, LTI%A, LTI%B, &
+                                       & Tend, dt, info, &
+                                       & exptA=exptA, options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
 
                ! Reconstruct solution
@@ -341,7 +341,7 @@ program demo
       svals = svdvals(X_out)
       print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR)[1-8]:', svals(:irow)
 
-      call reset_lyapunov_solver()
+      call reset_solver(LyapunovSolver_counter, 'Lyapunov', 'Lyapunov_')
    else
       print *, 'Skip.'
    end if
@@ -448,9 +448,9 @@ program demo
                ! run step
                opts = dlra_opts(mode=torder, if_rank_adaptive=.false.)
                call system_clock(count=clock_start)     ! Start Timer
-               call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, &
-                                                                  & Tend, dt, info, &
-                                                                  & exptA=exptA, options=opts)
+               call Lyapunov_integrator(X, LTI%A, LTI%B, &
+                                       & Tend, dt, info, &
+                                       & exptA=exptA, options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
 
                ! Reconstruct solution
@@ -475,8 +475,7 @@ program demo
       svals = svdvals(X_out)
       print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
       print *, ''
-
-      call reset_lyapunov_solver()
+      call reset_solver(LyapunovSolver_counter, 'Lyapunov', 'Lyapunov_')
    else
       print *, 'Skip.'
    end if
@@ -529,9 +528,9 @@ program demo
                ! run step
                opts = dlra_opts(mode=torder, if_rank_adaptive=.true., tol=tol)
                call system_clock(count=clock_start)     ! Start Timer
-               call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, &
-                                                                  & Tend, dt, info, &
-                                                                  & exptA=exptA, options=opts)
+               call Lyapunov_integrator(X, LTI%A, LTI%B, &
+                                       & Tend, dt, info, &
+                                       & exptA=exptA, options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
                rk = X%rk
 
@@ -557,7 +556,7 @@ program demo
          print *, '#########################################################################'
          print *, ''
       end do
-      call reset_lyapunov_solver()
+      call reset_solver(LyapunovSolver_counter, 'Lyapunov', 'Lyapunov_')
    else
       print *, 'Skip.'
    end if
@@ -617,9 +616,9 @@ program demo
 
             ! run step
             call system_clock(count=clock_start)     ! Start Timer
-            call projector_splitting_DLRA_lyapunov_integrator(X, LTI%A, LTI%B, &
-                                                                  & Tend, dt, info, &
-                                                                  & exptA=exptA, options=opts)
+            call Lyapunov_integrator(X, LTI%A, LTI%B, &
+                                    & Tend, dt, info, &
+                                    & exptA=exptA, options=opts)
             call system_clock(count=clock_stop)      ! Stop Timer
 
             ! Reconstruct solution
@@ -647,7 +646,7 @@ program demo
          print '(1X,A16,2X,*(F15.12,1X))', 'SVD(X_LR )[1-8]:', svals(:irow)
          print *, ''
       end do
-      call reset_lyapunov_solver()
+      call reset_solver(LyapunovSolver_counter, 'Lyapunov', 'Lyapunov_')
    else
       print *, 'Skip.'
       print *, ''

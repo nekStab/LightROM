@@ -226,14 +226,14 @@ contains
                   ! run integrator
                   call system_clock(count=clock_start)     ! Start Timer
                   if (adjoint) then
-                     call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%CT, Tend, tau, info, &
-                                                               & exptA=exptA, iftrans=expta_adj, options=opts)
+                     call Lyapunov_integrator(X, LTI%prop, LTI%CT, Tend, tau, info, &
+                                             & exptA=exptA, iftrans=expta_adj, options=opts)
                   else
-                     call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
-                                                               & exptA=exptA, iftrans=expta_adj, options=opts)
+                     call Lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
+                                             & exptA=exptA, iftrans=expta_adj, options=opts)
                   end if
                   call system_clock(count=clock_stop)      ! Stop Timer
-                  call reset_lyapunov_solver(home, fchomp)
+                  call reset_solver(RiccatiSolver_counter, 'Lyapunov', 'Lyapunov_', home, fchomp)
                   etime = real(clock_stop-clock_start)/real(clock_rate)
                end if
                ! Reconstruct solution
@@ -354,14 +354,14 @@ contains
                   ! run integrator
                   call system_clock(count=clock_start)     ! Start Timer
                   if (adjoint) then
-                     call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%CT, Tend, tau, info, &
-                                                                  & exptA=exptA, iftrans=.true., options=opts)
+                     call Lyapunov_integrator(X, LTI%prop, LTI%CT, Tend, tau, info, &
+                                             & exptA=exptA, iftrans=.true., options=opts)
                   else
-                     call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
-                                                                  & exptA=exptA, iftrans=.false., options=opts)
+                     call Lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
+                                             & exptA=exptA, iftrans=.false., options=opts)
                   end if
                   call system_clock(count=clock_stop)      ! Stop Timer
-                  call reset_lyapunov_solver(home, fchomp)
+                  call reset_solver(RiccatiSolver_counter, 'Lyapunov', 'Lyapunov_', home, fchomp)
                   etime = real(clock_stop-clock_start)/real(clock_rate)
                end if
                ! Reconstruct solution
