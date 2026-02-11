@@ -62,10 +62,19 @@ module LightROM_Utils
 
    type, extends(abstract_opts), public :: dlra_opts
       !! Options container for the (rank-adaptive) projector-splitting dynalical low-rank approximation
+      !
+      ! BASIC OPTIONS
+      !
       !! integrator
       integer :: mode = 1
       !! Time integration mode. Only 1st order (Lie splitting - mode 1) and 
       !! 2nd order (Strang splitting - mode 2) are implemented. (default: 1)
+      real(dp) :: tau = 1.0_dp
+      !! Requested integration step
+      real(dp) :: Tend = 1.0_dp
+      !! Final integration time
+      integer :: nsteps = 0
+      !! Total number of timesteps
       !
       ! CONVERGENCE CHECK
       !
@@ -90,9 +99,74 @@ module LightROM_Utils
       !! Choose whether to base the tolerance on 'tol' or on the splitting error estimate
       integer :: err_est_step = 10
       !! Time step interval for recomputing the splitting error estimate (only of use_err_est = .true.)
+      integer :: rk_reduction_lock = 10
+   contains
+      procedure, pass(self), public :: init => dlra_opts_initialize
    end type
 
 contains
+
+   subroutine dlra_opts_initialize(self)
+      class(dlra_opts), intent(inout) :: self
+      ! internal
+      character(len=*), parameter :: this_procedure = 'dlra_opts_initialize'
+      character(len=256) :: msg
+      type(dlra_opts) :: opts_default
+      integer :: itmp
+      real(dp) :: tau_eff
+      real(dp), parameter :: tol = 1e-7
+
+      opts_default = dlra_opts()
+      !
+      ! INTEGRATION TIME
+      !
+      itmp = nint(self%Tend/self%tau)
+      if (self%Tend < 0.0_dp .or. self%tau < 0.0_dp .or. itmp < 1) then
+         write(msg,'(2(A,E12.5))') 'Invalid Tend/tau combination specified. Tend = ', self%Tend, ', tau = ', self%tau
+         call stop_error(msg, this_module, this_procedure)
+      end if 
+      self%nsteps = itmp
+      tau_eff = self%Tend/self%nsteps
+      if (abs(self%tau-tau_eff) < tol) then
+         write(msg,'(3(A,E12.5))') 'Timestep reset to match specified Tend = ', self%Tend, ': tau = ', self%tau, ' -> ', tau_eff
+         call log_warning(msg, this_module, this_procedure)
+         self%tau = tau_eff
+      end if
+      !
+      ! TEMPORAL ORDER
+      !
+      if ( self%mode > 2 ) then
+         write(msg,'(A)') "Time-integration order for the operator splitting of d > 2 &
+                      & requires adjoint solves and is not implemented. Resetting torder = 2." 
+         call log_message(msg, this_module, this_procedure)
+      else if ( self%mode < 1 ) then
+         write(msg,'(A,I0)') "Invalid time-integration order specified: ", self%mode
+         call stop_error(msg, this_module, this_procedure)
+      endif
+      !
+      ! CONVERGENCE CHECK
+      !
+      if (self%chkctrl_time) then
+         if (self%chktime <= 0.0_dp) then
+            self%chktime = opts_default%chktime
+            write(msg,'(A,E12.5,A)') 'Invalid chktime. Reset to default (',  self%chktime,')'
+            call log_warning(msg, this_module, this_procedure)
+         end if
+         self%chkstep = max(1, NINT(self%chktime/self%tau))
+         write(msg,'(A,E12.5,A,I0,A)') 'Convergence check every ', self%chktime, ' time units (', self%chkstep, ' steps)'
+         call log_information(msg, this_module, this_procedure)
+      else
+         if (self%chkstep <= 0) then
+            self%chkstep = opts_default%chkstep
+            write(msg,'(A,I0,A)') "Invalid chktime. Reset to default (",  self%chkstep,")"
+            call log_warning(msg, this_module, this_procedure)
+         end if
+         self%chktime = self%tau*self%chkstep
+         write(msg,'(A,I0,A)') 'Convergence check every ', self%chkstep, ' steps (based on steps).'
+         call log_information(msg, this_module, this_procedure)
+      end if
+      
+   end subroutine dlra_opts_initialize
 
    subroutine Balancing_Transformation_rdp(T, S, Tinv, Xc, Yo)
       !! Computes the the biorthogonal balancing transformation \( \mathbf{T}, \mathbf{T}^{-1} \) from the
@@ -783,42 +857,5 @@ contains
 
       return
    end function is_converged
-
-   subroutine check_options(chkstep, tau, X, opts)
-      integer,                                 intent(out)   :: chkstep
-      real(dp),                                intent(in)    :: tau
-      class(abstract_sym_low_rank_state_rdp),  intent(inout) :: X
-      type(dlra_opts),                         intent(inout) :: opts
-
-      ! internal
-      character(len=128) :: msg
-      type(dlra_opts) :: opts_default
-      opts_default = dlra_opts()
-      !
-      ! CONVERGENCE CHECK
-      !
-      if (opts%chkctrl_time) then
-         if (opts%chktime <= 0.0_dp) then
-            opts%chktime = opts_default%chktime
-            write(msg,'(A,E12.5,A)') 'Invalid chktime. Reset to default (',  opts%chktime,')'
-            call log_warning(msg, module=this_module, procedure='DLRA_check_options')
-         end if
-         chkstep = max(1, NINT(opts%chktime/tau))
-         write(msg,'(A,E12.5,A,I0,A)') 'Convergence check every ', opts%chktime, ' time units (', chkstep, ' steps)'
-         call log_information(msg, module=this_module, procedure='DLRA_check_options')
-      else
-         if (opts%chkstep <= 0) then
-            opts%chkstep = opts_default%chkstep
-            write(msg,'(A,I0,A)') "Invalid chktime. Reset to default (",  opts%chkstep,")"
-            call log_warning(msg, module=this_module, procedure='DLRA_check_options')
-         end if
-         chkstep = opts%chkstep
-         opts%chktime = tau*chkstep
-         write(msg,'(A,I0,A)') 'Convergence check every ', opts%chkstep, ' steps (based on steps).'
-         call log_information(msg, module=this_module, procedure='DLRA_check_options')
-      end if
-      opts%chkstep = chkstep
-      return
-   end subroutine check_options
 
 end module LightROM_Utils
