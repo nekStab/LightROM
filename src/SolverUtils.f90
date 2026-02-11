@@ -271,7 +271,7 @@ contains
          end if
          ! compute singular values of X%S
          call svd(X%S(:rk,:rk), ssvd(:rk), Usvd(:rk,:rk), VTsvd(:rk,:rk))
-         call find_rank(found, irk, ssvd, tol)
+         call find_rank(found, irk, ssvd(:rk), tol)
          
          ! choose action
          if (.not. found) then ! none of the singular values is below tolerance
