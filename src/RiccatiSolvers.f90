@@ -1,4 +1,4 @@
-module LightROM_RiccatiSolvers
+module LightROM_RiccSolvers
    !! This module provides the implementation of the Krylov-based solvers for the Differential Riccati
    !! equation based on the dynamic low-rank approximation and operator splitting.
    ! Standard Library
@@ -22,6 +22,7 @@ module LightROM_RiccatiSolvers
    use LightROM_AbstractLTIsystems
 
    implicit none
+   character(len=*), parameter, private :: this_module = 'LR_RiccSolvers'
 
    ! global scratch arrays
    !class(abstract_vector_rdp),  allocatable   :: Uwrk0(:)
@@ -40,12 +41,9 @@ module LightROM_RiccatiSolvers
    !real(dp),                    allocatable   :: ssvd(:)
    !real(dp),                    allocatable   :: Usvd(:,:), VTsvd(:,:)
 
-   private 
-   ! module name
-   private :: this_module
-   character(len=*), parameter :: this_module = 'LR_RiccSolvers'
    character(len=*), parameter :: logfile_basename = 'Riccati_'
    integer :: RiccSolver_counter = 0
+   
 
    public :: projector_splitting_DLRA_riccati_integrator
    !public :: G_map_riccati
@@ -232,7 +230,7 @@ module LightROM_RiccatiSolvers
 !
 !      ! determine initial rank if rank-adaptive
 !      if (opts%if_rank_adaptive) then
-!         rk_reduction_lock = opts%rk_reduction_lock
+!         rk_reduction_lock = opts%rk_reduction_barrier
 !         if (.not. X%rank_is_initialised) then
 !            call log_message('Determine initial rank:', this_module, 'DLRA_main')
 !            call set_initial_rank(X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, exptA, trans, opts%tol)
@@ -244,7 +242,7 @@ module LightROM_RiccatiSolvers
       call log_message('Starting DLRA integration', this_module, 'DLRA_main')
 
       if_lastep = .false.
-      if (opts%if_rank_adaptive) rk_reduction_lock = opts%rk_reduction_lock
+      if (opts%if_rank_adaptive) rk_reduction_lock = opts%rk_reduction_barrier
       dlra : do istep = 1, opts%nsteps
 
          call log_step(X, istep,opts%nsteps)
@@ -973,4 +971,4 @@ module LightROM_RiccatiSolvers
       call reset_logfiles(logfile_basename, prefix=prefix, suffix=suffix)
    end subroutine reset_riccati_solver
 
-end module LightROM_RiccatiSolvers
+end module LightROM_RiccSolvers

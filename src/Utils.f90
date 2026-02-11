@@ -99,7 +99,10 @@ module LightROM_Utils
       !! Choose whether to base the tolerance on 'tol' or on the splitting error estimate
       integer :: err_est_step = 10
       !! Time step interval for recomputing the splitting error estimate (only of use_err_est = .true.)
-      integer :: rk_reduction_lock = 10
+      integer :: rk_reduction_lock = 0
+      !! Current value of the rank reduction lock
+      integer :: rk_reduction_barrier = 10
+      !! Reset value of the rank reduction lock
    contains
       procedure, pass(self), public :: init => dlra_opts_initialize
    end type
@@ -590,10 +593,10 @@ contains
 
       ! orthonormalize second basis against first
       call orthogonalize_against_basis(Vp, U, info, if_chk_orthonormal=.false., beta=UTV)
-      call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='project_onto_common_basis_rdp')
+      call check_info(info, 'orthogonalize_against_basis', this_module, 'project_onto_common_basis_rdp')
       allocate(wrk(rv,rv)); wrk = 0.0_dp
       call qr(Vp, wrk, info)
-      call check_info(info, 'qr', module=this_module, procedure='project_onto_common_basis_rdp')
+      call check_info(info, 'qr', this_module, 'project_onto_common_basis_rdp')
 
       ! compute inner product between second basis and its orthonormalized version
       VpTV = innerprod(Vp, V)
@@ -666,7 +669,7 @@ contains
       ! fill the basis
       allocate(sqrt_S(rk,rk)); sqrt_S = 0.0_dp
       call sqrtm(X%S(:rk,:rk), sqrt_S, info)
-      call check_info(info, 'sqrtm', module=this_module, procedure='low_rank_CALE_residual_norm')
+      call check_info(info, 'sqrtm', this_module, 'low_rank_CALE_residual_norm')
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, X%U(:rk), sqrt_S)
@@ -678,7 +681,7 @@ contains
       call copy(Q(2*rk+1:), B(:))
 
       call qr(Q, R, info)
-      call check_info(info, 'qr', module=this_module, procedure='low_rank_CALE_residual_norm')
+      call check_info(info, 'qr', this_module, 'low_rank_CALE_residual_norm')
 
       R_shuffle(:,      :  rk) = R(:,  rk+1:2*rk)
       R_shuffle(:,  rk+1:2*rk) = R(:,      :  rk)
@@ -735,7 +738,7 @@ contains
       if (rk == rkmax) then ! cannot increase rank without reallocating X%U and X%S
          write(msg,'(A,I0,A,A)') 'Cannot increase rank, rkmax = ', rkmax, ' is reached. ', &
                   & 'Increase rkmax and restart!'
-         call stop_error(msg, module=this_module, procedure=this_procedure)
+         call stop_error(msg, this_module, this_procedure)
       else
          
          X%rk = X%rk + 1
@@ -747,7 +750,7 @@ contains
          call X%U(rk)%rand(.false.)
          ! ... and orthonormalize
          call orthogonalize_against_basis(X%U(rk), X%U(:rk-1), info, if_chk_orthonormal=.false.)
-         call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure=this_procedure)
+         call check_info(info, 'orthogonalize_against_basis', this_module, this_procedure)
          call X%U(rk)%scal(1.0_dp / X%U(rk)%norm())
 
       end if
@@ -771,7 +774,7 @@ contains
       ! sanity check
       if (rk > size(X%U)) then
          write(msg,'(A,I0,1X,I0)') 'Invalid rank input: ', rk, size(X%U)
-         call stop_error(msg, module=this_module, procedure=this_procedure)
+         call stop_error(msg, this_module, this_procedure)
       end if
 
       ! rotate basis onto principal axes
@@ -815,12 +818,12 @@ contains
       do i = 1, ceiling(float(X%rk)/iline)
          is = (i-1)*iline+1; ie = min(X%rk,i*iline)
          write(msg,fmt_sval) istep, nsteps, X%tot_time, X%rk, " SVD abs", is, ie, ( svals(j), j = is, ie )
-         call log_information(msg, module=this_module, procedure='DLRA_main')
+         call log_information(msg, this_module, 'DLRA_main')
       end do
       do i = 1, ceiling(float(irk)/iline)
          is = (i-1)*iline+1; ie = min(irk,i*iline)
          write(msg,fmt_sval) istep, nsteps, X%tot_time, X%rk, "dSVD rel", is, ie, ( dsvals(j) , j = is, ie )
-         call log_information(msg, module=this_module, procedure='DLRA_main')
+         call log_information(msg, this_module, 'DLRA_main')
       end do
    end subroutine print_svals
 
@@ -854,10 +857,10 @@ contains
 
       if (mod(X%step,opts%chkstep) == 0) then
          write(msg,fmt) 'Check state: ', X%step, X%time, ' svals lag ', norm, norm_lag, ' inc_norm ', dnorm
-         call log_message(msg, module=this_module, procedure='DLRA')
+         call log_message(msg, this_module, 'DLRA')
       else if (if_lastep) then
          write(msg,fmt) 'Final state: ', X%step, X%time, ' svals lag ', norm, norm_lag, ' inc_norm ', dnorm
-         call log_message(msg, module=this_module, procedure='DLRA')
+         call log_message(msg, this_module, 'DLRA')
       end if
       if (dnorm < opts%inc_tol) converged = .true.
 

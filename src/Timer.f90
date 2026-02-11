@@ -4,9 +4,9 @@ module LightROM_Timing
    use LightKrylov_Logger, only: log_message, log_information, log_warning, log_debug, check_info
    use LightKrylov_Timing
    implicit none
-   private
-   character(len=*), parameter :: this_module      = 'LR_Timer'
-   character(len=*), parameter :: this_module_long = 'LightROM_Timer'
+   character(len=*), parameter, private :: this_module      = 'LR_Timer'
+   character(len=*), parameter, private :: this_module_long = 'LightROM_Timer'
+   
    logical :: if_time = .false.
 
    public :: time_lightrom
@@ -58,8 +58,7 @@ contains
       integer :: istart, iend
       call self%set_watch_name('LightROM_timer')
       ! timers for LightKrylov_LyapunovSolvers
-      call self%add_timer('DLRA_lyapunov_integrator_rdp', count=istart)
-      !call self%add_timer('DLRA_lyapunov_step_rdp')
+      call self%add_timer('Lyapunov_integrator_rdp', count=istart)
       call self%add_timer('rank_adaptive_projector_splitting_DLRA_step_lyapunov_rdp')
       call self%add_timer('fixed_rank_projector_splitting_DLRA_step_lyapunov_rdp')
       call self%add_timer('M_map_rdp')
@@ -70,8 +69,7 @@ contains
       ! define LyapunovSolvers group
       call self%add_group('LyapunovSolvers', istart=istart, iend=iend)
       ! timers for LightKrylov_RiccatiSolvers
-      call self%add_timer('DLRA_riccati_integrator_rdp', count=istart)
-      !call self%add_timer('DLRA_riccati_step_rdp')
+      call self%add_timer('Riccati_integrator_rdp', count=istart)
       call self%add_timer('rank_adaptive_projector_splitting_DLRA_step_riccati_rdp')
       call self%add_timer('fixed_rank_projector_splitting_DLRA_step_riccati_rdp')
       call self%add_timer('G_map_riccati_rdp')

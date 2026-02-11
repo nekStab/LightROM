@@ -20,52 +20,27 @@ module LightROM_LyapunovSolvers
    use LightROM_Timing, only: lr_timer => global_lightROM_timer, time_lightROM
    
    implicit none
+   character(len=*), parameter, private :: this_module = 'LR_LyapSolvers'
 
-   ! global scratch arrays
-   !real(dp), allocatable   :: ssvd(:)
-   !real(dp), allocatable   :: Usvd(:,:), VTsvd(:,:)
+   character(len=*), parameter :: logfile_basename_lyapunov = 'Lyapunov_'
+   integer :: LyapunovSolver_counter = 0
+   character(len=*), parameter :: logfile_basename_riccati  = 'Riccati_'
+   integer :: RiccatiSolver_counter = 0
 
-   ! module name
-   private :: this_module
-   character(len=*), parameter :: this_module = 'LR_LyapSolvers'
-   character(len=*), parameter :: logfile_basename = 'Lyapunov_'
-   integer :: LyapSolver_counter = 0
+   public :: Lyapunov_integrator
+   public :: reset_solver
 
-   public :: projector_splitting_DLRA_lyapunov_integrator
-   !public :: M_map
-   !public :: G_map_lyapunov
-   !public :: K_step_lyapunov
-   !public :: S_step_lyapunov
-   !public :: L_step_lyapunov
-   public :: reset_lyapunov_solver
-
-   interface projector_splitting_DLRA_lyapunov_integrator
-      module procedure projector_splitting_DLRA_lyapunov_integrator_rdp
+   interface Lyapunov_integrator
+      module procedure Lyapunov_Integrator_rdp
    end interface
 
-   ! interface M_map
-   !    module procedure M_map_rdp
-   ! end interface
+   interface Riccati_Integrator
+      module procedure Riccati_Integrator_rdp
+   end interface
 
-   !interface G_map_lyapunov
-   !   module procedure G_map_lyapunov_rdp
-   !end interface
+contains
 
-   !interface K_step_lyapunov
-   !   module procedure K_step_lyapunov_rdp
-   !end interface
-
-   !interface S_step_lyapunov
-   !   module procedure S_step_lyapunov_rdp
-   !end interface
-
-   !interface L_step_lyapunov
-   !   module procedure L_step_lyapunov_rdp
-   !end interface
-
-   contains
-
-   subroutine projector_splitting_DLRA_lyapunov_integrator_rdp(X, A, B, Tend, tau, info, exptA, iftrans, options)
+   subroutine Lyapunov_integrator_rdp(X, A, B, Tend, tau, info, exptA, iftrans, options)
       !! Main driver for the numerical integrator for the matrix-valued differential Lyapunov equation of the form
       !!
       !!    $$ \dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{B} \mathbf{B}^T $$
@@ -154,74 +129,294 @@ module LightROM_LyapunovSolvers
       procedure(abstract_exptA_rdp)                          :: exptA
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
       logical,                       optional, intent(in)    :: iftrans
-      logical                                                :: trans
       !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
       type(dlra_opts),               optional, intent(in)    :: options
-      type(dlra_opts)                                        :: opts
+      !! Options for solver configuration
+      
+      ! internal
+      character(len=*), parameter :: this_procedure = 'Lyapunov_integrator_rdp'
+      character(len=*), parameter :: equation = 'Lyapunov'
+      character(len=128) :: logfile
+      type(dlra_opts) :: opts
+      logical :: trans
+
+      trans = optval(iftrans, .false.)
+      logfile = logfile_basename_lyapunov
+      LyapunovSolver_counter = LyapunovSolver_counter + 1
+
+      call generic_initializer_rdp(X, opts, Tend, tau, rank_initializer, this_procedure, logfile, trans, options)
+
+      call generic_DLRA_integrator_rdp(X, opts, Tend, tau, info, stepper, this_procedure, equation)
+
+   contains
+
+      subroutine stepper(if_rank_adaptive, info)
+         logical, intent(in) :: if_rank_adaptive
+         integer, intent(out) :: info
+         !! Information flag
+         if (if_rank_adaptive) then
+            call rank_adaptive_projector_splitting_DLRA_step_lyapunov_rdp( &
+                     &  X, A, B, opts%tau, opts%mode, exptA, trans, info, opts)
+         else
+            call fixed_rank_projector_splitting_DLRA_step_lyapunov_rdp( &
+                     &  X, A, B, opts%tau, opts%mode, info, exptA, trans)
+         end if
+      end subroutine
+
+      subroutine rank_initializer(X, opts)
+         class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+         type(dlra_opts),                        intent(in)    :: opts
+         ! internal
+         integer :: rk_init, nsteps
+         rk_init = 1
+         nsteps = 5
+         call set_initial_rank_lyapunov_rdp(X, A, B, opts%tau, opts%mode, exptA, trans, opts%tol, rk_init, nsteps)
+      end subroutine
+
+   end subroutine Lyapunov_integrator_rdp
+
+   subroutine Riccati_Integrator_rdp(X, A, B, CT, Qc, Rinv, Tend, tau, info, exptA, iftrans, options)
+      !! Main driver for the numerical integrator for the matrix-valued differential Riccati equation of the form
+      !!
+      !!    $$\dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
+      !!
+      !! where \( \mathbf{A} \) is a (n x n) Hurwitz matrix, \( \mathbf{X} \) is SPD and 
+      !! \( \mathbf{B} \) and \( \mathbf{C}^T \) are low-rank matrices.
+      !!
+      !! Since \( \mathbf{A} \) is Hurwitz, the equations converges to steady state for  \( t \to \infty \), 
+      !! which corresponds to the associated algebrait Riccati equation of the form
+      !!
+      !!    $$\mathbf{0} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
+      !!
+      !! The algorithm is based on four main ideas:
+      !!
+      !! - Dynamic Low-Rank Approximation (DLRA). DLRA is a method for the solution of general matrix differential 
+      !!   equations proposed by Nonnenmacher & Lubich (2007) which seeks to integrate only the leading low-rank 
+      !!   factors of the solution to a large system by updating an appropriate matrix factorization. The time-integration
+      !!   is achieved by splitting the step into three sequential substeps, each updating a part of the factorization
+      !!   taking advantage of and maintaining the orthogonality of the left and right low-rank bases of the factorization.
+      !! - Projector-Splitting Integration (PSI). The projector-splitting scheme proposed by Lubich & Oseledets (2014) 
+      !!   for the solution of DLRA splits the right-hand side of the differential equation into a linear stiff part 
+      !!   that is integrated exactly and a (possibly non-linear) non-stiff part which is integrated numerically. 
+      !!   The two operators are then composed to obtain the integrator for the full differential equation.
+      !!   The advantage of the projector splitting integration is that it maintains orthonormality of the basis
+      !!   of the low-rank approximation to the solution without requiring SVDs of the full matrix.                                                                     
+      !! - The third element is the application of the general framework of projector-splitting integration for 
+      !!   dynamical low-rank approximation to the Riccati equations by Mena et al. (2018). As the solutions
+      !!   to the Riccati equation are by construction SPD, this fact can be taken advantage of to reduce the 
+      !!   computational cost of the integration and, in particular, doing away with one QR factorization per timestep
+      !!   while maintaining symmetry of the resulting matrix factorization.
+      !! - The final element is the addition of the capability of dyanmic rank adaptivity for the projector-splitting
+      !!   integrator proposed by Hochbruck et al. (2023). At the cost of integrating a supplementary solution vector, 
+      !!   the rank of the solution is dynamically adapted to ensure that the corresponding additional singular value
+      !!   stays below a chosen threshold.
+      !!
+      !! **Algorithmic Features**
+      !! 
+      !! - Separate integration of the stiff inhomogeneous part of the Riccati equation and the non-stiff inhomogeneity
+      !! - Rank preserving time-integration that maintains orthonormality of the factorization basis
+      !! - Alternatively, dynamical rank-adaptivity based on the instantaneous singular values
+      !! - The stiff part of the problem is solved using a time-stepper approach to approximate 
+      !!   the action of the exponential propagator
+      !!
+      !! **Advantages**
+      !!
+      !! - Rank of the approximate solution is user defined or chosen adaptively based on the solution
+      !! - The integrator is adjoint-free
+      !! - The operator of the homogeneous part and the inhomogeneity are not needed explicitly i.e. the algorithm 
+      !! is amenable to solution using Krylov methods (in particular for the solution of the stiff part of the problem)
+      !! - No SVDs of the full solution are required for this algorithm
+      !! - Lie and Strang splitting implemented allowing for first and second order integration in time
+      !!
+      !! ** Limitations**
+      !!
+      !! - Rank of the approximate solution is user defined. The appropriateness of this approximation is not considered.
+      !!   This does not apply to the rank-adaptive version of the integrator.
+      !! - The current implementation does not require an adjoint integrator. This means that the temporal order of the 
+      !!   basic operator splitting scheme is limited to 1 (Lie-Trotter splitting) or at most 2 (Strang splitting). 
+      !!   Higher order integrators are possible, but require at least some backward integration (via the adjoint) 
+      !!   in BOTH parts of the splitting (see Sheng-Suzuki and Goldman-Kaper theorems).
+      !!
+      !! **References**
+      !! 
+      !! - Koch, O.,Lubich, C. (2007). "Dynamical Low‐Rank Approximation", SIAM Journal on Matrix Analysis 
+      !!   and Applications 29(2), 434-454
+      !! - Lubich, C., Oseledets, I.V. (2014). "A projector-splitting integrator for dynamical low-rank 
+      !!   approximation", BIT Numerical Mathematics 54, 171–188
+      !! - Mena, H., Ostermann, A., Pfurtscheller, L.-M., Piazzola, C. (2018). "Numerical low-rank 
+      !!   approximation of matrix differential equations", Journal of Computational and Applied Mathematics,
+      !!   340, 602-614
+      !! - Hochbruck, M., Neher, M., Schrammer, S. (2023). "Rank-adaptive dynamical low-rank integrators for
+      !!   first-order and second-order matrix differential equations", BIT Numerical Mathematics 63:9
+      class(abstract_sym_low_rank_state_rdp),  intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_linop_rdp),               intent(inout) :: A
+      !! Linear operator.
+      class(abstract_vector_rdp),              intent(in)    :: B(:)
+      !! System input.
+      class(abstract_vector_rdp),              intent(in)    :: CT(:)
+      !! System output.
+      real(dp),                                intent(in)    :: Qc(:,:)
+      !! Measurement weights.
+      real(dp),                                intent(in)    :: Rinv(:,:)
+      !! Inverse of the actuation weights.
+      real(dp),                                intent(in)    :: Tend
+      !! Integration time horizon. 
+      real(dp),                                intent(in)    :: tau
+      !! Desired time step. The avtual time-step will be computed such as to reach Tend in an integer number
+      !! of steps.
+      integer,                                 intent(out)   :: info
+      !! Information flag.
+      procedure(abstract_exptA_rdp)                          :: exptA
+      !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
+      logical,                       optional, intent(in)    :: iftrans
+      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      type(dlra_opts),               optional, intent(in)    :: options
+
+      ! internal
+      character(len=*), parameter :: this_procedure = 'Riccati_integrator_rdp'
+      character(len=*), parameter :: equation = 'Riccati'
+      character(len=128) :: logfile
+      type(dlra_opts) :: opts
+      logical :: trans
+
+      trans = optval(iftrans, .false.)
+      logfile = logfile_basename_riccati
+      RiccatiSolver_counter = RiccatiSolver_counter + 1
+
+      call generic_initializer_rdp(X, opts, Tend, tau, rank_initializer, this_procedure, logfile, trans, options)
+
+      call generic_DLRA_integrator_rdp(X, opts, Tend, tau, info, stepper, this_procedure, equation)
+
+   contains
+
+      subroutine stepper(if_rank_adaptive, info)
+         logical, intent(in) :: if_rank_adaptive
+         integer, intent(out) :: info
+         !! Information flag
+         if (if_rank_adaptive) then
+            call rank_adaptive_projector_splitting_DLRA_step_riccati_rdp( &
+                     &  X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, exptA, trans, opts, info)
+         else
+            call fixed_rank_projector_splitting_DLRA_step_riccati_rdp( &
+                     &  X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, info, exptA, trans)
+         end if
+      end subroutine
+
+      subroutine rank_initializer(X, opts)
+         class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+         type(dlra_opts),                        intent(in)    :: opts
+         ! internal
+         integer :: rk_init, nsteps
+         rk_init = 1
+         nsteps = 5
+         call set_initial_rank_riccati_rdp(X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, exptA, trans, opts%tol, rk_init, nsteps)
+      end subroutine
+
+   end subroutine Riccati_Integrator_rdp
+
+   !!-------------------------------------------------------------------------------------------------------------
+   !!
+   !! Generic implementations of the initializer and integrator
+   !!
+   !!-------------------------------------------------------------------------------------------------------------
+
+   subroutine generic_initializer_rdp(X, opts, Tend, tau, rank_initializer, this_procedure, logfile, trans, options)
+      class(abstract_sym_low_rank_state_rdp),  intent(inout) :: X
+      !! Low-Rank factors of the solution
+      type(dlra_opts),                         intent(out)   :: opts
+      !! Checked opts
+      real(dp),                                intent(in)    :: Tend
+      !! Integration time horizon.
+      real(dp),                                intent(in)    :: tau
+      !! Desired time step. The avtual time-step will be computed such as to reach Tend in an integer number
+      !! of steps.
+      procedure(abstract_dlra_rank_initializer)              :: rank_initializer
+      !! Generic wrapper for the rank_initializer (Lyapnuov/Riccati)
+      character(len=*),                        intent(in)    :: this_procedure
+      !! Specific procedure name (for error attribution)
+      character(len=*),                        intent(in)    :: logfile
+      !! Basename for logfile
+      logical,                                 intent(in)    :: trans
+      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      type(dlra_opts),               optional, intent(in)    :: options
       !! Options for solver configuration
 
-      ! Internal variables
-      integer                             :: i, irk
-      integer                             :: istep, nsteps, rkmax, chkstep
-      integer                             :: rk_reduction_lock   ! 'timer' to disable rank reduction
-      real(dp)                            :: tol                 ! current tolerance
-      logical                             :: if_lastep
+      ! internal
+      character(len=128) :: msg
+      integer :: rkmax
+
+      call X%reset()
+      ! Allocate memory for SVD & lagged fields
+      rkmax = size(X%U)
+      allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
+
+      ! Options
+      if (present(options)) then
+         opts = options
+      else ! default
+         opts = dlra_opts()
+      end if
+      opts%tau = tau
+      opts%Tend = Tend
+      call opts%init()
+
+      call log_message('Initializing solver', this_module, this_procedure)
+      write(msg,'(A,I0,A,F10.8)') 'Integration over ', opts%nsteps, ' steps with dt= ', opts%tau
+      call log_information(msg, this_module, this_procedure)
+      ! Prepare logfile
+      call write_logfile_headers(logfile)
+
+      ! determine initial rank if rank-adaptive
+      if (opts%if_rank_adaptive .and. .not. X%rank_is_initialised) then
+         call log_message('Determine initial rank:', this_module, this_procedure)
+         call rank_initializer(X, opts)
+      end if
+
+      call log_settings(X, Tend, opts)
+   end subroutine generic_initializer_rdp
+
+   subroutine generic_DLRA_integrator_rdp(X, opts, Tend, tau, info,stepper, this_procedure, equation)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      type(dlra_opts),                        intent(inout) :: opts
+      !! DLRA opts
+      real(dp),                               intent(in)    :: Tend
+      !! Integration time horizon.
+      real(dp),                               intent(in)    :: tau
+      !! Desired time step. The avtual time-step will be computed such as to reach Tend in an integer number
+      !! of steps.
+      integer,                                intent(out)   :: info
+      !! Information flag
+      procedure(abstract_dlra_stepper)                      :: stepper
+      !! Generic wrapper for the stepper (Lyapnuov/Riccati)
+      character(len=*),                       intent(in)    :: this_procedure
+      !! Specific procedure name (for error attribution)
+      character(len=*),                       intent(in)    :: equation
+      !! Solver type (Lyapunov/Riccati) - is used as in logfile name
+
+      ! internal
+      character(len=128) :: msg, logfile
+      integer :: istep, irk, counter
+      logical :: if_lastep
       real(dp), dimension(:), allocatable :: svals, svals_lag
-      character(len=128)                  :: msg
 
-      if (time_lightROM()) call lr_timer%start('DLRA_lyapunov_integrator_rdp')
-      LyapSolver_counter = LyapSolver_counter + 1
+      if (equation == 'Lyapunov') then
+         logfile = logfile_basename_lyapunov
+         counter = LyapunovSolver_counter
+      else if (equation == 'Riccati') then
+         logfile = logfile_basename_riccati
+         counter = RiccatiSolver_counter
+      else
+         call stop_error('Unknown equation type: '//trim(equation), this_module, this_procedure)
+      end if
 
-      ! Optional arguments
-!      trans = optval(iftrans, .false.)
-!
-!      ! Options
-!      if (present(options)) then
-!         opts = options
-!      else ! default
-!         opts = dlra_opts()
-!      end if
-!
-!      ! Set tolerance
-!      !tol = opts%tol
-!      opts%tau = tau
-!      opts%Tend = Tend
-!
-!      ! Check compatibility of options and determine chk/IO step
-!      !all check_options(X, opts)
-!      call opts%init()
-!
-!      ! Initialize
-!      call X%reset()
-!      ! Compute number of steps
-!      if_lastep = .false.
-!      !opts%nsteps = nint(Tend/tau)
-!
-!      rkmax = size(X%U)
-!      ! Allocate memory for SVD & lagged fields
-!      allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
-
-!      call log_message('Initializing Lyapunov solver', this_module, 'DLRA_main')
-!      write(msg,'(A,I0,A,F10.8)') 'Integration over ', opts%nsteps, ' steps with dt= ', opts%tau
-!      call log_information(msg, this_module, 'DLRA_main')
-!      ! Prepare logfile
-!      call write_logfile_headers(logfile_basename)
-!
-!      ! determine initial rank if rank-adaptive
-!      if (opts%if_rank_adaptive) then
-!         rk_reduction_lock = opts%rk_reduction_lock  ! initialize rank reduction lock
-!         if (.not. X%rank_is_initialised) then
-!            call log_message('Determine initial rank:', this_module, 'DLRA_main')
-!            call set_initial_rank(X, A, B, opts%tau, opts%mode, exptA, trans, opts%tol)
-!         end if
-!      end if
-
-!      call log_settings(X, Tend, opts)
-      call init_lyap(X, A, B,  Tend, tau, exptA, opts, iftrans, options)
-      call log_message('Starting DLRA integration', this_module, 'DLRA_main')
+      if (time_lightROM()) call lr_timer%start(this_procedure)
+      call log_message('Starting DLRA integration', this_module, this_procedure)
 
       if_lastep = .false.
-      if (opts%if_rank_adaptive) rk_reduction_lock = opts%rk_reduction_lock
+      if (opts%if_rank_adaptive) opts%rk_reduction_lock = opts%rk_reduction_barrier
+
       dlra : do istep = 1, opts%nsteps
 
          call log_step(X, istep, opts%nsteps)
@@ -232,11 +427,7 @@ module LightROM_LyapunovSolvers
          end if
 
          ! dynamical low-rank approximation solver
-         if (opts%if_rank_adaptive) then
-            call rank_adaptive_projector_splitting_DLRA_step(X, A, B, opts%tau, opts%mode, exptA, trans, info, rk_reduction_lock, opts%tol)
-         else
-            call fixed_rank_projector_splitting_DLRA_step(X, A, B, opts%tau, opts%mode, info, exptA, trans)
-         end if
+         call stepper(opts%if_rank_adaptive, info)
 
          ! update time & step counters
          call X%increment_counters(opts%tau)
@@ -245,599 +436,25 @@ module LightROM_LyapunovSolvers
          if ( X%rk > 0 .and. (mod(istep, opts%chkstep) == 0 .or. istep == opts%nsteps) ) then
             svals = svdvals(X%S(:X%rk,:X%rk))
             if (.not. allocated(svals_lag)) allocate(svals_lag(X%rk), source=zero_rdp)
-            call log_svals(logfile_basename, X, opts%tau, svals, svals_lag, LyapSolver_counter, istep, opts%nsteps)
+            call log_svals(logfile, X, opts%tau, svals, svals_lag, counter, istep, opts%nsteps)
             ! Check convergence
             if (istep == opts%nsteps) if_lastep = .true.
             irk = min(size(svals), size(svals_lag))
             X%is_converged = is_converged(X, svals(:irk), svals_lag(:irk), opts, if_lastep)
             if (X%is_converged) then
                write(msg,'(A,I0,A)') "Step ", istep, ": Solution converged!"
-               call log_information(msg, this_module, 'DLRA_main')
+               call log_information(msg, this_module, this_procedure)
                exit dlra
             else ! if final step
                if (if_lastep) then
                   write(msg,'(A,I0,A)') "Step ", istep, ": Solution not converged!"
-                  call log_information(msg, this_module, 'DLRA_main')
+                  call log_information(msg, this_module, this_procedure)
                end if
             end if
          endif
       enddo dlra
-      call log_message('Exiting Lyapunov solver', this_module, 'DLRA_main')
-      ! Clean up scratch space
-      deallocate(Usvd, ssvd, VTsvd)
-      if (time_lightROM()) call lr_timer%stop('DLRA_lyapunov_integrator_rdp')
-   end subroutine projector_splitting_DLRA_lyapunov_integrator_rdp
+      call log_message('Exiting solver', this_module, this_procedure)
 
-   subroutine init_lyap(X, A, B,  Tend, tau, exptA, opts, iftrans, options)
-      class(abstract_sym_low_rank_state_rdp),  intent(inout) :: X
-      !! Low-Rank factors of the solution.
-      class(abstract_linop_rdp),               intent(inout) :: A
-      !! Linear operator
-      class(abstract_vector_rdp),              intent(in)    :: B(:)
-      !! Low-Rank inhomogeneity.
-      real(dp),                                intent(in)    :: Tend
-      !! Integration time horizon.
-      real(dp),                                intent(in)    :: tau
-      !! Desired time step. The avtual time-step will be computed such as to reach Tend in an integer number
-      !! of steps.
-      procedure(abstract_exptA_rdp)                          :: exptA
-      !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
-      type(dlra_opts),                         intent(out)   :: opts
-      !! Checked opts
-      logical,                       optional, intent(in)    :: iftrans
-      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
-      type(dlra_opts),               optional, intent(in)    :: options
-      !! Options for solver configuration
-      ! internal
-      character(len=128)                  :: msg
-      integer :: rkmax
-      logical                                                :: trans
-      
-      
-      trans = optval(iftrans, .false.)
-
-      ! Options
-      if (present(options)) then
-         opts = options
-      else ! default
-         opts = dlra_opts()
-      end if
-
-      ! Set tolerance
-      !tol = opts%tol
-      opts%tau = tau
-      opts%Tend = Tend
-
-      ! Check compatibility of options and determine chk/IO step
-      !all check_options(X, opts)
-      call opts%init()
-
-      ! Initialize
-      call X%reset()
-
-      rkmax = size(X%U)
-      ! Allocate memory for SVD & lagged fields
-      allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
-
-      call log_message('Initializing Lyapunov solver', this_module, 'DLRA_main')
-      write(msg,'(A,I0,A,F10.8)') 'Integration over ', opts%nsteps, ' steps with dt= ', opts%tau
-      call log_information(msg, this_module, 'DLRA_main')
-      ! Prepare logfile
-      call write_logfile_headers(logfile_basename)
-
-      ! determine initial rank if rank-adaptive
-      if (opts%if_rank_adaptive .and. .not. X%rank_is_initialised) then
-         call log_message('Determine initial rank:', this_module, 'DLRA_main')
-         call set_initial_rank(X, A, B, opts%tau, opts%mode, exptA, trans, opts%tol)
-      end if
-
-      call log_settings(X, Tend, opts)
-   end subroutine init_lyap
-
-   !-----------------------
-   !-----     PSI     -----
-   !-----------------------
-
-   ! subroutine projector_splitting_DLRA_step_lyapunov_rdp(X, A, B, tau, mode, info, exptA, trans)
-   !    !! Driver for the time-stepper defining the splitting logic for each step of the the 
-   !    !! projector-splitting integrator
-   !    class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-   !    !! Low-Rank factors of the solution.
-   !    class(abstract_linop_rdp),              intent(inout) :: A
-   !    !! Linear operator
-   !    class(abstract_vector_rdp),             intent(in)    :: B(:)
-   !    !! Low-Rank inhomogeneity.
-   !    real(dp),                               intent(in)    :: tau
-   !    !! Time step.
-   !    integer,                                intent(in)    :: mode
-   !    !! TIme integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) 
-   !    !! orders are implemented.
-   !    integer,                                intent(out)   :: info
-   !    !! Information flag
-   !    procedure(abstract_exptA_rdp)                         :: exptA
-   !    !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
-   !    logical,                                intent(in)    :: trans
-   !    !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
-      
-   !    ! Internal variables
-   !    integer                                               :: istep, nsteps
-   !    character(len=128)                                    :: msg
-
-   !    if (time_lightROM()) call lr_timer%start('DLRA_step_lyapunov_rdp')
-
-   !    select case (mode)
-   !    case (1)
-   !       ! Lie-Trotter splitting
-   !       call M_map(         X, A, tau, info, exptA, trans)
-   !       call G_map(X, B, tau, info)
-   !    case (2) 
-   !       ! Strang splitting
-   !       call M_map(         X, A, 0.5*tau, info, exptA, trans)
-   !       call G_map(X, B,     tau, info)
-   !       call M_map(         X, A, 0.5*tau, info, exptA, trans)
-   !    end select
-
-   !    if (time_lightROM()) call lr_timer%stop('DLRA_step_lyapunov_rdp')
-   ! end subroutine projector_splitting_DLRA_step_lyapunov_rdp
-
-   !-----------------------------
-   !
-   !     RANK-ADAPTIVE PSI 
-   !
-   !-----------------------------
-
-   ! subroutine rank_adaptive_PS_DLRA_step_lyapunov_rdp(X, A, B, tau, mode, info, rk_reduction_lock, exptA, trans, tol)
-   !    !! Wrapper for projector_splitting_DLRA_step_lyapunov_rdp adding the logic for rank-adaptivity
-   !    class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-   !    !! Low-Rank factors of the solution.
-   !    class(abstract_linop_rdp),              intent(inout) :: A
-   !    !! Linear operator
-   !    class(abstract_vector_rdp),             intent(in)    :: B(:)
-   !    !! Low-Rank inhomogeneity.
-   !    real(dp),                               intent(in)    :: tau
-   !    !! Time step.
-   !    integer,                                intent(in)    :: mode
-   !    !! Time integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) 
-   !    !! orders are implemented.
-   !    integer,                                intent(out)   :: info
-   !    !! Information flag
-   !    integer,                                intent(inout) :: rk_reduction_lock
-   !    !! 'timer' to disable rank reduction
-   !    procedure(abstract_exptA_rdp)                         :: exptA
-   !    !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
-   !    logical,                                intent(in)    :: trans
-   !    !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
-   !    real(dp),                               intent(in)    :: tol
-      
-   !    ! Internal variables
-   !    integer                                               :: istep, rk, irk, rkmax, ndigits
-   !    logical                                               :: accept_step, found
-   !    real(dp),                               allocatable   :: coef(:)
-   !    real(dp)                                              :: norm
-   !    character(len=256)                                    :: msg, fmt
-
-   !    integer, parameter                                    :: max_step = 40  ! might not be needed
-
-   !    ! ensure that we are integrating one more rank than we use for approximation
-   !    X%rk = X%rk + 1
-   !    rk = X%rk ! this is only to make the code more readable
-   !    rkmax = size(X%U)
-   !    ndigits = max(1,ceiling(log10(real(rkmax))))
-      
-   !    accept_step = .false.
-   !    istep = 1
-   !    do while ( .not. accept_step .and. istep < max_step )
-   !       ! run a regular step
-   !       call projector_splitting_DLRA_step_lyapunov_rdp(X, A, B, tau, mode, info, exptA, trans)
-   !       ! compute singular values of X%S
-   !       call svd(X%S(:rk,:rk), ssvd(:rk), Usvd(:rk,:rk), VTsvd(:rk,:rk))
-   !       call find_rank(found, irk, ssvd, tol)
-         
-   !       ! choose action
-   !       if (.not. found) then ! none of the singular values is below tolerance
-   !          ! increase rank and run another step
-   !          if (rk == rkmax) then ! cannot increase rank without reallocating X%U and X%S
-   !             write(msg,'(A,I0,A,A)') 'Cannot increase rank, rkmax = ', rkmax, ' is reached. ', &
-   !                      & 'Increase rkmax and restart!'
-   !             call stop_error(msg, this_module, 'rank_adaptive_PS_DLRA_step_lyapunov_rdp')
-   !          else
-   !             write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8)")') ndigits, ndigits
-   !             write(msg,fmt) 'rk= ', rk, ', s_', rk,' = ', ssvd(rk)
-   !             call log_information(msg, this_module, 'DLRA_main')
-   !             write(msg,'(A,I0)') 'Rank increased to rk= ', rk + 1
-   !             call log_message(msg, this_module, 'DLRA_main')
-               
-   !             X%rk = X%rk + 1
-   !             rk = X%rk ! this is only to make the code more readable
-   !             ! set coefficients to zero (for redundancy)
-   !             X%S(:rk, rk) = 0.0_dp 
-   !             X%S( rk,:rk) = 0.0_dp
-   !             ! add random vector ...
-   !             call X%U(rk)%rand(.false.)
-   !             ! ... and orthonormalize
-   !             call orthogonalize_against_basis(X%U(rk), X%U(:rk-1), info, if_chk_orthonormal=.false.)
-   !             call check_info(info, 'orthogonalize_against_basis', this_module, &
-   !                               & 'rank_adaptive_PS_DLRA_step_lyapunov_rdp')
-   !             call X%U(rk)%scal(1.0_dp / X%U(rk)%norm())
-
-   !             rk_reduction_lock = 10 ! avoid rank oscillations
-   !          end if
-
-   !       else ! the rank of the solution is sufficient
-   !          accept_step = .true.
-
-   !          if (irk /= rk .and. rk_reduction_lock == 0) then ! we should decrease the rank
-   !             ! decrease rank
-   !             call decrease_rank(X, Usvd, ssvd, rk)
-   !             rk = max(irk, rk - 2)  ! reduce by at most 2
-   !             write(msg, '(A,I0)') 'Rank decreased to rk= ', rk
-   !             call log_message(msg, this_module, 'DLRA_main')
-   !          end if
-            
-   !       end if ! found
-   !       istep = istep + 1
-   !    end do ! while .not. accept_step
-
-   !    if (istep >= max_step) then
-   !       write(msg,'(A,I0,A,2(A,E11.4))') 'Rank increased ', max_step, ' times in a single step without ', &
-   !             & 'reaching the desired tolerance on the singular values. s_{k+1} = ', ssvd(irk), ' > ', tol
-   !       call stop_error(msg, this_module, 'DLRA_main')
-   !    end if
-
-   !    write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8,A,I2)")') ndigits, ndigits
-   !    write(msg,fmt) 'rk = ', rk-1, ':     s_', irk,' = ', &
-   !             & ssvd(irk), ',     lock: ', rk_reduction_lock
-   !    call log_information(msg, this_module, 'DLRA_main')
-
-   !    ! decrease rk_reduction_lock
-   !    if (rk_reduction_lock > 0) rk_reduction_lock = rk_reduction_lock - 1
-      
-   !    ! reset to the rank of the approximation which we use outside of the integrator
-   !    X%rk = rk - 1      
-   ! end subroutine rank_adaptive_PS_DLRA_step_lyapunov_rdp
-
-   ! subroutine M_map_rdp(X, A, tau, info, exptA, iftrans)
-   !    !! This subroutine computes the solution of the stiff linear part of the 
-   !    !! differential equation exactly using the matrix exponential.
-   !    class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-   !    !! Low-Rank factors of the solution.
-   !    class(abstract_linop_rdp),              intent(inout) :: A
-   !    !! Linear operator.
-   !    real(dp),                               intent(in)    :: tau
-   !    !! Time step.
-   !    integer,                                intent(out)   :: info
-   !    !! Information flag
-   !    procedure(abstract_exptA_rdp)                         :: exptA
-   !    !! Routine for computation of the exponential pabstract_vector),  ropagator (default: Krylov-based exponential operator).
-   !    logical, optional,                      intent(in)    :: iftrans
-   !    logical                                               :: trans
-   !    !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
-
-   !    ! Internal variables
-   !    class(abstract_vector_rdp),             allocatable   :: exptAU    ! scratch basis
-   !    real(dp),                               allocatable   :: R(:,:)    ! QR coefficient matrix
-   !    integer                                               :: i, rk
-
-   !    if (time_lightROM()) call lr_timer%start('M_map_rdp')
-      
-   !    ! Optional argument
-   !    trans = optval(iftrans, .false.)
-
-   !    rk = X%rk
-   !    allocate(R(rk,rk)); R = 0.0_dp
-
-   !    ! Apply propagator to initial basis
-   !    allocate(exptAU, source=X%U(1)); call exptAU%zero()
-   !    do i = 1, rk
-   !       call exptA(exptAU, A, X%U(i), tau, info, trans)
-   !       call copy(X%U(i), exptAU) ! overwrite old solution
-   !    end do
-   !    ! Reorthonormalize in-place
-   !    call qr(X%U(:rk), R, info)
-   !    call check_info(info, 'qr', this_module, 'M_map_rdp')
-   
-   !    ! Update coefficient matrix
-   !    X%S(:rk,:rk) = matmul(R, matmul(X%S(:rk,:rk), transpose(R)))
-
-   !    if (time_lightROM()) call lr_timer%stop('M_map_rdp')
-   ! end subroutine M_map_rdp
-
-   ! subroutine G_map_lyapunov_rdp(X, B, tau, info)
-   !    !! This subroutine computes the solution of the non-stiff part of the 
-   !    !! differential equation numerically using first-order explicit Euler.
-   !    !! The update of the full low-rank factorization requires three separate
-   !    !! steps called K, S, L.
-   !    class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-   !    !! Low-Rank factors of the solution.
-   !    class(abstract_vector_rdp),             intent(in)    :: B(:)
-   !    !! Low-Rank inhomogeneity.
-   !    real(dp),                               intent(in)    :: tau
-   !    !! Time step.
-   !    integer,                                intent(out)   :: info
-   !    !! Information flag.
-
-   !    ! Internal variables
-   !    class(abstract_vector_rdp),  allocatable              :: U1(:)
-   !    class(abstract_vector_rdp),  allocatable              :: BBTU(:)
-   !    integer                                               :: rk
-
-   !    if (time_lightROM()) call lr_timer%start('G_map_lyapunov_rdp')
-    
-   !    rk = X%rk
-   !    allocate(  U1(rk), source=X%U(1)); call zero_basis(U1)
-   !    allocate(BBTU(rk), source=X%U(1)); call zero_basis(BBTU)
-
-   !    call K_step_lyapunov(X, U1, BBTU, B, tau, info)
-   !    call S_step_lyapunov(X, U1, BBTU,    tau, info)
-   !    call L_step_lyapunov(X, U1,       B, tau, info)
-      
-   !    ! Copy updated low-rank factors to output
-   !    call copy(X%U(:rk), U1)
-
-   !    if (time_lightROM()) call lr_timer%stop('G_map_lyapunov_rdp')
-   ! end subroutine G_map_lyapunov_rdp
-
-   ! subroutine K_step_lyapunov_rdp(X, U1, BBTU, B, tau, info)
-   !    class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-   !    !! Low-Rank factors of the solution.
-   !    class(abstract_vector_rdp),             intent(out)   :: U1(:)
-   !    !! Intermediate low-rank factor.
-   !    class(abstract_vector_rdp),             intent(out)   :: BBTU(:)
-   !    !! Precomputed application of the inhomogeneity.
-   !    class(abstract_vector_rdp),             intent(in)    :: B(:)
-   !    !! Low-Rank inhomogeneity.
-   !    real(dp),                               intent(in)    :: tau
-   !    !! Time step.
-   !    integer,                                intent(out)   :: info
-   !    !! Information flag.
-
-   !    ! Internal variables
-   !    class(abstract_vector_rdp), allocatable :: Uwrk(:)
-   !    integer                                 :: rk
-
-   !    if (time_lightROM()) call lr_timer%start('K_step_lyapunov_rdp')
-
-   !    rk = X%rk
-   !    call linear_combination(Uwrk, X%U(:rk), X%S(:rk,:rk))  ! K0
-   !    call copy(U1, Uwrk)
-   !    call apply_outerprod(BBTU, B, X%U(:rk))                ! Kdot
-   !    ! Construct intermediate solution U1
-   !    call axpby_basis(tau, BBTU, 1.0_dp, U1)                ! K0 + tau*Kdot
-   !    ! Orthonormalize in-place
-   !    call qr(U1, X%S(:rk,:rk), info)
-   !    call check_info(info, 'qr', this_module, 'K_step_lyapunov_rdp')
-
-   !    if (time_lightROM()) call lr_timer%stop('K_step_lyapunov_rdp')
-   ! end subroutine K_step_lyapunov_rdp
-
-   ! subroutine S_step_lyapunov_rdp(X, U1, BBTU, tau, info)
-   !    class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-   !    !! Low-Rank factors of the solution.
-   !    class(abstract_vector_rdp),             intent(in)    :: U1(:)
-   !    !! Intermediate low-rank factor.
-   !    class(abstract_vector_rdp),             intent(in)    :: BBTU(:)
-   !    !! Precomputed application of the inhomogeneity.
-   !    real(dp),                               intent(in)    :: tau
-   !    !! Time step.
-   !    integer,                                intent(out)   :: info
-   !    !! Information flag.
-
-   !    ! Internal variables
-   !    integer                                               :: rk
-   !    real(dp),                               allocatable   :: Swrk(:,:)
-
-   !    if (time_lightROM()) call lr_timer%start('S_step_lyapunov_rdp')
-
-   !    rk = X%rk
-   !    allocate(Swrk(rk,rk)); Swrk = 0.0_dp
-   !    Swrk = innerprod(U1, BBTU)          ! - Sdot
-   !    ! Construct intermediate coefficient matrix
-   !    X%S(:rk,:rk) = X%S(:rk,:rk) - tau*Swrk
-
-   !    if (time_lightROM()) call lr_timer%stop('S_step_lyapunov_rdp')
-   ! end subroutine S_step_lyapunov_rdp
-
-   ! subroutine L_step_lyapunov_rdp(X, U1, B, tau, info)
-   !    class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-   !    !! Low-Rank factors of the solution.
-   !    class(abstract_vector_rdp),             intent(in)    :: U1(:)
-   !    !! Intermediate low-rank factor (from K step).
-   !    class(abstract_vector_rdp),             intent(in)    :: B(:)
-   !    !! Low-Rank inhomogeneity.
-   !    real(dp),                               intent(in)    :: tau
-   !    !! Time step.
-   !    integer,                                intent(out)   :: info
-   !    !! Information flag.
-
-   !    ! Internal variables
-   !    integer                                               :: rk
-   !    class(abstract_vector_rdp),             allocatable   :: Uwrk(:)
-
-   !    if (time_lightROM()) call lr_timer%start('L_step_lyapunov_rdp')
-
-   !    rk = X%rk
-   !    call linear_combination(Uwrk, X%U(:rk), transpose(X%S(:rk,:rk)))  ! L0.T
-   !    ! Construct derivative
-   !    call apply_outerprod(X%U(:rk), B, U1)       ! Ldot.T
-   !    ! Construct solution L1.T
-   !    call axpby_basis(tau, X%U(:rk), 1.0_dp, Uwrk)
-   !    ! Update coefficient matrix
-   !    X%S(:rk,:rk) = innerprod(Uwrk, U1)
-
-   !    if (time_lightROM()) call lr_timer%stop('L_step_lyapunov_rdp')
-   ! end subroutine L_step_lyapunov_rdp
-
-   ! subroutine set_initial_rank_lyapunov(X, A, B, tau, mode, exptA, trans, tol, rk_init, nsteps)
-   !    class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-   !    !! Low-Rank factors of the solution.
-   !    class(abstract_linop_rdp),              intent(inout) :: A
-   !    !! Linear operator
-   !    class(abstract_vector_rdp),             intent(in)    :: B(:)
-   !    !! Low-Rank inhomogeneity.
-   !    real(dp),                               intent(in)    :: tau
-   !    !! Time step.
-   !    integer,                                intent(in)    :: mode
-   !    !! TIme integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) orders are implemented.
-   !    procedure(abstract_exptA_rdp)                         :: exptA
-   !    !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
-   !    logical,                                intent(in)    :: trans
-   !    !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
-   !    real(dp),                               intent(in)    :: tol
-   !    !! Tolerance on the last singular value to determine rank
-   !    integer,                      optional, intent(in)    :: rk_init
-   !    !! Smallest tested rank
-   !    integer,                      optional, intent(in)    :: nsteps
-   !    integer                                               :: n
-   !    !! Number of steps to run before checking the singular values
-
-   !    ! internal
-   !    integer                                               :: i, rk, irk, info, rkmax
-   !    class(abstract_vector_rdp),               allocatable :: Utmp(:)
-   !    real(dp),                                 allocatable :: Stmp(:,:), svals(:)
-   !    logical                                               :: found, accept_rank
-   !    character(len=512)                                    :: msg, fmt
-
-   !    ! optional arguments
-   !    X%rk = max(optval(rk_init, 1), 1)
-   !    n = optval(nsteps, 5)
-   !    rkmax = size(X%U)
-
-   !    info = 0
-   !    accept_rank = .false.
-
-   !    ! save initial condition
-   !    allocate(Utmp(rkmax), source=X%U)
-   !    allocate(Stmp(rkmax,rkmax)); Stmp = X%S
-
-   !    do while (.not. accept_rank .and. X%rk <= rkmax)
-   !       write(msg,'(4X,A,I0)') 'Test r = ', X%rk
-   !       call log_message(msg, this_module, 'set_initial_rank_lyapunov')
-   !       ! run integrator
-   !       do i = 1,n
-   !          call projector_splitting_DLRA_step_lyapunov_rdp(X, A, B, tau, mode, info, exptA, trans)
-   !       end do
-
-   !       ! check if singular values are resolved
-   !       svals = svdvals(X%S(:X%rk,:X%rk))
-   !       found = .false.
-   !       tol_chk: do irk = 1, X%rk
-   !          if ( svals(irk) < tol ) then
-   !             found = .true.
-   !             exit tol_chk
-   !          end if
-   !       end do tol_chk
-   !       if (.not. found) irk = irk - 1
-
-   !       write(msg,'(4X,A,I2,A,E8.2)') 'rk = ', X%rk, ' s_r =', svals(X%rk)
-   !       call log_debug(msg, this_module, 'set_initial_rank_lyapunov')
-   !       if (found) then
-   !          accept_rank = .true.
-   !          X%rk = irk
-   !          write(msg,'(4X,A,I2,A,E10.4)') 'Accpeted rank: r = ', X%rk-1, ',     s_{r+1} = ', svals(X%rk)
-   !          call log_message(msg, this_module, 'set_initial_rank_lyapunov')
-   !       else
-   !          X%rk = 2*X%rk
-   !       end if
-         
-   !       ! reset initial conditions
-   !       call copy(X%U, Utmp)
-   !       X%S = Stmp
-   !    end do
-
-   !    if (X%rk > rkmax) then
-   !       write(msg, *) 'Maximum rank reached but singular values are not converged. Increase rkmax and restart.'
-   !       call stop_error(msg, this_module, 'set_initial_rank_lyapunov')
-   !    end if
-
-   !    ! reset to the rank of the approximation which we use outside of the integrator & mark rank as initialized
-   !    X%rk = max(X%rk - 1, 1)
-   !    X%rank_is_initialised = .true.
-   ! end subroutine set_initial_rank_lyapunov
-
-   subroutine compute_splitting_error(err_est, X, A, B, tau, mode, exptA, trans)
-      !! This function estimates the splitting error of the integrator as a function of the chosen timestep.
-      !! This error estimation can be integrated over time to give an estimate of the compound error due to 
-      !! the splitting approach.
-      !! This error can be used as a tolerance for the rank-adaptivity to ensure that the low-rank truncation 
-      !! error is smaller than the splitting error.
-      real(dp),                               intent(out)   :: err_est
-      !! Estimation of the splitting error
-      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-      !! Low-Rank factors of the solution.
-      class(abstract_linop_rdp),              intent(inout) :: A
-      !! Linear operator
-      class(abstract_vector_rdp),             intent(in)    :: B(:)
-      !! Low-Rank inhomogeneity.
-      real(dp),                               intent(in)    :: tau
-      !! Time step.
-      integer,                                intent(in)    :: mode
-      !! TIme integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) orders are implemented.
-      procedure(abstract_exptA_rdp)                         :: exptA
-      !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
-      logical,                                intent(in)    :: trans
-      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
-      
-      ! internals
-      ! save current state to reset it later
-      class(abstract_vector_rdp),               allocatable :: Utmp(:)
-      real(dp),                                 allocatable :: Stmp(:,:)
-      ! first solution to compute the difference against
-      class(abstract_vector_rdp),               allocatable :: U1(:)
-      real(dp),                                 allocatable :: S1(:,:)
-      ! projected bases
-      real(dp),                                 allocatable :: V1(:,:), V2(:,:)
-      ! projected difference
-      real(dp),                                 allocatable :: D(:,:)
-      integer                                               :: rx, r, info
-
-      rx = X%rk
-      r  = 2*rx
-
-      ! save curret state
-      allocate(Utmp(rx), source=X%U(:rx))
-      allocate(Stmp(rx,rx)); Stmp = X%S(:rx,:rx)
-
-      ! tau step
-      call fixed_rank_projector_splitting_DLRA_step_lyapunov_rdp(X, A, B, tau, mode, info, exptA, trans)
-      ! save result
-      allocate(U1(rx), source=X%U(:rx))
-      allocate(S1(rx,rx)); S1 = X%S(:rx,:rx)
-
-      ! reset curret state
-      call copy(X%U(:rx), Utmp)
-      X%S(:rx,:rx) = Stmp
-
-      ! tau/2 steps
-      call fixed_rank_projector_splitting_DLRA_step_lyapunov_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans)
-      call fixed_rank_projector_splitting_DLRA_step_lyapunov_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans)
-
-      ! compute common basis
-      call project_onto_common_basis(V1, V2, U1(:rx), X%U(:rx))
-
-      ! project second low-rank state onto common basis and construct difference
-      allocate(D(r,r)); D = 0.0_dp
-      D(    :rx,     :rx) = S1 - matmul(V1, matmul(X%S(:rx,:rx), transpose(V1)))
-      D(rx+1:r ,     :rx) =    - matmul(V2, matmul(X%S(:rx,:rx), transpose(V1)))
-      D(    :rx, rx+1:r ) =    - matmul(V1, matmul(X%S(:rx,:rx), transpose(V2)))
-      D(rx+1:r , rx+1:r ) =    - matmul(V2, matmul(X%S(:rx,:rx), transpose(V2)))
-
-      ! compute local error based on frobenius norm of difference
-      err_est = 2**mode / (2**mode - 1) * sqrt( sum( svdvals(D) ** 2 ) )
-
-      ! reset curret state
-      call copy(X%U(:rx), Utmp)
-      X%S(:rx,:rx) = Stmp
-   end subroutine compute_splitting_error
-
-   subroutine reset_lyapunov_solver(prefix, suffix)
-      character(len=*), optional, intent(in) :: prefix
-      character(len=*), optional, intent(in) :: suffix
-      ! internal
-      character(len=128) :: msg
-      write(msg,'(A,I0,A)') 'Lyapunov solver called ', LyapSolver_counter, ' times. Resetting coutner to 0.'
-      call log_message(msg, this_module, 'DLRA_main')
-      LyapSolver_counter = 0
-      call reset_logfiles(logfile_basename, prefix=prefix, suffix=suffix)
-   end subroutine reset_lyapunov_solver
+   end subroutine generic_DLRA_integrator_rdp
 
 end module LightROM_LyapunovSolvers

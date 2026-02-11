@@ -35,7 +35,6 @@ module LightROM_SolverUtils
    public :: set_initial_rank_lyapunov_rdp, set_initial_rank_riccati_rdp
    public :: rank_adaptive_projector_splitting_DLRA_step
    public :: set_initial_rank
-   !public :: M_map, G_map
 
    interface rank_adaptive_projector_splitting_DLRA_step
       module procedure rank_adaptive_projector_splitting_DLRA_step_lyapunov_rdp
@@ -80,6 +79,14 @@ module LightROM_SolverUtils
       subroutine abstract_dlra_stepper(if_rank_adaptive, info)
          logical, intent(in) :: if_rank_adaptive
          integer, intent(out) :: info
+      end subroutine
+   end interface
+
+   abstract interface
+      subroutine abstract_dlra_rank_initializer(X, opts)
+         import dp, abstract_sym_low_rank_state_rdp, dlra_opts
+         class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+         type(dlra_opts),                        intent(in)    :: opts
       end subroutine
    end interface
 
@@ -228,17 +235,73 @@ contains
    !
    !---------------------------------------------------------------
 
-   subroutine generic_rank_adaptive_projector_splitting_DLRA_step_rdp( &
-            &  X, info, rk_reduction_lock, tol, stepper, this_procedure)
+   subroutine rank_adaptive_projector_splitting_DLRA_step_lyapunov_rdp( &
+            &  X, A, B, tau, mode, exptA, trans, info, opts)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      class(abstract_linop_rdp),              intent(inout) :: A
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
+      real(dp),                               intent(in)    :: tau
+      integer,                                intent(in)    :: mode
+      procedure(abstract_exptA_rdp)                         :: exptA
+      logical,                                intent(in)    :: trans
+      integer,                                intent(out)   :: info
+      class(dlra_opts),                       intent(inout) :: opts
+      ! internal
+      character(len=*), parameter :: this_procedure = 'rank_adaptive_projector_splitting_DLRA_step_lyapunov_rdp'
+      
+      call generic_rank_adaptive_projector_splitting_DLRA_step_rdp(X, opts, info, stepper, this_procedure)
+
+   contains
+
+      subroutine stepper(if_rank_adaptive, info)
+         logical, intent(in) :: if_rank_adaptive
+         integer, intent(out) :: info
+         !! Information flag
+         call fixed_rank_projector_splitting_DLRA_step_lyapunov_rdp( &
+               &  X, A, B, tau, mode, info, exptA, trans)
+      end subroutine
+
+   end subroutine rank_adaptive_projector_splitting_DLRA_step_lyapunov_rdp
+
+   subroutine rank_adaptive_projector_splitting_DLRA_step_riccati_rdp( &
+            &  X, A, B, CT, Qc, Rinv, tau, mode, exptA, trans, opts, info)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      class(abstract_linop_rdp),              intent(inout) :: A
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
+      class(abstract_vector_rdp),             intent(in)    :: CT(:)
+      real(dp),                               intent(in)    :: Qc(:,:)
+      real(dp),                               intent(in)    :: Rinv(:,:)
+      real(dp),                               intent(in)    :: tau
+      integer,                                intent(in)    :: mode
+      procedure(abstract_exptA_rdp)                         :: exptA
+      logical,                                intent(in)    :: trans
+      integer,                                intent(out)   :: info
+      class(dlra_opts),                       intent(inout) :: opts
+      ! internal
+      character(len=*), parameter :: this_procedure = 'rank_adaptive_projector_splitting_DLRA_step_riccati_rdp'
+
+      call generic_rank_adaptive_projector_splitting_DLRA_step_rdp(X, opts, info, stepper, this_procedure)
+
+   contains
+
+      subroutine  stepper(if_rank_adaptive, info)
+         logical, intent(in) :: if_rank_adaptive
+         integer, intent(out) :: info
+         !! Information flag
+         call fixed_rank_projector_splitting_DLRA_step_riccati_rdp( &
+               &  X, A, B, CT, Qc, Rinv, tau, mode, info, exptA, trans)
+      end subroutine
+
+   end subroutine rank_adaptive_projector_splitting_DLRA_step_riccati_rdp
+
+   subroutine generic_rank_adaptive_projector_splitting_DLRA_step_rdp(X, opts, info, stepper, this_procedure)
       !! Wrapper for projector_splitting_DLRA_step_lyapunov_rdp adding the logic for rank-adaptivity
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       !! Low-Rank factors of the solution.
+      type(dlra_opts),                        intent(inout) :: opts 
+      !! DLRA opts
       integer,                                intent(out)   :: info
       !! Information flag
-      integer,                                intent(inout) :: rk_reduction_lock
-      !! 'timer' to disable rank reduction
-      real(dp),                               intent(in)    :: tol
-      !! Tolerance for rank determination
       procedure(abstract_dlra_stepper)                      :: stepper
       !! Generic wrapper for the stepper (Lyapnuov/Riccati)
       character(len=*),                       intent(in)    :: this_procedure
@@ -271,7 +334,7 @@ contains
          end if
          ! compute singular values of X%S
          call svd(X%S(:rk,:rk), ssvd(:rk), Usvd(:rk,:rk), VTsvd(:rk,:rk))
-         call find_rank(found, irk, ssvd(:rk), tol)
+         call find_rank(found, irk, ssvd(:rk), opts%tol)
          
          ! choose action
          if (.not. found) then ! none of the singular values is below tolerance
@@ -300,13 +363,13 @@ contains
                                  & 'rank_adaptive_PS_DLRA_step_lyapunov_rdp')
                call X%U(rk)%scal(1.0_dp / X%U(rk)%norm())
 
-               rk_reduction_lock = 10 ! avoid rank oscillations
+               opts%rk_reduction_lock = opts%rk_reduction_barrier ! avoid rank oscillations
             end if
 
          else ! the rank of the solution is sufficient
             accept_step = .true.
 
-            if (irk /= rk .and. rk_reduction_lock == 0) then ! we should decrease the rank
+            if (irk /= rk .and. opts%rk_reduction_lock == 0) then ! we should decrease the rank
                ! decrease rank
                call decrease_rank(X, Usvd, ssvd, rk)
                rk = max(irk, rk - 2)  ! reduce by at most 2
@@ -320,17 +383,17 @@ contains
 
       if (istep >= max_step) then
          write(msg,'(A,I0,A,2(A,E11.4))') 'Rank increased ', max_step, ' times in a single step without ', &
-               & 'reaching the desired tolerance on the singular values. s_{k+1} = ', ssvd(irk), ' > ', tol
+               & 'reaching the desired tolerance on the singular values. s_{k+1} = ', ssvd(irk), ' > ', opts%tol
          call stop_error(msg, this_module, 'DLRA_main')
       end if
 
       write(fmt,'("(A,I3,A,I",I0,".",I0,",A,E14.8,A,I2)")') ndigits, ndigits
       write(msg,fmt) 'rk = ', rk-1, ':     s_', irk,' = ', &
-               & ssvd(irk), ',     lock: ', rk_reduction_lock
+               & ssvd(irk), ',     lock: ', opts%rk_reduction_lock
       call log_information(msg, this_module, 'DLRA_main')
 
       ! decrease rk_reduction_lock
-      if (rk_reduction_lock > 0) rk_reduction_lock = rk_reduction_lock - 1
+      if (opts%rk_reduction_lock > 0) opts%rk_reduction_lock = opts%rk_reduction_lock - 1
       
       ! reset to the rank of the approximation which we use outside of the integrator
       X%rk = rk - 1
@@ -338,156 +401,11 @@ contains
       if (time_lightROM()) call lr_timer%stop(this_procedure)
    end subroutine generic_rank_adaptive_projector_splitting_DLRA_step_rdp
 
-   subroutine rank_adaptive_projector_splitting_DLRA_step_lyapunov_rdp( &
-            &  X, A, B, tau, mode, exptA, trans, info, rk_reduction_lock, tol)
-      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-      class(abstract_linop_rdp),              intent(inout) :: A
-      class(abstract_vector_rdp),             intent(in)    :: B(:)
-      real(dp),                               intent(in)    :: tau
-      integer,                                intent(in)    :: mode
-      procedure(abstract_exptA_rdp)                         :: exptA
-      logical,                                intent(in)    :: trans
-      integer,                                intent(out)   :: info
-      integer,                                intent(inout) :: rk_reduction_lock
-      real(dp),                               intent(in)    :: tol
-      ! internal
-      character(len=*), parameter :: this_procedure = 'rank_adaptive_projector_splitting_DLRA_step_lyapunov_rdp'
-      
-      call generic_rank_adaptive_projector_splitting_DLRA_step_rdp( &
-            &  X, info, rk_reduction_lock, tol, stepper, this_procedure)
-
-   contains
-
-      subroutine stepper(if_rank_adaptive, info)
-         logical, intent(in) :: if_rank_adaptive
-         integer, intent(out) :: info
-         !! Information flag
-         call fixed_rank_projector_splitting_DLRA_step_lyapunov_rdp( &
-               &  X, A, B, tau, mode, info, exptA, trans)
-      end subroutine
-
-   end subroutine rank_adaptive_projector_splitting_DLRA_step_lyapunov_rdp
-
-   subroutine rank_adaptive_projector_splitting_DLRA_step_riccati_rdp( &
-            &  X, A, B, CT, Qc, Rinv, tau, mode, exptA, trans, info, rk_reduction_lock, tol)
-      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-      class(abstract_linop_rdp),              intent(inout) :: A
-      class(abstract_vector_rdp),             intent(in)    :: B(:)
-      class(abstract_vector_rdp),             intent(in)    :: CT(:)
-      real(dp),                               intent(in)    :: Qc(:,:)
-      real(dp),                               intent(in)    :: Rinv(:,:)
-      real(dp),                               intent(in)    :: tau
-      integer,                                intent(in)    :: mode
-      procedure(abstract_exptA_rdp)                         :: exptA
-      logical,                                intent(in)    :: trans
-      integer,                                intent(out)   :: info
-      integer,                                intent(inout) :: rk_reduction_lock
-      real(dp),                               intent(in)    :: tol
-      ! internal
-      character(len=*), parameter :: this_procedure = 'rank_adaptive_projector_splitting_DLRA_step_riccati_rdp'
-
-      call generic_rank_adaptive_projector_splitting_DLRA_step_rdp( &
-            &  X, info, rk_reduction_lock, tol, stepper, this_procedure)
-
-   contains
-
-      subroutine  stepper(if_rank_adaptive, info)
-         logical, intent(in) :: if_rank_adaptive
-         integer, intent(out) :: info
-         !! Information flag
-         call fixed_rank_projector_splitting_DLRA_step_riccati_rdp( &
-               &  X, A, B, CT, Qc, Rinv, tau, mode, info, exptA, trans)
-      end subroutine
-
-   end subroutine rank_adaptive_projector_splitting_DLRA_step_riccati_rdp
-
    !---------------------------------------------------------------
    !
    !  Set initial rank
    !
    !---------------------------------------------------------------
-
-   subroutine generic_set_initial_rank_rdp(X, tol, stepper, this_procedure, rk_init, nsteps)
-      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
-      !! Low-Rank factors of the solution.
-      real(dp),                               intent(in)    :: tol
-      !! Tolerance on the last singular value to determine rank
-      procedure(abstract_dlra_stepper)                      :: stepper
-      !! Generic wrapper for the stepper (Lyapnuov/Riccati)
-      character(len=*),                       intent(in)    :: this_procedure
-      !! Specific procedure name (for error attribution)
-      integer,                      optional, intent(in)    :: rk_init
-      !! Smallest tested rank
-      integer,                      optional, intent(in)    :: nsteps
-      !! Number of steps to determine rank
-      
-      ! internal
-      character(len=512) :: msg, fmt
-      class(abstract_vector_rdp), allocatable :: Utmp(:)
-      real(dp),                   allocatable :: Stmp(:,:), svals(:)
-      integer :: i, n, rk, irk, info, rkmax
-      logical :: found, accept_rank
-
-      ! optional arguments
-      X%rk = max(optval(rk_init, 1), 1)
-      n = optval(nsteps, 5)
-      rkmax = size(X%U)
-
-      info = 0
-      accept_rank = .false.
-
-      ! save initial condition
-      allocate(Utmp(rkmax), source=X%U)
-      allocate(Stmp(rkmax,rkmax)); Stmp = X%S
-
-      do while (.not. accept_rank .and. X%rk <= rkmax)
-         write(msg,'(4X,A,I0)') 'Test r = ', X%rk
-         call log_message(msg, this_module, this_procedure)
-         ! run integrator
-         do i = 1,n
-            call stepper(.false., info)
-            if (info /= 0) then
-               write(msg, '(A,I0,A)') 'Error in stepper at iteration ', i, '.'
-               call stop_error(msg, this_module, this_procedure)
-            end if
-         end do
-
-         ! check if singular values are resolved
-         svals = svdvals(X%S(:X%rk,:X%rk))
-         found = .false.
-         tol_chk: do irk = 1, X%rk
-            if ( svals(irk) < tol ) then
-               found = .true.
-               exit tol_chk
-            end if
-         end do tol_chk
-         if (.not. found) irk = irk - 1
-
-         write(msg,'(4X,A,I2,A,E8.2)') 'rk = ', X%rk, ' s_r =', svals(X%rk)
-         call log_debug(msg, this_module, this_procedure)
-         if (found) then
-            accept_rank = .true.
-            X%rk = irk
-            write(msg,'(4X,A,I2,A,E10.4)') 'Accpeted rank: r = ', X%rk-1, ',     s_{r+1} = ', svals(X%rk)
-            call log_message(msg, this_module, this_procedure)
-         else
-            X%rk = 2*X%rk
-         end if
-         
-         ! reset initial conditions
-         call copy(X%U, Utmp)
-         X%S = Stmp
-      end do
-
-      if (X%rk > rkmax) then
-         write(msg, '(A)') 'Maximum rank reached but singular values are not converged. Increase rkmax and restart.'
-         call stop_error(msg, this_module, this_procedure)
-      end if
-
-      ! reset to the rank of the approximation which we use outside of the integrator & mark rank as initialized
-      X%rk = max(X%rk - 1, 1)
-      X%rank_is_initialised = .true.
-   end subroutine generic_set_initial_rank_rdp
 
    subroutine set_initial_rank_lyapunov_rdp(X, A, B, tau, mode, exptA, trans, tol, rk_init, nsteps)
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
@@ -545,6 +463,81 @@ contains
       end subroutine
 
    end subroutine set_initial_rank_riccati_rdp
+
+   subroutine generic_set_initial_rank_rdp(X, tol, stepper, this_procedure, rk_init, nsteps)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      real(dp),                               intent(in)    :: tol
+      !! Tolerance on the last singular value to determine rank
+      procedure(abstract_dlra_stepper)                      :: stepper
+      !! Generic wrapper for the stepper (Lyapnuov/Riccati)
+      character(len=*),                       intent(in)    :: this_procedure
+      !! Specific procedure name (for error attribution)
+      integer,                      optional, intent(in)    :: rk_init
+      !! Smallest tested rank
+      integer,                      optional, intent(in)    :: nsteps
+      !! Number of steps to determine rank
+      
+      ! internal
+      character(len=512) :: msg, fmt
+      class(abstract_vector_rdp), allocatable :: Utmp(:)
+      real(dp),                   allocatable :: Stmp(:,:), svals(:)
+      integer :: i, n, rk, irk, info, rkmax
+      logical :: found, accept_rank
+
+      ! optional arguments
+      X%rk = max(optval(rk_init, 1), 1)
+      n = optval(nsteps, 5)
+      rkmax = size(X%U)
+
+      info = 0
+      accept_rank = .false.
+
+      ! save initial condition
+      allocate(Utmp(rkmax), source=X%U)
+      allocate(Stmp(rkmax,rkmax)); Stmp = X%S
+
+      do while (.not. accept_rank .and. X%rk <= rkmax)
+         write(msg,'(4X,A,I0)') 'Test r = ', X%rk
+         call log_message(msg, this_module, this_procedure)
+         ! run integrator
+         do i = 1,n
+            call stepper(.false., info)
+            if (info /= 0) then
+               write(msg, '(A,I0,A)') 'Error in stepper at iteration ', i, '.'
+               call stop_error(msg, this_module, this_procedure)
+            end if
+         end do
+
+         ! check if singular values are resolved
+         svals = svdvals(X%S(:X%rk,:X%rk))
+         call find_rank(found, irk, svals, tol)
+
+         write(msg,'(4X,A,I2,A,E8.2)') 'rk = ', X%rk, ' s_r =', svals(X%rk)
+         call log_debug(msg, this_module, this_procedure)
+         if (found) then
+            accept_rank = .true.
+            X%rk = irk
+            write(msg,'(4X,A,I2,A,E10.4)') 'Accpeted rank: r = ', X%rk-1, ',     s_{r+1} = ', svals(X%rk)
+            call log_message(msg, this_module, this_procedure)
+         else
+            X%rk = 2*X%rk
+         end if
+         
+         ! reset initial conditions
+         call copy(X%U, Utmp)
+         X%S = Stmp
+      end do
+
+      if (X%rk > rkmax) then
+         write(msg, '(A)') 'Maximum rank reached but singular values are not converged. Increase rkmax and restart.'
+         call stop_error(msg, this_module, this_procedure)
+      end if
+
+      ! reset to the rank of the approximation which we use outside of the integrator & mark rank as initialized
+      X%rk = max(X%rk - 1, 1)
+      X%rank_is_initialised = .true.
+   end subroutine generic_set_initial_rank_rdp
 
    !---------------------------------------------------------------
    !
@@ -1034,5 +1027,86 @@ contains
 
       if (time_lightROM()) call lr_timer%stop(this_procedure)
    end subroutine L_step_riccati_rdp
+
+   !---------------------------------------------------------------
+   !
+   !  Splitting error
+   !
+   !---------------------------------------------------------------
+
+   subroutine compute_splitting_error(err_est, X, A, B, tau, mode, exptA, trans)
+      !! This function estimates the splitting error of the integrator as a function of the chosen timestep.
+      !! This error estimation can be integrated over time to give an estimate of the compound error due to 
+      !! the splitting approach.
+      !! This error can be used as a tolerance for the rank-adaptivity to ensure that the low-rank truncation 
+      !! error is smaller than the splitting error.
+      real(dp),                               intent(out)   :: err_est
+      !! Estimation of the splitting error
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
+      !! Low-Rank factors of the solution.
+      class(abstract_linop_rdp),              intent(inout) :: A
+      !! Linear operator
+      class(abstract_vector_rdp),             intent(in)    :: B(:)
+      !! Low-Rank inhomogeneity.
+      real(dp),                               intent(in)    :: tau
+      !! Time step.
+      integer,                                intent(in)    :: mode
+      !! TIme integration mode. Only 1st (Lie splitting - mode 1) and 2nd (Strang splitting - mode 2) orders are implemented.
+      procedure(abstract_exptA_rdp)                         :: exptA
+      !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
+      logical,                                intent(in)    :: trans
+      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      
+      ! internals
+      ! save current state to reset it later
+      class(abstract_vector_rdp),               allocatable :: Utmp(:)
+      real(dp),                                 allocatable :: Stmp(:,:)
+      ! first solution to compute the difference against
+      class(abstract_vector_rdp),               allocatable :: U1(:)
+      real(dp),                                 allocatable :: S1(:,:)
+      ! projected bases
+      real(dp),                                 allocatable :: V1(:,:), V2(:,:)
+      ! projected difference
+      real(dp),                                 allocatable :: D(:,:)
+      integer                                               :: rx, r, info
+
+      rx = X%rk
+      r  = 2*rx
+
+      ! save curret state
+      allocate(Utmp(rx), source=X%U(:rx))
+      allocate(Stmp(rx,rx)); Stmp = X%S(:rx,:rx)
+
+      ! tau step
+      call fixed_rank_projector_splitting_DLRA_step_lyapunov_rdp(X, A, B, tau, mode, info, exptA, trans)
+      ! save result
+      allocate(U1(rx), source=X%U(:rx))
+      allocate(S1(rx,rx)); S1 = X%S(:rx,:rx)
+
+      ! reset curret state
+      call copy(X%U(:rx), Utmp)
+      X%S(:rx,:rx) = Stmp
+
+      ! tau/2 steps
+      call fixed_rank_projector_splitting_DLRA_step_lyapunov_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans)
+      call fixed_rank_projector_splitting_DLRA_step_lyapunov_rdp(X, A, B, 0.5*tau, mode, info, exptA, trans)
+
+      ! compute common basis
+      call project_onto_common_basis(V1, V2, U1(:rx), X%U(:rx))
+
+      ! project second low-rank state onto common basis and construct difference
+      allocate(D(r,r)); D = 0.0_dp
+      D(    :rx,     :rx) = S1 - matmul(V1, matmul(X%S(:rx,:rx), transpose(V1)))
+      D(rx+1:r ,     :rx) =    - matmul(V2, matmul(X%S(:rx,:rx), transpose(V1)))
+      D(    :rx, rx+1:r ) =    - matmul(V1, matmul(X%S(:rx,:rx), transpose(V2)))
+      D(rx+1:r , rx+1:r ) =    - matmul(V2, matmul(X%S(:rx,:rx), transpose(V2)))
+
+      ! compute local error based on frobenius norm of difference
+      err_est = 2**mode / (2**mode - 1) * sqrt( sum( svdvals(D) ** 2 ) )
+
+      ! reset curret state
+      call copy(X%U(:rx), Utmp)
+      X%S(:rx,:rx) = Stmp
+   end subroutine compute_splitting_error
 
 end module LightROM_SolverUtils

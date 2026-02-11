@@ -11,15 +11,15 @@ module LightROM_LoggerUtils
    use LightROM_Utils, only: dlra_opts
    
    implicit none 
-
-   private :: this_module
-   character(len=*), parameter :: this_module = 'LR_LoggerUtils'
+   character(len=*), parameter, private :: this_module = 'LR_LoggerUtils'
+   
    integer, parameter :: iline = 4  ! number of svals per line
    logical :: if_overwrite = .true.
    integer :: rename_counter = 0
 
    public :: write_logfile_headers, reset_logfiles, stamp_logfiles
    public :: log_settings, log_svals
+   public :: reset_solver
 
 contains
 
@@ -237,5 +237,19 @@ contains
       ! Add information to the SVD logfile as well
       call stamp_logfiles(basename, X, lag, svals, dsvals, icall)
    end subroutine log_svals
+
+   subroutine reset_solver(counter, equation, logfile, prefix, suffix)
+      integer,                    intent(out) :: counter
+      character(len=*),           intent(in)  :: equation
+      character(len=*),           intent(in)  :: logfile
+      character(len=*), optional, intent(in)  :: prefix
+      character(len=*), optional, intent(in)  :: suffix
+      ! internal
+      character(len=128) :: msg
+      write(msg,'(A,A,I0,A)') trim(equation), ' solver called ', counter, ' times. Resetting coutner to 0.'
+      call log_message(msg, this_module, 'reset_solver')
+      counter = 0
+      call reset_logfiles(logfile, prefix=prefix, suffix=suffix)
+   end subroutine reset_solver
 
 end module LightROM_LoggerUtils

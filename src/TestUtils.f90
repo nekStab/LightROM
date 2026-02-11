@@ -15,9 +15,6 @@ module LightROM_TestUtils
     use LightKrylov_TestUtils
     
     implicit none
-    
-    private
-
     character(len=128), parameter, private :: this_module = 'LightROM_TestUtils'
 
     public :: initialize_GL_parameters

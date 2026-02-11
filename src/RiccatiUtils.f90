@@ -5,11 +5,9 @@ module LightROM_RiccatiUtils
 
    use LightROM_AbstractLTIsystems
    use LightKrylov_Utils, only : assert_shape
+   
    implicit none
-
-   ! module name
-   private :: this_module
-   character(len=*), parameter :: this_module = 'LR_RiccUtils'
+   character(len=*), parameter, private :: this_module = 'LR_RiccUtils'
 
    public :: apply_outerprod_w
    public :: apply_premult_outerprod_w
