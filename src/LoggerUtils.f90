@@ -133,11 +133,9 @@ contains
       end if
    end subroutine reset_logfiles
 
-   subroutine log_settings(X, Tend, tau, nsteps, opts)
+   subroutine log_settings(X, Tend, opts)
       class(abstract_sym_low_rank_state_rdp),  intent(in) :: X
       real(dp), intent(in) :: Tend
-      real(dp), intent(in) :: tau
-      integer, intent(in) :: nsteps
       type(dlra_opts), intent(in) :: opts
       ! parameters
       character(len=*), parameter :: this_procedure = 'log_settings'
@@ -149,9 +147,9 @@ contains
       call log_message(msg, this_module, this_procedure)
       write(msg,'(A15," : ", F15.8)') padl('tf',15), X%tot_time + Tend
       call log_message(msg, this_module, this_procedure)
-      write(msg,'(A15," : ", F15.8)') padl('dt',15), tau
+      write(msg,'(A15," : ", F15.8)') padl('dt',15), opts%tau
       call log_message(msg, this_module, this_procedure)
-      write(msg,'(A15," : ", I0)')    padl('nsteps',15),  nsteps
+      write(msg,'(A15," : ", I0)')    padl('nsteps',15), opts%nsteps
       call log_message(msg, this_module, this_procedure)
       write(msg,'(A15," : ", I0)')    padl('t-order',15), opts%mode
       call log_message(msg, this_module, this_procedure)
@@ -178,10 +176,10 @@ contains
       write(msg,'(A15," : ", E15.8)') padl('tol',15), opts%inc_tol
       call log_message(msg, this_module, this_procedure)
       if (opts%chkctrl_time) then
-         write(msg,'("  Output every ",F8.4," time units (",I0," steps)")') opts%chktime, nint(opts%chktime/tau)
+         write(msg,'("  Output every ",F8.4," time units (",I0," steps)")') opts%chktime, nint(opts%chktime/opts%tau)
          call log_message(msg, this_module, this_procedure)
       else
-         write(msg,'("  Output every ",I0," steps (",F8.4," time units)")') opts%chkstep, opts%chkstep*tau
+         write(msg,'("  Output every ",I0," steps (",F8.4," time units)")') opts%chkstep, opts%chkstep*opts%tau
          call log_message(msg, this_module, this_procedure)
       end if
       call log_message('###### solver settings ######', this_module, this_procedure)

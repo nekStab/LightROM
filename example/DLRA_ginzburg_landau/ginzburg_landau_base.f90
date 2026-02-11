@@ -273,10 +273,7 @@ contains
       select type (U)
       type is (state_vector)
          ! set time and optional args
-         self%tot_time = 0.0_dp
-         self%time     = 0.0_dp
-         self%tot_step = 0
-         self%step     = 0
+         call self%reset(full=.true.)
 
          m = size(U)
          call assert_shape(S, [m,m], 'S', this_module, this_procedure)
@@ -292,7 +289,7 @@ contains
                   call stop_error('rkmax must be larger than rk for rank-adaptive DLRA!', this_module, this_procedure)
                end if
                write(msg,'(A,I0,A)') 'Rank-adaptivity enabled. Computation will begin with X%rk = ', self%rk+1, '.'
-               call logger%log_information(msg, this_module, this_procedure)
+               call log_information(msg, this_module, this_procedure)
             end if
          else
             self%rk = rk
@@ -309,18 +306,18 @@ contains
          allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
          allocate(self%S(rka,rka)); self%S = 0.0_dp
          write(msg,'(3(A,I0),A)') 'size(X%U) = [ ', rka,' ], X%rk = ', self%rk, ', size(U0) = [ ', m,' ]'
-         call logger%log_information(msg, this_module, this_procedure)
+         call log_information(msg, this_module, this_procedure)
          ! copy inputs
          if (self%rk > m) then   ! copy the full IC into self%U
             call copy(self%U(:m), U)
             self%S(:m,:m) = S
             write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
-            call logger%log_information(msg, this_module, this_procedure)
+            call log_information(msg, this_module, this_procedure)
          else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
             call copy(self%U(:self%rk), U(:self%rk))
             self%S(:self%rk,:self%rk) = S(:self%rk,:self%rk)
             write(msg,'(4X,A,I0,A)') 'Transfer the first ', self%rk, ' columns of U0 to X%U.'
-            call logger%log_information(msg, this_module, this_procedure)
+            call log_information(msg, this_module, this_procedure)
          end if        
 
          ! top up basis (to rka for rank-adaptivity) with orthonormal columns if needed
@@ -328,7 +325,7 @@ contains
          n_rem = rka - m_init
          if (m > 0) then
             write(msg,'(4X,A,I0,A)') 'Fill remaining ', n_rem, ' columns with orthonormal noise orthonormal to X%U.'
-            call logger%log_information(msg, this_module, this_procedure)
+            call log_information(msg, this_module, this_procedure)
             allocate(Utmp(n_rem), source=U(1))
             call initialize_random_orthonormal_basis(Utmp)
             call orthogonalize_against_basis(Utmp, self%U(:m_init), info)

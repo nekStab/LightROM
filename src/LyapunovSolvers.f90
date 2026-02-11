@@ -183,79 +183,72 @@ module LightROM_LyapunovSolvers
       end if
 
       ! Set tolerance
-      tol = opts%tol
+      !tol = opts%tol
+      opts%tau = tau
+      opts%Tend = Tend
 
       ! Check compatibility of options and determine chk/IO step
-      call check_options(chkstep, tau, X, opts)
+      !all check_options(X, opts)
+      call opts%init()
 
       ! Initialize
-      X%is_converged = .false.
-      X%time = 0.0_dp
-      X%step = 0
+      rk_reduction_lock = 10
+      call X%reset()
       ! Compute number of steps
       if_lastep = .false.
-      nsteps = nint(Tend/tau)
+      !opts%nsteps = nint(Tend/tau)
 
       rkmax = size(X%U)
       ! Allocate memory for SVD & lagged fields
       allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
 
       call log_message('Initializing Lyapunov solver', this_module, 'DLRA_main')
-      write(msg,'(A,I0,A,F10.8)') 'Integration over ', nsteps, ' steps with dt= ', tau
+      write(msg,'(A,I0,A,F10.8)') 'Integration over ', opts%nsteps, ' steps with dt= ', opts%tau
       call log_information(msg, this_module, 'DLRA_main')
       ! Prepare logfile
       call write_logfile_headers(logfile_basename)
-
-      if ( opts%mode > 2 ) then
-         write(msg,'(A)') "Time-integration order for the operator splitting of d > 2 &
-                      & requires adjoint solves and is not implemented. Resetting torder = 2." 
-         call log_message(msg, this_module, 'DLRA_main')
-      else if ( opts%mode < 1 ) then
-         write(msg,'(A,I0)') "Invalid time-integration order specified: ", opts%mode
-         call stop_error(msg, this_module, 'DLRA_main')
-      endif
 
       ! determine initial rank if rank-adaptive
       if (opts%if_rank_adaptive) then
          rk_reduction_lock = 10  ! initialize rank reduction lock
          if (.not. X%rank_is_initialised) then
             call log_message('Determine initial rank:', this_module, 'DLRA_main')
-            call set_initial_rank(X, A, B, tau, opts%mode, exptA, trans, tol)
+            call set_initial_rank(X, A, B, opts%tau, opts%mode, exptA, trans, opts%tol)
          end if
       end if
 
-      call log_settings(X, Tend, tau, nsteps, opts)
+      call log_settings(X, Tend, opts)
       call log_message('Starting DLRA integration', this_module, 'DLRA_main')
 
-      dlra : do istep = 1, nsteps
+      dlra : do istep = 1, opts%nsteps
 
-         call log_step(X, istep, nsteps)
+         call log_step(X, istep, opts%nsteps)
 
          ! save lag data defore the timestep
-         if ( X%rk > 0 .and. (mod(istep, chkstep) == 0 .or. istep == nsteps) ) then
+         if ( X%rk > 0 .and. (mod(istep, opts%chkstep) == 0 .or. istep == opts%nsteps) ) then
             svals_lag = svdvals(X%S(:X%rk,:X%rk))
          end if
 
          ! dynamical low-rank approximation solver
          if (opts%if_rank_adaptive) then
-            call rank_adaptive_projector_splitting_DLRA_step(X, A, B, tau, opts%mode, exptA, trans, info, rk_reduction_lock, tol)
+            call rank_adaptive_projector_splitting_DLRA_step(X, A, B, opts%tau, opts%mode, exptA, trans, info, rk_reduction_lock, opts%tol)
          else
-            call fixed_rank_projector_splitting_DLRA_step(X, A, B, tau, opts%mode, info, exptA, trans)
+            call fixed_rank_projector_splitting_DLRA_step(X, A, B, opts%tau, opts%mode, info, exptA, trans)
          end if
 
          ! update time & step counters
-         X%time = X%time + tau
+         X%time = X%time + opts%tau
          X%step = X%step + 1
-         X%tot_time = X%tot_time + tau
+         X%tot_time = X%tot_time + opts%tau
          X%tot_step = X%tot_step + 1
 
          ! here we can do some checks such as whether we have reached steady state
-         if ( X%rk > 0 .and. (mod(istep, chkstep) == 0 .or. istep == nsteps) ) then
+         if ( X%rk > 0 .and. (mod(istep, opts%chkstep) == 0 .or. istep == opts%nsteps) ) then
             svals = svdvals(X%S(:X%rk,:X%rk))
             if (.not. allocated(svals_lag)) allocate(svals_lag(X%rk), source=zero_rdp)
-            call log_svals(logfile_basename, X, tau, svals, svals_lag, LyapSolver_counter, istep, nsteps)
+            call log_svals(logfile_basename, X, opts%tau, svals, svals_lag, LyapSolver_counter, istep, opts%nsteps)
             ! Check convergence
-            if (istep == nsteps) if_lastep = .true.
+            if (istep == opts%nsteps) if_lastep = .true.
             irk = min(size(svals), size(svals_lag))
             X%is_converged = is_converged(X, svals(:irk), svals_lag(:irk), opts, if_lastep)
             if (X%is_converged) then

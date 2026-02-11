@@ -1,4 +1,5 @@
 module LightROM_AbstractLTIsystems
+   use stdlib_optval, only : optval
    ! Use the abstract linear operator types defined in LightKrylov.
    use LightKrylov, only : abstract_linop_rdp, abstract_vector_rdp, dp
    implicit none
@@ -73,6 +74,26 @@ module LightROM_AbstractLTIsystems
       logical                                  :: is_converged = .false.
       ! Has rank been initialized? (for rank-adaptive DLRA)
       logical                                  :: rank_is_initialised = .false.
+   contains
+      procedure, pass(self), public :: reset => abstract_sym_low_rank_state_reset
    end type abstract_sym_low_rank_state_rdp
+
+contains
+
+   subroutine abstract_sym_low_rank_state_reset(self, full)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
+      logical, optional, intent(in) :: full
+      ! internal
+      logical :: full_
+      full_ = optval(full, .false.)
+      self%time = 0.0_dp
+      self%step = 0
+      self%is_converged = .false.
+      self%rank_is_initialised = .false.
+      if (full_) then
+         self%tot_time = 0.0_dp
+         self%tot_step = 0
+      end if
+   end subroutine abstract_sym_low_rank_state_reset
 
 end module LightROM_AbstractLTIsystems
