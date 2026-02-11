@@ -172,7 +172,7 @@ contains
       character(len=256)                           :: fbase, fchomp
       real(dp)                                     :: X_out(N,N)
       logical                                      :: exist_file
-      real(wp),                      allocatable   :: meta(:)
+      real(dp),                      allocatable   :: meta(:)
       character(len=128)                           :: note
       ! timing
       integer                                      :: clock_rate, clock_start, clock_stop
@@ -298,7 +298,7 @@ contains
       character(len=256)                           :: fbase, fchomp
       real(dp)                                     :: X_out(N,N)
       logical                                      :: exist_file
-      real(wp),                      allocatable   :: meta(:)
+      real(dp),                      allocatable   :: meta(:)
       character(len=128)                           :: note
       ! timing
       integer                                      :: clock_rate, clock_start, clock_stop
