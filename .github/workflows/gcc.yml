@@ -23,7 +23,7 @@ jobs:
         run: sudo apt update && sudo apt install -y gfortran
 
       - name: Install fpm
-        uses: fortran-lang/setup-fpm@v5
+        uses: fortran-lang/setup-fpm@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
