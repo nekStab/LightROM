@@ -238,8 +238,8 @@ program demo
       dtv  = logspace(-1.0_dp, 0.0_dp, 3, 10)
       dtv  = dtv(size(dtv):1:-1) ! reverse vector
       print '(1X,A)', 'POD:'
-      do it = 1, size(tolv)
-         T_POD = tolv(it)
+      do it = 1, size(Tendv)
+         T_POD = Tendv(it)
          print '(3X,A,F12.6)', '   Tend:', T_POD
          do irep = 1, size(dtv)
             tau = dtv(irep)
