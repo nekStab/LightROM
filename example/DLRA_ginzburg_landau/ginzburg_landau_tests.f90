@@ -1,123 +1,217 @@
 module Ginzburg_Landau_Tests
-   ! Standard Library.
-   use stdlib_optval, only : optval
-   use stdlib_linalg, only : diag, svd, svdvals
-   use stdlib_io_npy, only : save_npy, load_npy
-   use stdlib_logger, only : success, warning_level
-   ! LightKrylov for linear algebra.
-   use LightKrylov
-   use LightKrylov, only : wp => dp
-   use LightKrylov_AbstractVectors ! linear_combination
-   use LightKrylov_Utils ! svd, sqrtm
-   ! LightROM
-   use LightROM_Utils ! Balancing_Transformation
-   ! Lyapunov Solver
-   use LightROM_LyapunovSolvers
-   use LightROM_LyapunovUtils
-   ! Riccati Solver
-   use LightROM_RiccatiSolvers
-   use LightROM_RiccatiUtils
+   use stdlib_io_npy, only : load_npy
    ! Ginzburg Landau
-   use Ginzburg_Landau_Base
-   use Ginzburg_Landau_Operators
-   use Ginzburg_Landau_RK_Lyapunov
-   use Ginzburg_Landau_Utils
+   use Ginzburg_Landau_Base, only : state_vector
+   use Ginzburg_Landau_Operators, only : exponential_prop
+   use Ginzburg_Landau_Control, only : exponential_prop_with_control, rks54_class_with_control
+   use Ginzburg_Landau_Tests_Lyapunov
+   use Ginzburg_Landau_Tests_Riccati
    implicit none
 
-   integer,       parameter :: rkmax = 80
-   integer,       parameter :: rk_X0 = 10
+   character(len=*), parameter, private :: this_module = 'Ginzburg_Landau_Tests'
 
-   private :: this_module
-   public  :: rkmax, rk_X0
-
-   character(len=*), parameter :: this_module = 'Ginzburg_Landau_Tests'
+   public :: eigenvalue_analysis
+   public :: check_eigenvalues
+   public :: integrate_DLRA_fixed
+   public :: integrate_DLRA_adaptive
 
 contains
 
-   subroutine run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, Tend, nrep, iref, adjoint)
+   subroutine eigenvalue_analysis(prop, mold, tmr_name, fname)
+      implicit none
+      class(abstract_exptA_linop_rdp), intent(inout) :: prop
+      class(abstract_vector_rdp), intent(in) :: mold(:)
+      character(len=*), optional, intent(in) :: tmr_name
+      character(len=*), optional, intent(in) :: fname
+
+      ! internals
+      character(len=*), parameter :: this_procedure = 'eigenvalue_analysis'
+      character(len=64)                         :: label
+      integer                                   :: nev, info
+      class(abstract_vector_rdp),           allocatable :: V(:)
+      complex(dp),                  allocatable :: lambda(:)
+      real(dp),                     allocatable :: residuals(:)
+
+      if (present(tmr_name)) call global_lightROM_timer%add_timer(tmr_name, start=.true.)
+
+      nev = 50; allocate(V(nev), source=mold(1)); call zero_basis(V)
+      call eigs(prop, V, lambda, residuals, info, kdim=2*nev)
+      call check_info(info, 'eigs', this_module, this_procedure)
+      
+      lambda = log(lambda)/prop%tau
+      if (present(tmr_name)) then
+         label = trim(tmr_name)
+      else
+         label ='eig A'
+      end if
+      print '(A64,A,F21.7)', padr(trim(label), 64), ': ', maxval(real(lambda))
+
+      if (present(fname)) call save_npy(fname, lambda)
+      if (present(tmr_name)) call global_lightROM_timer%stop(tmr_name)
+   end subroutine eigenvalue_analysis
+
+   subroutine check_eigenvalues(eq, prop, LTI, U0, Tend, dtv, torder, tolv, adjoint, fname_SVD_base, home)
+      implicit none
+      character(len=4),              intent(in)    :: eq
+      ! propagator
+      type(exponential_prop),        intent(inout) :: prop
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
-      ! Reference solution (BS)
-      real(wp),                      intent(in)    :: Xref_BS(N,N)
-      ! Reference solution (RK)
-      real(wp),                      intent(out)   :: Xref_RK(N,N)
       ! Initial condition
       type(state_vector),            intent(inout) :: U0(:)
-      real(wp),                      intent(inout) :: S0(:,:)
-      real(wp),                      intent(in)    :: Tend
-      integer,                       intent(in)    :: nrep
-      integer,                       intent(in)    :: iref
-      logical,                       intent(in)    :: adjoint
-
-      ! Internals
-      type(rk_lyapunov),             allocatable   :: RK_propagator
-      type(state_matrix)                           :: X_mat(2)
-      real(wp),                      allocatable   :: X_RK(:,:,:)
-      real(wp)                                     :: U0_mat(N,N)
-      integer                                      :: irep
-      real(wp)                                     :: etime, Tstep
-      ! OUTPUT
-      real(wp)                                     :: X_out(N,N)
-      character(len=128)      :: note
-      ! timer
-      integer            :: clock_rate, clock_start, clock_stop
-
-      call system_clock(count_rate=clock_rate)
-
-      Tstep = Tend/nrep
-      allocate(X_RK(N, N, nrep))
-      ! initialize exponential propagator
-      RK_propagator = RK_lyapunov(Tstep)
-      ! Set initial condition for RK
-      call reconstruct_solution(X_out, U0, S0)
-      call set_state(X_mat(1:1), X_out, 'Set initial condition')
-      write(*,'(A7,A10,A19,A19,A19,A12)') ' RKlib:','Tend','| X_RK |/N', '| X_RK - X_BS |/N', '| res_RK |/N','etime'
-      write(*,*) '-------------------------------------------------------------------------------------'
-      write(*,'(I7,F10.4,3(1X,E18.6),F10.4," s",A)') 0, 0.0, norm2(X_out)/N, norm2(X_out - Xref_BS)/N, &
-                                                            & norm2(CALE(X_out, adjoint))/N, 0.0, ''
-      do irep = 1, nrep
-         call system_clock(count=clock_start)     ! Start Timer
-         ! integrate
-         if (adjoint) then
-            call RK_propagator%rmatvec(X_mat(1), X_mat(2))
-         else
-            call RK_propagator%matvec(X_mat(1), X_mat(2))
-         end if
-         call system_clock(count=clock_stop)      ! Stop Timer
-         etime = real(clock_stop-clock_start)/real(clock_rate)
-         ! recover output
-         call get_state(X_RK(:,:,irep), X_mat(2:2), 'Extract RK solution')
-         ! replace input
-         call set_state(X_mat(1:1), X_RK(:,:,irep), 'Reset initial condition')
-         ! compute residual
-         if (irep == iref) then
-            write(note,*) '   < reference'
-         else
-            write(note,*) ''
-         end if
-         write(*,'(I7,F10.4,3(1X,E18.6),F10.4," s",A)') irep, irep*Tstep, norm2(X_RK(:,:,irep))/N, &
-                     & norm2(X_RK(:,:,irep)-Xref_BS)/N, norm2(CALE(X_RK(:,:,irep), adjoint))/N, etime, trim(note) 
-      enddo
-      Xref_RK(:,:) = X_RK(:,:,iref)
-      print *, ''
-      print '(A,F16.12)', '  |  X_RK  |/N = ', norm2(Xref_RK)/N
-      print '(A,F16.12)', '  | res_RK |/N = ', norm2(CALE(Xref_RK, adjoint))/N
-      return
-   end subroutine run_lyap_reference_RK
-
-   subroutine run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home)
-      ! LTI system
-      type(lti_system),              intent(inout) :: LTI
-      ! Reference solution (BS)
-      real(wp),                      intent(in)    :: Xref_BS(N,N)
-      ! Reference solution (RK)
-      real(wp),                      intent(in)    :: Xref_RK(N,N)
-      ! Initial condition
-      type(state_vector),            intent(inout) :: U0(:)
-      real(wp),                      intent(inout) :: S0(:,:)
-      real(wp),                      intent(in)    :: Tend
+      ! End time
+      real(dp),                      intent(in)    :: Tend
       ! vector of dt values
-      real(wp),                      intent(in)    :: dtv(:)
+      real(dp),                      intent(in)    :: dtv(:)
+      ! vector of torders
+      integer,                       intent(in)    :: torder
+      ! vector of adaptation tolerance
+      real(dp),                      intent(in)    :: tolv(:)
+      ! number of singular values to print
+      logical,                       intent(in)    :: adjoint
+      character(len=*),              intent(in)    :: fname_SVD_base
+      character(len=128),            intent(in)    :: home
+
+      ! internal
+      type(LR_state),                      allocatable :: X
+      integer                                          :: j, k
+      real(dp)                                         :: tol, tau
+      ! Exponential propagator (with control)
+      type(rks54_class_with_control),      allocatable :: rkintegrator
+      type(exponential_prop_with_control), allocatable :: prop_control
+      character(len=256)                               :: fbase, fname, tmr_name, note
+      character(len=32)                                :: tolstr, taustr, Tstr
+      ! IO
+      integer,                              parameter  :: rk_dummy = 10
+      logical                                          :: exist_file
+      real(dp),                            allocatable :: meta(:)
+
+      ! eig A
+      tmr_name =  'eig A'
+      fname    = trim(home)//"spectrum_A.npy"
+      call eigenvalue_analysis(prop, U0, tmr_name, fname)
+      print *, ''
+
+      ! eig A - BK
+      X = LR_state()
+      if (adjoint) then
+         tmr_name = 'eig A-LC: exact'
+         fname    = trim(home)//"spectrum_A-LC.npy"
+         note = '_adjoint'
+      else
+         tmr_name = 'eig A-BK: exact'
+         fname    = trim(home)//"spectrum_A-BK.npy"
+         note = '_direct'
+      end if
+      call load_X_from_file(X, meta, trim(fname_SVD_base)//eq//trim(note), U0)
+      rkintegrator = rks54_class_with_control()
+      prop_control = exponential_prop_with_control(1.0_dp, prop=rkintegrator)
+      if (adjoint) then
+         call prop_control%init(X, LTI%CT, Vinv, adjoint=adjoint, enable_control=.true.)
+      else
+         call prop_control%init(X, LTI%B, Rinv, adjoint=adjoint, enable_control=.true.)
+      end if
+      
+      call eigenvalue_analysis(prop_control, U0, tmr_name, fname)
+
+      ! deallocate and clean
+      deallocate(rkintegrator); deallocate(prop_control)
+
+      print *, ''
+      do j = 1, size(tolv)
+         tol = tolv(j)
+         do k = 1, size(dtv)
+            tau = dtv(k)
+            note = merge('Padj', 'Pdir', adjoint)
+            fbase = make_filename(home, 'DLRA_ADAPT', eq, trim(note), rk_dummy, torder, tau, Tend, tol)
+            exist_file = exist_X_file(fbase)
+            if (exist_file) then
+               ! load X state
+               call load_X_from_file(X, meta, fbase, U0)
+               ! recreate integrators
+               rkintegrator = rks54_class_with_control()
+               prop_control = exponential_prop_with_control(1.0_dp, prop=rkintegrator)
+               ! initialize integrators
+               if (adjoint) then
+                  call prop_control%init(X, LTI%CT, Vinv, adjoint=adjoint, enable_control=.true.)
+               else
+                  call prop_control%init(X, LTI%B, Rinv, adjoint=adjoint, enable_control=.true.)
+               end if
+               
+               call make_labels(Tstr, taustr, tolstr, Tend, tau, tol)
+               note = merge('A-LC', 'A-BK', adjoint)
+               fname = trim(home)//'spectrum_'//trim(note)//'_Tend'//trim(Tstr)//'_tau'//trim(taustr)//'_tol'//trim(tolstr)//'.npy'
+               write(tmr_name,'(*(A))')  'eig ', trim(note), ':   Tend= ', trim(Tstr), '   tau= ', trim(taustr), '   tol= ', trim(tolstr)
+               
+               ! eigendecomposition
+               call eigenvalue_analysis(prop_control, U0, tmr_name, fname)
+               
+               ! deallocate and clean
+               deallocate(rkintegrator); deallocate(prop_control)
+            end if
+         end do
+         write(*,*)
+      end do
+   end subroutine check_eigenvalues
+   
+   subroutine integrate_RK(eq, LTI, Xref, Xref_RK, U0, S0, Tend, adjoint, home, main_run)
+      implicit none
+      character(len=4),              intent(in)    :: eq
+      ! LTI system
+      type(lti_system),              intent(inout) :: LTI
+      ! Reference solution (SD)
+      real(dp),                      intent(in)    :: Xref(N,N)
+      ! Reference solution (RK)
+      real(dp),                      intent(out)   :: Xref_RK(N,N)
+      ! Initial condition
+      type(state_vector),            intent(inout) :: U0(:)
+      real(dp),                      intent(inout) :: S0(:,:)
+      real(dp),                      intent(in)    :: Tend
+      logical,                       intent(in)    :: adjoint
+      character(len=128),            intent(in)    :: home
+      logical,                       intent(in)    :: main_run
+
+      ! internal
+      character(len=128) :: tmr_name
+      logical :: if_save_output
+      integer :: nstep, iref
+      
+      if (main_run) then
+         tmr_name = 'Runge-Kutta'
+         if_save_output = .true.
+         nstep = int(Tend)
+         iref  = nstep
+      else
+         tmr_name = 'Short time: Runge-Kutta'
+         if_save_output = .false.
+         nstep = int(Tend/0.001_dp)
+         iref  = nstep
+      end if
+      
+      call global_lightROM_timer%add_timer(tmr_name, start=.true.)
+      if (eq == 'lyap') then
+         call run_lyapunov_reference_RK(LTI, Xref, Xref_RK, U0, S0, Tend, nstep, iref, adjoint, home, if_save_output)
+      else
+         call run_riccati_reference_RK( LTI, Xref, Xref_RK, U0, S0, Tend, nstep, iref, adjoint, home, if_save_output)
+      end if
+      call global_lightROM_timer%stop(tmr_name)
+   end subroutine integrate_RK
+   
+   subroutine integrate_DLRA_fixed(eq, LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, main_run)
+      implicit none
+      character(len=4),              intent(in)    :: eq
+      ! LTI system
+      type(lti_system),              intent(inout) :: LTI
+      ! Reference solution (BS)
+      real(dp),                      intent(in)    :: Xref(N,N)
+      ! Reference solution (RK)
+      real(dp),                      intent(in)    :: Xref_RK(N,N)
+      ! Initial condition
+      type(state_vector),            intent(inout) :: U0(:)
+      real(dp),                      intent(inout) :: S0(:,:)
+      real(dp),                      intent(in)    :: Tend
+      ! vector of dt values
+      real(dp),                      intent(in)    :: dtv(:)
       ! vector of rank values
       integer,                       intent(in)    :: rkv(:)
       ! vector of torders
@@ -126,226 +220,72 @@ contains
       integer,                       intent(in)    :: nprint
       logical,                       intent(in)    :: adjoint
       character(len=128),            intent(in)    :: home
-
-      ! Internals
-      type(LR_state),                allocatable   :: X
-      type(state_matrix)                           :: X_mat(2)
-      integer                                      :: info, i, j, k, rk, torder, irep, nrep, nsteps
-      real(wp)                                     :: etime, tau, Tstep, Ttot
-      ! OUTPUT
-      real(wp)                                     :: X_out(N,N)
-
-      ! SVD                         
-      integer                                      :: is, ie
-      integer,                         parameter   :: irow = 8
-      real(wp),                        allocatable :: svals(:)
-      character(len=128)                           :: note, casename
-      character(len=128)                           :: logfile_abs, logfile_rel
-      ! DLRA options
-      type(dlra_opts)                              :: opts
-      ! timer
-      integer                                      :: clock_rate, clock_start, clock_stop
+      logical,                       intent(in)    :: main_run
       
-      Tstep = 1.0_wp
+      ! internal
+      character(len=128) :: tmr_name
+      logical :: if_save_output
 
-      if (adjoint) then
-         note = 'Yobs'
+      if (main_run) then
+         if_save_output = .true. 
+         tmr_name = 'fixed-rank DLRA'
       else
-         note = 'Xctl'
+         if_save_output = .false. 
+         tmr_name = 'Short_time: fixed-rank DLRA'
       end if
-
-      ! basic opts
-      opts = dlra_opts(chktime=1.0_wp, inc_tol=atol_dp, if_rank_adaptive=.false.)
-
-      call system_clock(count_rate=clock_rate)
-
-      print '(A16,A8,A4,A10,A6,A8,4(A19),A12)', 'DLRA:','  rk',' TO','dt','steps','Tend', &
-                     & '| X_D |/N', '| X_D - X_RK |/N', '| X_D - X_BS |/N', '| res_D |/N', 'etime'
-      X = LR_state()
-      do i = 1, size(rkv)
-         rk = rkv(i)
-         do j = 1, size(TOv)
-            torder = TOv(j)
-            do k = 1, size(dtv)
-               tau = dtv(k)
-               nsteps = nint(Tend/tau)
-               
-               ! set solver options
-               opts%mode = torder
-
-               ! define casename
-               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_II_rk', rk, '_TO', torder, '_dt', tau
-               write(logfile_abs,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDabs_II_rk', rk, '_TO', torder, '_dt', tau, '.dat'
-               write(logfile_rel,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDrel_II_rk', rk, '_TO', torder, '_dt', tau, '.dat'
-
-               ! Initialize low-rank representation with rank rk
-               call X%initialize_LR_state(U0, S0, rk, rkmax, .false., casename=casename)
-
-               ! run integrator
-               call system_clock(count=clock_start)     ! Start Timer
-               if (adjoint) then
-                  call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%CT, Tend, tau, info, &
-                                                            & exptA=exptA, iftrans=.true., options=opts)
-               else
-                  call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
-                                                            & exptA=exptA, iftrans=.false., options=opts)
-               end if
-               call system_clock(count=clock_stop)      ! Stop Timer
-               etime = real(clock_stop-clock_start)/real(clock_rate)
-               ! Reconstruct solution
-               call reconstruct_solution(X_out, X)
-               write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I6,F8.4,4(E19.8),F10.2," s")') 1, note, 'OUTPUT', &
-                                 & rk, torder, tau, nsteps, Tend, &
-                                 & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
-                                 & norm2(CALE(X_out, adjoint))/N, etime
-               deallocate(X%U); deallocate(X%S)
-               call rename(logfile_SVD_abs, logfile_abs)
-               call rename(logfile_SVD_rel, logfile_rel)
-            end do
-            print *, ''
-         end do
-      end do
-      if (nprint > 0) then
-         svals = svdvals(Xref_BS)
-         do i = 1, ceiling(nprint*1.0_wp/irow)
-            is = (i-1)*irow+1; ie = i*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_BS) ', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-         print *, ''
-         svals = svdvals(Xref_RK)
-         do i = 1, ceiling(nprint*1.0_wp/irow)
-            is = (i-1)*irow+1; ie = i*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_RK) ', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-         print *, ''
-         svals = svdvals(X_out)
-         do i = 1, ceiling(nprint*1.0_wp/irow)
-            is = (i-1)*irow+1; ie = i*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_D ) ', is, '-', ie, ( svals(j), j = is, ie )
-         end do
+      call global_lightROM_timer%add_timer(tmr_name, start=.true.)
+      if (eq == 'lyap') then
+         call run_lyapunov_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
+      else         
+         call run_riccati_DLRA_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home, if_save_output)
       end if
+      call global_lightROM_timer%stop(tmr_name)
+   end subroutine integrate_DLRA_fixed
 
-   end subroutine run_lyap_DLRA_test
-
-   subroutine run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home)
+   subroutine integrate_DLRA_adaptive(eq, LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, main_run)
+      implicit none
+      character(len=4),              intent(in)    :: eq
       ! LTI system
       type(lti_system),              intent(inout) :: LTI
       ! Reference solution (BS)
-      real(wp),                      intent(in)    :: Xref_BS(N,N)
+      real(dp),                      intent(in)    :: Xref(N,N)
       ! Reference solution (RK)
-      real(wp),                      intent(in)    :: Xref_RK(N,N)
+      real(dp),                      intent(in)    :: Xref_RK(N,N)
       ! Initial condition
       type(state_vector),            intent(inout) :: U0(:)
-      real(wp),                      intent(inout) :: S0(:,:)
-      real(wp),                      intent(in)    :: Tend
+      real(dp),                      intent(inout) :: S0(:,:)
+      real(dp),                      intent(in)    :: Tend
       ! vector of dt values
-      real(wp),                      intent(in)    :: dtv(:)
+      real(dp),                      intent(in)    :: dtv(:)
       ! vector of torders
       integer,                       intent(in)    :: TOv(:)
       ! vector of adaptation tolerance
-      real(wp),                      intent(in)    :: tolv(:)
+      real(dp),                      intent(in)    :: tolv(:)
       ! number of singular values to print
       integer,                       intent(in)    :: nprint
       logical,                       intent(in)    :: adjoint
       character(len=128),            intent(in)    :: home
+      logical,                       intent(in)    :: main_run
 
-      ! Internals
-      type(LR_state),                allocatable   :: X
-      type(state_matrix)                           :: X_mat(2)
-      integer                                      :: info, i, j, k, rk, torder, irep, nsteps
-      real(wp)                                     :: etime, tau
-      ! OUTPUT
-      real(wp)                                     :: X_out(N,N)
-      ! timer
-      integer                                      :: is, ie
-      integer,                         parameter   :: irow = 8
-      real(wp),                        allocatable :: svals(:)
-      character(len=128)                           :: note, casename
-      character(len=128)                           :: logfile_abs, logfile_rel
-      ! DLRA options
-      type(dlra_opts)                              :: opts
-      ! timer
-      integer                                      :: clock_rate, clock_start, clock_stop
+      ! internal
+      character(len=128) :: tmr_name
+      logical :: if_save_output
 
-      ! basic opts
-      opts = dlra_opts(chktime=1.0_wp, inc_tol=atol_dp, if_rank_adaptive=.true.)
-
-      call system_clock(count_rate=clock_rate)
-
-      if (adjoint) then
-         note = 'Yobs'
+      if (main_run) then
+         if_save_output = .true. 
+         tmr_name = 'rank-adaptive DLRA'
       else
-         note = 'Xctl'
+         if_save_output = .false. 
+         tmr_name = 'Short_time: rank-adaptive DLRA'
       end if
- 
-      print '(A16,A8,A4,A10,A6,A8,4(A19),A12)', 'DLRA:','rk_end',' TO','dt','steps','Tend', &
-               & '| X_D |/N', '| X_D - X_RK |/N', '| X_D - X_BS |/N', '| res_D |/N', 'etime'
-      rk = rk_X0
-      X = LR_state()
-      do i = 1, size(tolv)
-         opts%tol = tolv(i)
-         print '(A,E9.2)', ' SVD tol = ', opts%tol
-         print *, ''
-         do j = 1, size(TOv)
-            torder = TOv(j)
-            do k = 1, size(dtv)
-               tau = dtv(k)
-               nsteps = nint(Tend/tau)
-               
-               ! set solver options
-               opts%mode = torder
+      call global_lightROM_timer%add_timer(tmr_name, start=.true.)
+      if (eq == 'lyap') then
+         call run_lyapunov_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
+      else
+         call run_riccati_DLRArk_test(LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home, if_save_output)
+      end if
+      call global_lightROM_timer%stop(tmr_name)
 
-               ! define casename
-               write(casename,'(A,A,I2.2,A,I0,A,F8.6)') trim(home), 'DATA_III_rk', rk, '_TO', torder, '_dt', tau
-               write(logfile_abs,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDabs_III_rk', rk, '_TO', torder, '_dt', tau, '.dat'
-               write(logfile_rel,'(A,A,I2.2,A,I0,A,F8.6,A)') trim(home), 'logfile_SVDrel_III_rk', rk, '_TO', torder, '_dt', tau, '.dat'
-
-               ! Initialize low-rank representation with rank rk
-               call X%initialize_LR_state(U0, S0, rk, rkmax, opts%if_rank_adaptive, casename=casename)
-
-               ! run integrator
-               call system_clock(count=clock_start)     ! Start Timer
-               if (adjoint) then
-                  call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%CT, Tend, tau, info, &
-                                                               & exptA=exptA, iftrans=.true., options=opts)
-               else
-                  call projector_splitting_DLRA_lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
-                                                               & exptA=exptA, iftrans=.false., options=opts)
-               end if
-               call system_clock(count=clock_stop)      ! Stop Timer
-               etime = real(clock_stop-clock_start)/real(clock_rate)
-               ! Reconstruct solution
-               call reconstruct_solution(X_out, X)
-               write(*,'(I4," ",A4,1X,A6,I8," TO",I1,F10.6,I6,F8.4,4(E19.8),F10.2," s")') 1, note, 'OUTPUT', &
-                                 & X%rk, torder, tau, nsteps, Tend, &
-                                 & norm2(X_out)/N, norm2(X_out - Xref_RK)/N, norm2(X_out - Xref_BS)/N, &
-                                 & norm2(CALE(X_out, adjoint))/N, etime
-               deallocate(X%U); deallocate(X%S)
-               call rename(logfile_SVD_abs, logfile_abs)
-               call rename(logfile_SVD_rel, logfile_rel)
-            end do
-            print *, ''
-         end do
-         svals = svdvals(Xref_BS)
-         do k = 1, ceiling(nprint*1.0_wp/irow)
-            is = (k-1)*irow+1; ie = k*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_BS) ', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-         print *, ''
-         svals = svdvals(Xref_RK)
-         do k = 1, ceiling(nprint*1.0_wp/irow)
-            is = (k-1)*irow+1; ie = k*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_RK) ', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-         print *, ''
-         svals = svdvals(X_out)
-         do k = 1, ceiling(nprint*1.0_wp/irow)
-            is = (k-1)*irow+1; ie = k*irow
-            print '(1X,A,I2,A,I2,*(1X,F16.12))', 'SVD(X_D ) ', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-      end do
-      
-      return
-   end subroutine run_lyap_DLRArk_test
+   end subroutine integrate_DLRA_adaptive
 
 end module Ginzburg_Landau_Tests

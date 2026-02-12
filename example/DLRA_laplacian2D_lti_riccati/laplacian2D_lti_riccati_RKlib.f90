@@ -7,21 +7,20 @@ module Laplacian2D_LTI_Riccati_RKlib
    use rklib_module
    !> LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov, only : wp => dp
    !> Laplacian
    use Laplacian2D_LTI_Riccati_Base
    use laplacian2D_LTI_Riccati_Operators   
    implicit none
 
    private :: this_module
-   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Base'
+   character(len=*), parameter :: this_module = 'Laplacian2D_LTI_Lyapunov_Base'
 
    !-----------------------------------------------
    !-----     EXPONENTIAL PROPAGATOR RKLIB    -----
    !-----------------------------------------------
 
    type, extends(abstract_linop_rdp), public :: rklib_exptA_laplacian
-      real(wp) :: tau ! Integration time.
+      real(dp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec  => direct_solver_vec
@@ -29,7 +28,7 @@ module Laplacian2D_LTI_Riccati_RKlib
    end type rklib_exptA_laplacian
 
    type, extends(abstract_linop_rdp), public :: rklib_riccati_mat
-      real(wp) :: tau ! Integration time.
+      real(dp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec  => direct_solver_riccati_mat
@@ -48,16 +47,15 @@ contains
       !> Time-integrator.
       class(rk_class), intent(inout)        :: me
       !> Current time.
-      real(wp)  , intent(in)                :: t
+      real(dp)  , intent(in)                :: t
       !> State vector.
-      real(wp)  , dimension(:), intent(in)  :: x
+      real(dp)  , dimension(:), intent(in)  :: x
       !> Time-derivative.
-      real(wp)  , dimension(:), intent(out) :: f
+      real(dp)  , dimension(:), intent(out) :: f
 
-      f = 0.0_wp
+      f = 0.0_dp
       call laplacian(f(1:N), x(1:N))
       
-      return
    end subroutine rhs
 
    subroutine direct_solver_vec(self, vec_in, vec_out)
@@ -69,8 +67,9 @@ contains
       class(abstract_vector_rdp),   intent(out) :: vec_out
 
       !> Time-integrator.
+      character(len=*), parameter :: this_procedure = 'direct_solver_vec'
       type(rks54_class) :: prop
-      real(wp)          :: dt = 1.0_wp
+      real(dp)          :: dt = 1.0_dp
 
       select type(vec_in)
       type is (state_vector)
@@ -80,11 +79,14 @@ contains
              !> Initialize propagator.
              call prop%initialize(n=N, f=rhs)
              !> Integrate forward in time.
-             call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+             call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
 
+         class default
+            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
          end select
+      class default
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
       end select
-      return
    end subroutine direct_solver_vec
 
     !-----    Laplacian Riccati RHS for RKlib    -----
@@ -93,20 +95,20 @@ contains
       !> Time-integrator.
       class(rk_class), intent(inout)        :: me
       !> Current time.
-      real(wp)  , intent(in)                :: t
+      real(dp)  , intent(in)                :: t
       !> State vector.
-      real(wp)  , dimension(:), intent(in)  :: x
+      real(dp)  , dimension(:), intent(in)  :: x
       !> Time-derivative.
-      real(wp)  , dimension(:), intent(out) :: f
+      real(dp)  , dimension(:), intent(out) :: f
 
       !> Internal variables.
       integer :: i, j, k
-      real(wp), dimension(N,N) :: xm
-      real(wp), dimension(N**2) :: dv, dvT
+      real(dp), dimension(N,N) :: xm
+      real(dp), dimension(N**2) :: dv, dvT
 
       !> Sets the internal variables.
-      dv  = 0.0_wp
-      dvT = 0.0_wp
+      dv  = 0.0_dp
+      dvT = 0.0_dp
 
       call laplacian_mat(dv,  x, .false.)       ! A @ X
       call laplacian_mat(dvT, x, .true.)        ! ( A @ X.T ).T
@@ -114,7 +116,6 @@ contains
       xm = reshape(x, shape(xm))
       f(1:N**2) = dv + dvT + CTQcC - reshape(matmul(xm, matmul(BRinvBTdata,xm)), [N**2])
 
-      return
    end subroutine rhs_riccati
 
    subroutine direct_solver_riccati_mat(self, vec_in, vec_out)
@@ -124,9 +125,11 @@ contains
       class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
       class(abstract_vector_rdp), intent(out) :: vec_out
+      
       !> Time-integrator.
+      character(len=*), parameter :: this_procedure = 'direct_solver_mat'
       type(rks54_class) :: prop
-      real(wp)          :: dt = 0.1_wp
+      real(dp)          :: dt = 0.1_dp
 
       select type(vec_in)
       type is (state_matrix)
@@ -135,11 +138,13 @@ contains
             !> Initialize propagator.
             call prop%initialize(n=N**2, f=rhs_riccati)
             !> Integrate forward in time.
-            call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+            call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
+         class default
+            call type_error('vec_out', 'state_matrix', 'OUT', this_module, this_procedure)
          end select
+      class default
+         call type_error('vec_in', 'state_matrix', 'IN', this_module, this_procedure)
       end select
-
-      return
    end subroutine direct_solver_riccati_mat
 
 end module Laplacian2D_LTI_Riccati_RKlib

@@ -1,0 +1,1390 @@
+2024-11-19 15:47:54.279: Laplacian2D_LTI_Lyapunov_Main: #
+2024-11-19 15:47:54.279: Laplacian2D_LTI_Lyapunov_Main: # Fixed-rank short time-horizon integration
+2024-11-19 15:47:54.279: Laplacian2D_LTI_Lyapunov_Main: #
+2024-11-19 15:47:54.279: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.279: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.279: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.279: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.279: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:47:54.279: LR_Utils % DLRA:          nsteps : 1
+2024-11-19 15:47:54.279: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:54.279: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.279: LR_Utils % DLRA:              rk : 2
+2024-11-19 15:47:54.279: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.280: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.280: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:47:54.280: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.280: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.280: LR_Utils % DLRA check (final time):        1     0.00100000 svals lag   0.4072397E+01   0.4581617E+01  inc_norm   0.1260917E+00
+2024-11-19 15:47:54.280: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.280: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.280: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.280: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.280: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.280: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:47:54.280: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:47:54.280: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:54.280: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.280: LR_Utils % DLRA:              rk : 2
+2024-11-19 15:47:54.280: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.280: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.280: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:47:54.280: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.280: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.283: LR_Utils % DLRA check (final time):       10     0.00100000 svals lag   0.4072349E+01   0.4119871E+01  inc_norm   0.1179528E-01
+2024-11-19 15:47:54.283: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.283: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.283: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.283: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.283: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.283: LR_Utils % DLRA:              dt :      0.00001000
+2024-11-19 15:47:54.283: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:47:54.283: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:54.283: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.283: LR_Utils % DLRA:              rk : 2
+2024-11-19 15:47:54.283: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.283: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.283: LR_Utils % DLRA:   Output every   1.0000 time units (99999 steps)
+2024-11-19 15:47:54.283: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.283: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.301: LR_Utils % DLRA check (final time):      100     0.00100000 svals lag   0.4072344E+01   0.4077064E+01  inc_norm   0.1171835E-02
+2024-11-19 15:47:54.301: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.301: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.301: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.301: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.301: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.301: LR_Utils % DLRA:              dt :      0.00000100
+2024-11-19 15:47:54.301: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:47:54.301: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:54.301: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.301: LR_Utils % DLRA:              rk : 2
+2024-11-19 15:47:54.301: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.301: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.301: LR_Utils % DLRA:   Output every   1.0000 time units (1000000 steps)
+2024-11-19 15:47:54.301: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.301: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.420: LR_Utils % DLRA check (final time):     1000     0.00100000 svals lag   0.4072344E+01   0.4072815E+01  inc_norm   0.1171070E-03
+2024-11-19 15:47:54.420: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.420: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.420: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.420: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.420: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.420: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:47:54.420: LR_Utils % DLRA:          nsteps : 1
+2024-11-19 15:47:54.420: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:54.420: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.420: LR_Utils % DLRA:              rk : 2
+2024-11-19 15:47:54.420: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.420: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.420: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:47:54.420: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.420: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.421: LR_Utils % DLRA check (final time):        1     0.00100000 svals lag   0.4072343E+01   0.4581617E+01  inc_norm   0.1261095E+00
+2024-11-19 15:47:54.421: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.421: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.424: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.424: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.424: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.424: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:47:54.424: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:47:54.424: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:54.424: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.424: LR_Utils % DLRA:              rk : 2
+2024-11-19 15:47:54.424: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.424: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.424: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:47:54.424: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.424: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.426: LR_Utils % DLRA check (final time):       10     0.00100000 svals lag   0.4072344E+01   0.4119866E+01  inc_norm   0.1179544E-01
+2024-11-19 15:47:54.426: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.426: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.426: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.426: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.426: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.426: LR_Utils % DLRA:              dt :      0.00001000
+2024-11-19 15:47:54.426: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:47:54.426: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:54.426: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.426: LR_Utils % DLRA:              rk : 2
+2024-11-19 15:47:54.426: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.426: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.426: LR_Utils % DLRA:   Output every   1.0000 time units (99999 steps)
+2024-11-19 15:47:54.426: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.426: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.443: LR_Utils % DLRA check (final time):      100     0.00100000 svals lag   0.4072344E+01   0.4077064E+01  inc_norm   0.1171837E-02
+2024-11-19 15:47:54.443: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.443: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.443: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.443: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.443: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.443: LR_Utils % DLRA:              dt :      0.00000100
+2024-11-19 15:47:54.443: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:47:54.443: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:54.443: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.443: LR_Utils % DLRA:              rk : 2
+2024-11-19 15:47:54.443: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.443: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.443: LR_Utils % DLRA:   Output every   1.0000 time units (1000000 steps)
+2024-11-19 15:47:54.443: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.443: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.567: LR_Utils % DLRA check (final time):     1000     0.00100000 svals lag   0.4072344E+01   0.4072815E+01  inc_norm   0.1171071E-03
+2024-11-19 15:47:54.567: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.567: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.567: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.567: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.567: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.567: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:47:54.567: LR_Utils % DLRA:          nsteps : 1
+2024-11-19 15:47:54.567: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:54.567: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.567: LR_Utils % DLRA:              rk : 3
+2024-11-19 15:47:54.567: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.567: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.567: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:47:54.567: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.567: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.568: LR_Utils % DLRA check (final time):        1     0.00100000 svals lag   0.4072416E+01   0.4581617E+01  inc_norm   0.1261266E+00
+2024-11-19 15:47:54.568: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.568: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.571: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.571: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.571: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.571: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:47:54.571: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:47:54.571: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:54.571: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.571: LR_Utils % DLRA:              rk : 3
+2024-11-19 15:47:54.571: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.571: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.571: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:47:54.571: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.571: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.573: LR_Utils % DLRA check (final time):       10     0.00100000 svals lag   0.4072366E+01   0.4119885E+01  inc_norm   0.1179825E-01
+2024-11-19 15:47:54.573: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.573: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.573: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.573: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.573: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.573: LR_Utils % DLRA:              dt :      0.00001000
+2024-11-19 15:47:54.573: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:47:54.573: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:54.573: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.573: LR_Utils % DLRA:              rk : 3
+2024-11-19 15:47:54.573: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.573: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.573: LR_Utils % DLRA:   Output every   1.0000 time units (99999 steps)
+2024-11-19 15:47:54.573: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.573: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.586: LR_Utils % DLRA check (final time):      100     0.00100000 svals lag   0.4072361E+01   0.4077081E+01  inc_norm   0.1172127E-02
+2024-11-19 15:47:54.586: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.586: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.586: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.586: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.586: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.586: LR_Utils % DLRA:              dt :      0.00000100
+2024-11-19 15:47:54.586: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:47:54.586: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:54.586: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.586: LR_Utils % DLRA:              rk : 3
+2024-11-19 15:47:54.586: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.586: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.586: LR_Utils % DLRA:   Output every   1.0000 time units (1000000 steps)
+2024-11-19 15:47:54.586: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.586: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.713: LR_Utils % DLRA check (final time):     1000     0.00100000 svals lag   0.4072360E+01   0.4072832E+01  inc_norm   0.1171362E-03
+2024-11-19 15:47:54.713: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.713: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.713: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.713: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.713: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.713: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:47:54.713: LR_Utils % DLRA:          nsteps : 1
+2024-11-19 15:47:54.713: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:54.713: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.713: LR_Utils % DLRA:              rk : 3
+2024-11-19 15:47:54.713: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.713: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.713: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:47:54.713: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.713: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.714: LR_Utils % DLRA check (final time):        1     0.00100000 svals lag   0.4072360E+01   0.4581617E+01  inc_norm   0.1261403E+00
+2024-11-19 15:47:54.714: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.714: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.717: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.717: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.717: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.717: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:47:54.717: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:47:54.717: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:54.717: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.717: LR_Utils % DLRA:              rk : 3
+2024-11-19 15:47:54.717: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.717: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.717: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:47:54.717: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.717: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.720: LR_Utils % DLRA check (final time):       10     0.00100000 svals lag   0.4072360E+01   0.4119880E+01  inc_norm   0.1179837E-01
+2024-11-19 15:47:54.720: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.720: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.720: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.720: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.720: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.720: LR_Utils % DLRA:              dt :      0.00001000
+2024-11-19 15:47:54.720: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:47:54.720: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:54.720: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.720: LR_Utils % DLRA:              rk : 3
+2024-11-19 15:47:54.720: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.720: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.720: LR_Utils % DLRA:   Output every   1.0000 time units (99999 steps)
+2024-11-19 15:47:54.720: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.720: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.745: LR_Utils % DLRA check (final time):      100     0.00100000 svals lag   0.4072360E+01   0.4077080E+01  inc_norm   0.1172129E-02
+2024-11-19 15:47:54.745: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.745: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.745: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.745: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.745: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.745: LR_Utils % DLRA:              dt :      0.00000100
+2024-11-19 15:47:54.745: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:47:54.745: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:54.745: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.745: LR_Utils % DLRA:              rk : 3
+2024-11-19 15:47:54.745: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.745: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.745: LR_Utils % DLRA:   Output every   1.0000 time units (1000000 steps)
+2024-11-19 15:47:54.745: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.745: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.928: LR_Utils % DLRA check (final time):     1000     0.00100000 svals lag   0.4072360E+01   0.4072832E+01  inc_norm   0.1171362E-03
+2024-11-19 15:47:54.928: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.928: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.928: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.928: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.928: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.928: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:47:54.928: LR_Utils % DLRA:          nsteps : 1
+2024-11-19 15:47:54.928: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:54.928: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.928: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:54.928: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.928: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.928: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:47:54.928: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.928: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.929: LR_Utils % DLRA check (final time):        1     0.00100000 svals lag   0.4072416E+01   0.4581617E+01  inc_norm   0.1261266E+00
+2024-11-19 15:47:54.929: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.929: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.932: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.932: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.932: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.932: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:47:54.932: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:47:54.932: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:54.932: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.932: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:54.932: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.932: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.932: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:47:54.932: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.932: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.935: LR_Utils % DLRA check (final time):       10     0.00100000 svals lag   0.4072366E+01   0.4119885E+01  inc_norm   0.1179825E-01
+2024-11-19 15:47:54.935: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.935: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.935: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.935: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.935: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.935: LR_Utils % DLRA:              dt :      0.00001000
+2024-11-19 15:47:54.935: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:47:54.935: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:54.935: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.935: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:54.935: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.935: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.935: LR_Utils % DLRA:   Output every   1.0000 time units (99999 steps)
+2024-11-19 15:47:54.935: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.935: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:54.951: LR_Utils % DLRA check (final time):      100     0.00100000 svals lag   0.4072361E+01   0.4077081E+01  inc_norm   0.1172127E-02
+2024-11-19 15:47:54.951: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:54.951: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:54.951: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.951: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:54.951: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:54.951: LR_Utils % DLRA:              dt :      0.00000100
+2024-11-19 15:47:54.951: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:47:54.951: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:54.951: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:54.951: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:54.951: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:54.951: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:54.951: LR_Utils % DLRA:   Output every   1.0000 time units (1000000 steps)
+2024-11-19 15:47:54.951: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:54.951: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:55.123: LR_Utils % DLRA check (final time):     1000     0.00100000 svals lag   0.4072360E+01   0.4072832E+01  inc_norm   0.1171362E-03
+2024-11-19 15:47:55.123: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:55.123: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:55.123: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.123: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:55.123: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:55.123: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:47:55.123: LR_Utils % DLRA:          nsteps : 1
+2024-11-19 15:47:55.123: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:55.123: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:55.123: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:55.123: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:55.123: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:55.123: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:47:55.123: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.123: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:55.124: LR_Utils % DLRA check (final time):        1     0.00100000 svals lag   0.4072360E+01   0.4581617E+01  inc_norm   0.1261403E+00
+2024-11-19 15:47:55.124: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:55.124: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:55.127: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.127: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:55.127: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:55.127: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:47:55.127: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:47:55.127: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:55.127: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:55.127: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:55.127: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:55.127: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:55.127: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:47:55.127: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.127: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:55.131: LR_Utils % DLRA check (final time):       10     0.00100000 svals lag   0.4072360E+01   0.4119880E+01  inc_norm   0.1179837E-01
+2024-11-19 15:47:55.131: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:55.131: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:55.131: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.131: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:55.131: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:55.131: LR_Utils % DLRA:              dt :      0.00001000
+2024-11-19 15:47:55.131: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:47:55.131: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:55.131: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:55.131: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:55.131: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:55.131: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:55.131: LR_Utils % DLRA:   Output every   1.0000 time units (99999 steps)
+2024-11-19 15:47:55.131: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.131: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:55.164: LR_Utils % DLRA check (final time):      100     0.00100000 svals lag   0.4072360E+01   0.4077080E+01  inc_norm   0.1172129E-02
+2024-11-19 15:47:55.164: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:55.164: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:55.164: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.164: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:55.164: LR_Utils % DLRA:              tf :      0.00100000
+2024-11-19 15:47:55.164: LR_Utils % DLRA:              dt :      0.00000100
+2024-11-19 15:47:55.164: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:47:55.164: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:55.164: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:55.164: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:55.164: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:55.164: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:55.164: LR_Utils % DLRA:   Output every   1.0000 time units (1000000 steps)
+2024-11-19 15:47:55.164: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.164: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:55.411: LR_Utils % DLRA check (final time):     1000     0.00100000 svals lag   0.4072360E+01   0.4072832E+01  inc_norm   0.1171362E-03
+2024-11-19 15:47:55.411: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:55.437: Laplacian2D_LTI_Lyapunov_Main: #
+2024-11-19 15:47:55.437: Laplacian2D_LTI_Lyapunov_Main: # Fixed-rank long time-horizon integration
+2024-11-19 15:47:55.437: Laplacian2D_LTI_Lyapunov_Main: #
+2024-11-19 15:47:55.437: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:55.437: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.437: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:55.437: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:47:55.437: LR_Utils % DLRA:              dt :      0.10000000
+2024-11-19 15:47:55.437: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:47:55.437: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:55.437: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:55.437: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:55.437: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:55.437: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:55.437: LR_Utils % DLRA:   Output every   1.0000 time units (10 steps)
+2024-11-19 15:47:55.437: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.437: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:55.442: LR_Utils % DLRA check (final time):       10     1.00000000 svals lag   0.1370883E+01   0.1370883E+01  inc_norm   0.5578216E-10
+2024-11-19 15:47:55.442: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:55.442: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:55.442: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.442: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:55.442: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:47:55.442: LR_Utils % DLRA:              dt :      0.01000000
+2024-11-19 15:47:55.442: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:47:55.442: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:55.442: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:55.442: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:55.442: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:55.442: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:55.442: LR_Utils % DLRA:   Output every   1.0000 time units (100 steps)
+2024-11-19 15:47:55.442: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.442: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:55.496: LR_Utils % DLRA check (final time):      100     1.00000000 svals lag   0.2130728E+00   0.2130728E+00  inc_norm   0.1008804E-10
+2024-11-19 15:47:55.496: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:55.496: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:55.496: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.496: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:55.496: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:47:55.496: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:47:55.496: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:47:55.496: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:55.496: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:55.496: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:55.496: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:55.496: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:55.496: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:47:55.496: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.496: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:55.853: LR_Utils % DLRA check (final time):     1000     1.00000000 svals lag   0.1420518E+00   0.1420518E+00  inc_norm   0.1385084E-11
+2024-11-19 15:47:55.853: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:55.853: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:55.854: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.854: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:55.854: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:47:55.854: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:47:55.854: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:47:55.854: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:47:55.854: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:55.854: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:55.854: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:55.854: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:55.854: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:47:55.854: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:55.854: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:58.151: LR_Utils % DLRA check (final time):    10000     1.00000000 svals lag   0.1362000E+00   0.1362000E+00  inc_norm   0.1435183E-12
+2024-11-19 15:47:58.151: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:58.151: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:58.151: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:58.151: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:58.151: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:47:58.151: LR_Utils % DLRA:              dt :      0.10000000
+2024-11-19 15:47:58.151: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:47:58.151: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:58.151: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:58.151: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:58.151: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:58.151: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:58.151: LR_Utils % DLRA:   Output every   1.0000 time units (10 steps)
+2024-11-19 15:47:58.151: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:58.151: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:58.162: LR_Utils % DLRA check (final time):       10     1.00000000 svals lag   0.3150737E-01   0.3150737E-01  inc_norm   0.3102752E-08
+2024-11-19 15:47:58.162: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:58.162: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:58.162: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:58.162: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:58.162: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:47:58.162: LR_Utils % DLRA:              dt :      0.01000000
+2024-11-19 15:47:58.162: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:47:58.162: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:58.162: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:58.162: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:58.162: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:58.162: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:58.162: LR_Utils % DLRA:   Output every   1.0000 time units (100 steps)
+2024-11-19 15:47:58.162: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:58.162: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:58.267: LR_Utils % DLRA check (final time):      100     1.00000000 svals lag   0.1301275E+00   0.1301275E+00  inc_norm   0.1740968E-10
+2024-11-19 15:47:58.267: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:58.267: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:58.267: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:58.267: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:58.267: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:47:58.267: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:47:58.267: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:47:58.267: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:58.267: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:58.267: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:58.267: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:58.267: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:58.267: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:47:58.267: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:58.267: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:47:58.941: LR_Utils % DLRA check (final time):     1000     1.00000000 svals lag   0.1355061E+00   0.1355061E+00  inc_norm   0.1459833E-11
+2024-11-19 15:47:58.941: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:47:58.941: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:47:58.941: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:58.941: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:47:58.941: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:47:58.941: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:47:58.941: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:47:58.941: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:47:58.941: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:47:58.941: LR_Utils % DLRA:              rk : 4
+2024-11-19 15:47:58.941: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:47:58.941: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:47:58.941: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:47:58.941: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:47:58.941: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:03.419: LR_Utils % DLRA check (final time):    10000     1.00000000 svals lag   0.1355632E+00   0.1355632E+00  inc_norm   0.1442656E-12
+2024-11-19 15:48:03.419: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:03.419: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:03.423: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:03.423: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:03.423: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:03.423: LR_Utils % DLRA:              dt :      0.10000000
+2024-11-19 15:48:03.423: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:48:03.423: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:03.423: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:48:03.423: LR_Utils % DLRA:              rk : 8
+2024-11-19 15:48:03.423: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:03.423: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:03.423: LR_Utils % DLRA:   Output every   1.0000 time units (10 steps)
+2024-11-19 15:48:03.423: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:03.423: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:03.433: LR_Utils % DLRA check (final time):       10     1.00000000 svals lag   0.1370883E+01   0.1370883E+01  inc_norm   0.5578214E-10
+2024-11-19 15:48:03.433: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:03.433: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:03.433: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:03.433: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:03.433: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:03.433: LR_Utils % DLRA:              dt :      0.01000000
+2024-11-19 15:48:03.433: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:48:03.433: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:03.433: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:48:03.433: LR_Utils % DLRA:              rk : 8
+2024-11-19 15:48:03.433: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:03.433: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:03.433: LR_Utils % DLRA:   Output every   1.0000 time units (100 steps)
+2024-11-19 15:48:03.433: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:03.433: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:03.540: LR_Utils % DLRA check (final time):      100     1.00000000 svals lag   0.2130728E+00   0.2130728E+00  inc_norm   0.1008639E-10
+2024-11-19 15:48:03.540: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:03.540: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:03.540: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:03.540: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:03.540: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:03.540: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:48:03.540: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:48:03.540: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:03.540: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:48:03.540: LR_Utils % DLRA:              rk : 8
+2024-11-19 15:48:03.540: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:03.540: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:03.540: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:48:03.540: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:03.540: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:04.246: LR_Utils % DLRA check (final time):     1000     1.00000000 svals lag   0.1420518E+00   0.1420518E+00  inc_norm   0.1384001E-11
+2024-11-19 15:48:04.246: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:04.246: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:04.246: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:04.246: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:04.246: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:04.246: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:48:04.246: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:48:04.246: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:04.246: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:48:04.246: LR_Utils % DLRA:              rk : 8
+2024-11-19 15:48:04.246: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:04.246: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:04.246: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:48:04.246: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:04.246: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:08.917: LR_Utils % DLRA check (final time):    10000     1.00000000 svals lag   0.1362000E+00   0.1362000E+00  inc_norm   0.1433790E-12
+2024-11-19 15:48:08.917: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:08.917: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:08.918: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:08.918: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:08.918: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:08.918: LR_Utils % DLRA:              dt :      0.10000000
+2024-11-19 15:48:08.918: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:48:08.918: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:08.918: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:48:08.918: LR_Utils % DLRA:              rk : 8
+2024-11-19 15:48:08.918: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:08.918: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:08.918: LR_Utils % DLRA:   Output every   1.0000 time units (10 steps)
+2024-11-19 15:48:08.918: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:08.918: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:08.940: LR_Utils % DLRA check (final time):       10     1.00000000 svals lag   0.3150737E-01   0.3150737E-01  inc_norm   0.3102752E-08
+2024-11-19 15:48:08.940: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:08.940: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:08.940: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:08.940: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:08.940: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:08.940: LR_Utils % DLRA:              dt :      0.01000000
+2024-11-19 15:48:08.940: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:48:08.940: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:08.940: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:48:08.940: LR_Utils % DLRA:              rk : 8
+2024-11-19 15:48:08.940: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:08.940: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:08.940: LR_Utils % DLRA:   Output every   1.0000 time units (100 steps)
+2024-11-19 15:48:08.940: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:08.940: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:09.152: LR_Utils % DLRA check (final time):      100     1.00000000 svals lag   0.1301275E+00   0.1301275E+00  inc_norm   0.1740655E-10
+2024-11-19 15:48:09.152: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:09.152: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:09.152: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:09.152: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:09.152: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:09.152: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:48:09.152: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:48:09.152: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:09.152: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:48:09.152: LR_Utils % DLRA:              rk : 8
+2024-11-19 15:48:09.152: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:09.152: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:09.152: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:48:09.152: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:09.152: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:10.454: LR_Utils % DLRA check (final time):     1000     1.00000000 svals lag   0.1355061E+00   0.1355061E+00  inc_norm   0.1458716E-11
+2024-11-19 15:48:10.454: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:10.454: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:10.454: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:10.454: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:10.454: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:10.454: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:48:10.454: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:48:10.454: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:10.454: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:48:10.454: LR_Utils % DLRA:              rk : 8
+2024-11-19 15:48:10.454: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:10.454: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:10.454: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:48:10.454: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:10.454: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:19.511: LR_Utils % DLRA check (final time):    10000     1.00000000 svals lag   0.1355632E+00   0.1355632E+00  inc_norm   0.1441656E-12
+2024-11-19 15:48:19.511: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:19.512: Laplacian2D_LTI_Lyapunov_Main: #
+2024-11-19 15:48:19.512: Laplacian2D_LTI_Lyapunov_Main: # Rank-adaptive long time-horizon integration
+2024-11-19 15:48:19.512: Laplacian2D_LTI_Lyapunov_Main: #
+2024-11-19 15:48:19.512: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:19.546: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:19.546: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:19.546: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:19.546: LR_Utils % DLRA:              dt :      0.10000000
+2024-11-19 15:48:19.546: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:48:19.546: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:19.546: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:19.546: LR_Utils % DLRA:         rk_init : 2
+2024-11-19 15:48:19.546: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:19.546: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-03
+2024-11-19 15:48:19.546: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:19.546: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:19.546: LR_Utils % DLRA:   Output every   1.0000 time units (10 steps)
+2024-11-19 15:48:19.546: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:19.546: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:19.552: LR_Utils % DLRA check (final time):       10     1.00000000 svals lag   0.1370883E+01   0.1370883E+01  inc_norm   0.4839803E-11
+2024-11-19 15:48:19.552: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:19.552: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:19.552: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:19.552: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:19.552: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:19.552: LR_Utils % DLRA:              dt :      0.01000000
+2024-11-19 15:48:19.552: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:48:19.552: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:19.552: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:19.552: LR_Utils % DLRA:         rk_init : 3
+2024-11-19 15:48:19.552: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:19.552: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-03
+2024-11-19 15:48:19.552: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:19.552: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:19.552: LR_Utils % DLRA:   Output every   1.0000 time units (100 steps)
+2024-11-19 15:48:19.552: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:19.552: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:19.614: LR_Utils % DLRA check (final time):      100     1.00000000 svals lag   0.2130728E+00   0.2130728E+00  inc_norm   0.6020499E-11
+2024-11-19 15:48:19.614: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:19.614: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:19.614: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:19.614: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:19.614: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:19.614: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:48:19.614: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:48:19.614: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:19.614: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:19.614: LR_Utils % DLRA:         rk_init : 3
+2024-11-19 15:48:19.614: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:19.614: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-03
+2024-11-19 15:48:19.614: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:19.614: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:19.614: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:48:19.614: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:19.614: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:20.008: LR_Utils % DLRA check (final time):     1000     1.00000000 svals lag   0.1420518E+00   0.1420518E+00  inc_norm   0.1334464E-11
+2024-11-19 15:48:20.009: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:20.009: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:20.009: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:20.009: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:20.009: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:20.009: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:48:20.009: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:48:20.009: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:20.009: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:20.009: LR_Utils % DLRA:         rk_init : 3
+2024-11-19 15:48:20.009: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:20.009: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-03
+2024-11-19 15:48:20.009: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:20.009: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:20.009: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:48:20.009: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:20.009: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:22.496: LR_Utils % DLRA check (final time):    10000     1.00000000 svals lag   0.1362000E+00   0.1362000E+00  inc_norm   0.1415758E-12
+2024-11-19 15:48:22.496: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:22.496: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:22.496: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:22.496: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:22.496: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:22.496: LR_Utils % DLRA:              dt :      0.10000000
+2024-11-19 15:48:22.496: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:48:22.496: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:22.496: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:22.496: LR_Utils % DLRA:         rk_init : 3
+2024-11-19 15:48:22.496: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:22.496: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-03
+2024-11-19 15:48:22.496: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:22.496: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:22.496: LR_Utils % DLRA:   Output every   1.0000 time units (10 steps)
+2024-11-19 15:48:22.496: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:22.496: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:22.507: LR_Utils % DLRA check (final time):       10     1.00000000 svals lag   0.3150737E-01   0.3150737E-01  inc_norm   0.3102752E-08
+2024-11-19 15:48:22.507: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:22.507: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:22.525: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:22.525: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:22.525: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:22.525: LR_Utils % DLRA:              dt :      0.01000000
+2024-11-19 15:48:22.525: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:48:22.525: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:22.525: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:22.525: LR_Utils % DLRA:         rk_init : 3
+2024-11-19 15:48:22.525: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:22.525: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-03
+2024-11-19 15:48:22.525: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:22.525: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:22.525: LR_Utils % DLRA:   Output every   1.0000 time units (100 steps)
+2024-11-19 15:48:22.525: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:22.525: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:22.638: LR_Utils % DLRA check (final time):      100     1.00000000 svals lag   0.1301275E+00   0.1301275E+00  inc_norm   0.1356434E-10
+2024-11-19 15:48:22.638: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:22.638: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:22.638: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:22.638: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:22.638: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:22.638: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:48:22.638: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:48:22.638: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:22.638: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:22.638: LR_Utils % DLRA:         rk_init : 3
+2024-11-19 15:48:22.638: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:22.638: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-03
+2024-11-19 15:48:22.638: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:22.638: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:22.638: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:48:22.638: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:22.638: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:23.339: LR_Utils % DLRA check (final time):     1000     1.00000000 svals lag   0.1355061E+00   0.1355061E+00  inc_norm   0.1409159E-11
+2024-11-19 15:48:23.339: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:23.339: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:23.339: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:23.339: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:23.339: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:23.339: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:48:23.339: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:48:23.339: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:23.339: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:23.339: LR_Utils % DLRA:         rk_init : 3
+2024-11-19 15:48:23.339: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:23.339: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-03
+2024-11-19 15:48:23.339: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:23.339: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:23.339: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:48:23.339: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:23.339: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:28.036: LR_Utils % DLRA check (final time):    10000     1.00000000 svals lag   0.1355632E+00   0.1355632E+00  inc_norm   0.1423318E-12
+2024-11-19 15:48:28.036: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:28.037: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:28.037: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:28.037: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:28.037: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:28.037: LR_Utils % DLRA:              dt :      0.10000000
+2024-11-19 15:48:28.037: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:48:28.037: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:28.037: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:28.037: LR_Utils % DLRA:         rk_init : 3
+2024-11-19 15:48:28.037: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:28.037: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-07
+2024-11-19 15:48:28.037: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:28.037: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:28.037: LR_Utils % DLRA:   Output every   1.0000 time units (10 steps)
+2024-11-19 15:48:28.037: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:28.037: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:28.044: LR_Utils % DLRA check (final time):       10     1.00000000 svals lag   0.1370883E+01   0.1370883E+01  inc_norm   0.4839779E-11
+2024-11-19 15:48:28.044: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:28.044: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:28.066: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:28.066: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:28.066: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:28.066: LR_Utils % DLRA:              dt :      0.01000000
+2024-11-19 15:48:28.066: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:48:28.066: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:28.066: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:28.066: LR_Utils % DLRA:         rk_init : 4
+2024-11-19 15:48:28.066: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:28.066: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-07
+2024-11-19 15:48:28.066: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:28.066: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:28.066: LR_Utils % DLRA:   Output every   1.0000 time units (100 steps)
+2024-11-19 15:48:28.066: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:28.066: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:28.166: LR_Utils % DLRA check (final time):      100     1.00000000 svals lag   0.2130728E+00   0.2130728E+00  inc_norm   0.4844318E-11
+2024-11-19 15:48:28.166: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:28.166: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:28.167: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:28.167: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:28.167: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:28.167: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:48:28.167: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:48:28.167: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:28.167: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:28.167: LR_Utils % DLRA:         rk_init : 6
+2024-11-19 15:48:28.167: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:28.167: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-07
+2024-11-19 15:48:28.167: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:28.167: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:28.167: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:48:28.167: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:28.167: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:28.846: LR_Utils % DLRA check (final time):     1000     1.00000000 svals lag   0.1420518E+00   0.1420518E+00  inc_norm   0.1317964E-11
+2024-11-19 15:48:28.846: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:28.846: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:28.846: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:28.846: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:28.846: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:28.846: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:48:28.846: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:48:28.846: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:28.846: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:28.846: LR_Utils % DLRA:         rk_init : 6
+2024-11-19 15:48:28.846: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:28.846: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-07
+2024-11-19 15:48:28.846: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:28.846: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:28.846: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:48:28.846: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:28.846: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:33.262: LR_Utils % DLRA check (final time):    10000     1.00000000 svals lag   0.1362000E+00   0.1362000E+00  inc_norm   0.1423525E-12
+2024-11-19 15:48:33.262: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:33.262: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:33.291: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:33.291: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:33.291: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:33.291: LR_Utils % DLRA:              dt :      0.10000000
+2024-11-19 15:48:33.291: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:48:33.291: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:33.291: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:33.291: LR_Utils % DLRA:         rk_init : 6
+2024-11-19 15:48:33.291: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:33.291: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-07
+2024-11-19 15:48:33.291: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:33.291: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:33.291: LR_Utils % DLRA:   Output every   1.0000 time units (10 steps)
+2024-11-19 15:48:33.291: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:33.291: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:33.309: LR_Utils % DLRA check (final time):       10     1.00000000 svals lag   0.3150737E-01   0.3150737E-01  inc_norm   0.3102752E-08
+2024-11-19 15:48:33.309: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:33.309: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:33.309: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:33.309: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:33.309: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:33.309: LR_Utils % DLRA:              dt :      0.01000000
+2024-11-19 15:48:33.309: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:48:33.309: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:33.309: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:33.309: LR_Utils % DLRA:         rk_init : 6
+2024-11-19 15:48:33.309: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:33.309: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-07
+2024-11-19 15:48:33.309: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:33.309: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:33.309: LR_Utils % DLRA:   Output every   1.0000 time units (100 steps)
+2024-11-19 15:48:33.309: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:33.309: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:33.488: LR_Utils % DLRA check (final time):      100     1.00000000 svals lag   0.1301275E+00   0.1301275E+00  inc_norm   0.1067531E-10
+2024-11-19 15:48:33.488: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:33.489: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:33.489: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:33.489: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:33.489: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:33.489: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:48:33.489: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:48:33.489: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:33.489: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:33.489: LR_Utils % DLRA:         rk_init : 5
+2024-11-19 15:48:33.489: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:33.489: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-07
+2024-11-19 15:48:33.489: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:33.489: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:33.489: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:48:33.489: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:33.489: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:34.708: LR_Utils % DLRA check (final time):     1000     1.00000000 svals lag   0.1355061E+00   0.1355061E+00  inc_norm   0.1389097E-11
+2024-11-19 15:48:34.708: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:34.708: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:34.708: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:34.708: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:34.708: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:34.708: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:48:34.708: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:48:34.708: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:34.708: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:34.708: LR_Utils % DLRA:         rk_init : 6
+2024-11-19 15:48:34.708: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:34.708: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-07
+2024-11-19 15:48:34.708: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:34.708: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:34.708: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:48:34.708: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:34.708: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:43.026: LR_Utils % DLRA check (final time):    10000     1.00000000 svals lag   0.1355632E+00   0.1355632E+00  inc_norm   0.1431200E-12
+2024-11-19 15:48:43.026: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:43.026: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:43.026: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:43.026: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:43.026: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:43.026: LR_Utils % DLRA:              dt :      0.10000000
+2024-11-19 15:48:43.026: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:48:43.026: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:43.026: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:43.026: LR_Utils % DLRA:         rk_init : 6
+2024-11-19 15:48:43.026: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:43.026: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-11
+2024-11-19 15:48:43.026: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:43.026: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:43.026: LR_Utils % DLRA:   Output every   1.0000 time units (10 steps)
+2024-11-19 15:48:43.026: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:43.026: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:43.037: LR_Utils % DLRA check (final time):       10     1.00000000 svals lag   0.1370883E+01   0.1370883E+01  inc_norm   0.5578212E-10
+2024-11-19 15:48:43.037: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:43.037: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:43.056: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:43.056: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:43.056: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:43.056: LR_Utils % DLRA:              dt :      0.01000000
+2024-11-19 15:48:43.056: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:48:43.056: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:43.056: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:43.056: LR_Utils % DLRA:         rk_init : 6
+2024-11-19 15:48:43.056: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:43.056: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-11
+2024-11-19 15:48:43.056: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:43.056: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:43.056: LR_Utils % DLRA:   Output every   1.0000 time units (100 steps)
+2024-11-19 15:48:43.056: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:43.056: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:43.176: LR_Utils % DLRA check (final time):      100     1.00000000 svals lag   0.2130728E+00   0.2130728E+00  inc_norm   0.4844322E-11
+2024-11-19 15:48:43.176: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:43.176: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:43.176: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:43.176: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:43.176: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:43.176: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:48:43.176: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:48:43.176: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:43.176: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:43.176: LR_Utils % DLRA:         rk_init : 7
+2024-11-19 15:48:43.176: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:43.176: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-11
+2024-11-19 15:48:43.176: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:43.176: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:43.176: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:48:43.176: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:43.176: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:43.997: LR_Utils % DLRA check (final time):     1000     1.00000000 svals lag   0.1420518E+00   0.1420518E+00  inc_norm   0.1286158E-11
+2024-11-19 15:48:43.997: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:43.997: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:44.001: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:44.001: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:44.001: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:44.001: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:48:44.001: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:48:44.001: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:48:44.001: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:44.001: LR_Utils % DLRA:         rk_init : 7
+2024-11-19 15:48:44.001: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:44.001: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-11
+2024-11-19 15:48:44.001: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:44.001: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:44.001: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:48:44.001: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:44.001: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:49.250: LR_Utils % DLRA check (final time):    10000     1.00000000 svals lag   0.1362000E+00   0.1362000E+00  inc_norm   0.1420391E-12
+2024-11-19 15:48:49.250: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:49.250: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:49.250: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:49.250: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:49.250: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:49.250: LR_Utils % DLRA:              dt :      0.10000000
+2024-11-19 15:48:49.250: LR_Utils % DLRA:          nsteps : 10
+2024-11-19 15:48:49.250: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:49.250: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:49.250: LR_Utils % DLRA:         rk_init : 7
+2024-11-19 15:48:49.250: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:49.250: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-11
+2024-11-19 15:48:49.250: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:49.250: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:49.250: LR_Utils % DLRA:   Output every   1.0000 time units (10 steps)
+2024-11-19 15:48:49.250: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:49.250: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:49.271: LR_Utils % DLRA check (final time):       10     1.00000000 svals lag   0.3150737E-01   0.3150737E-01  inc_norm   0.3102752E-08
+2024-11-19 15:48:49.271: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:49.271: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:49.271: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:49.271: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:49.271: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:49.271: LR_Utils % DLRA:              dt :      0.01000000
+2024-11-19 15:48:49.271: LR_Utils % DLRA:          nsteps : 100
+2024-11-19 15:48:49.271: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:49.271: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:49.271: LR_Utils % DLRA:         rk_init : 7
+2024-11-19 15:48:49.271: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:49.271: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-11
+2024-11-19 15:48:49.271: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:49.271: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:49.271: LR_Utils % DLRA:   Output every   1.0000 time units (100 steps)
+2024-11-19 15:48:49.271: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:49.271: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:49.509: LR_Utils % DLRA check (final time):      100     1.00000000 svals lag   0.1301275E+00   0.1301275E+00  inc_norm   0.1067533E-10
+2024-11-19 15:48:49.509: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:49.509: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:49.509: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:49.509: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:49.509: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:49.509: LR_Utils % DLRA:              dt :      0.00100000
+2024-11-19 15:48:49.509: LR_Utils % DLRA:          nsteps : 1000
+2024-11-19 15:48:49.509: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:49.509: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:49.509: LR_Utils % DLRA:         rk_init : 7
+2024-11-19 15:48:49.509: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:49.509: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-11
+2024-11-19 15:48:49.509: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:49.509: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:49.509: LR_Utils % DLRA:   Output every   1.0000 time units (1000 steps)
+2024-11-19 15:48:49.509: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:49.509: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:48:50.963: LR_Utils % DLRA check (final time):     1000     1.00000000 svals lag   0.1355061E+00   0.1355061E+00  inc_norm   0.1355571E-11
+2024-11-19 15:48:50.963: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:48:50.963: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:48:50.963: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:50.963: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:48:50.963: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:48:50.963: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:48:50.963: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:48:50.963: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:48:50.963: LR_Utils % DLRA:   adaptive rank : T
+2024-11-19 15:48:50.963: LR_Utils % DLRA:         rk_init : 7
+2024-11-19 15:48:50.963: LR_Utils % DLRA:          rk_max : 11
+2024-11-19 15:48:50.963: LR_Utils % DLRA:     adapt. tol. : sigma_{r+1} <  0.10000000E-11
+2024-11-19 15:48:50.963: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:48:50.963: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:48:50.963: LR_Utils % DLRA:   Output every   1.0000 time units (10000 steps)
+2024-11-19 15:48:50.963: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:48:50.963: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:49:00.995: LR_Utils % DLRA check (final time):    10000     1.00000000 svals lag   0.1355632E+00   0.1355632E+00  inc_norm   0.1427907E-12
+2024-11-19 15:49:00.995: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:49:00.996: Laplacian2D_LTI_Lyapunov_Main: #
+2024-11-19 15:49:00.996: Laplacian2D_LTI_Lyapunov_Main: # Optimum rank long time-horizon integration
+2024-11-19 15:49:00.996: Laplacian2D_LTI_Lyapunov_Main: #
+2024-11-19 15:49:00.996: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:49:00.996: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:49:00.996: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:49:00.996: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:49:00.996: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:49:00.996: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:49:00.996: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:49:00.996: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:49:00.996: LR_Utils % DLRA:              rk : 7
+2024-11-19 15:49:00.996: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:49:00.996: LR_Utils % DLRA:             tol :  0.10000000E-03
+2024-11-19 15:49:00.996: LR_Utils % DLRA:   Output every   0.0100 time units (100 steps)
+2024-11-19 15:49:00.996: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:49:00.996: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:49:01.041: LR_Utils % DLRA check:      100     0.01000000 svals lag   0.1675375E+01   0.1689377E+01  inc_norm   0.8698405E-02
+2024-11-19 15:49:01.083: LR_Utils % DLRA check:      200     0.02000000 svals lag   0.8299441E+00   0.8349106E+00  inc_norm   0.6119101E-02
+2024-11-19 15:49:01.124: LR_Utils % DLRA check:      300     0.03000000 svals lag   0.4940314E+00   0.4962656E+00  inc_norm   0.4638254E-02
+2024-11-19 15:49:01.167: LR_Utils % DLRA check:      400     0.04000000 svals lag   0.3333815E+00   0.3345169E+00  inc_norm   0.3563430E-02
+2024-11-19 15:49:01.212: LR_Utils % DLRA check:      500     0.05000000 svals lag   0.2490934E+00   0.2497086E+00  inc_norm   0.2581712E-02
+2024-11-19 15:49:01.253: LR_Utils % DLRA check:      600     0.06000000 svals lag   0.2025531E+00   0.2028994E+00  inc_norm   0.1719899E-02
+2024-11-19 15:49:01.293: LR_Utils % DLRA check:      700     0.07000000 svals lag   0.1760061E+00   0.1762064E+00  inc_norm   0.1205338E-02
+2024-11-19 15:49:01.333: LR_Utils % DLRA check:      800     0.08000000 svals lag   0.1605033E+00   0.1606216E+00  inc_norm   0.9618191E-03
+2024-11-19 15:49:01.375: LR_Utils % DLRA check:      900     0.09000000 svals lag   0.1512765E+00   0.1513475E+00  inc_norm   0.7839147E-03
+2024-11-19 15:49:01.417: LR_Utils % DLRA check:     1000     0.10000000 svals lag   0.1456932E+00   0.1457366E+00  inc_norm   0.6287540E-03
+2024-11-19 15:49:01.459: LR_Utils % DLRA check:     1100     0.11000000 svals lag   0.1422636E+00   0.1422904E+00  inc_norm   0.4969150E-03
+2024-11-19 15:49:01.501: LR_Utils % DLRA check:     1200     0.12000000 svals lag   0.1401274E+00   0.1401442E+00  inc_norm   0.3879864E-03
+2024-11-19 15:49:01.544: LR_Utils % DLRA check:     1300     0.13000000 svals lag   0.1387791E+00   0.1387898E+00  inc_norm   0.2987336E-03
+2024-11-19 15:49:01.586: LR_Utils % DLRA check:     1400     0.14000000 svals lag   0.1379171E+00   0.1379240E+00  inc_norm   0.2251456E-03
+2024-11-19 15:49:01.628: LR_Utils % DLRA check:     1500     0.15000000 svals lag   0.1373591E+00   0.1373636E+00  inc_norm   0.1643774E-03
+2024-11-19 15:49:01.671: LR_Utils % DLRA check:     1600     0.16000000 svals lag   0.1369933E+00   0.1369963E+00  inc_norm   0.1167706E-03
+2024-11-19 15:49:01.713: LR_Utils % DLRA check:     1700     0.17000000 svals lag   0.1367504E+00   0.1367523E+00  inc_norm   0.8465648E-04
+2024-11-19 15:49:01.713: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:49:01.713: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:49:01.713: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:49:01.713: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:49:01.713: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:49:01.713: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:49:01.713: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:49:01.713: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:49:01.713: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:49:01.713: LR_Utils % DLRA:              rk : 7
+2024-11-19 15:49:01.713: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:49:01.713: LR_Utils % DLRA:             tol :  0.10000000E-03
+2024-11-19 15:49:01.713: LR_Utils % DLRA:   Output every   0.0100 time units (100 steps)
+2024-11-19 15:49:01.713: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:49:01.713: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:49:01.797: LR_Utils % DLRA check:      100     0.01000000 svals lag   0.1675333E+01   0.1689335E+01  inc_norm   0.8698801E-02
+2024-11-19 15:49:01.879: LR_Utils % DLRA check:      200     0.02000000 svals lag   0.8298418E+00   0.8348091E+00  inc_norm   0.6121608E-02
+2024-11-19 15:49:01.962: LR_Utils % DLRA check:      300     0.03000000 svals lag   0.4938487E+00   0.4960838E+00  inc_norm   0.4640575E-02
+2024-11-19 15:49:02.043: LR_Utils % DLRA check:      400     0.04000000 svals lag   0.3331078E+00   0.3342442E+00  inc_norm   0.3568325E-02
+2024-11-19 15:49:02.123: LR_Utils % DLRA check:      500     0.05000000 svals lag   0.2487296E+00   0.2493455E+00  inc_norm   0.2589635E-02
+2024-11-19 15:49:02.201: LR_Utils % DLRA check:      600     0.06000000 svals lag   0.2021101E+00   0.2024572E+00  inc_norm   0.1727961E-02
+2024-11-19 15:49:02.280: LR_Utils % DLRA check:      700     0.07000000 svals lag   0.1755011E+00   0.1757019E+00  inc_norm   0.1208957E-02
+2024-11-19 15:49:02.358: LR_Utils % DLRA check:      800     0.08000000 svals lag   0.1599535E+00   0.1600721E+00  inc_norm   0.9637726E-03
+2024-11-19 15:49:02.437: LR_Utils % DLRA check:      900     0.09000000 svals lag   0.1506961E+00   0.1507674E+00  inc_norm   0.7859169E-03
+2024-11-19 15:49:02.515: LR_Utils % DLRA check:     1000     0.10000000 svals lag   0.1450928E+00   0.1451363E+00  inc_norm   0.6307688E-03
+2024-11-19 15:49:02.593: LR_Utils % DLRA check:     1100     0.11000000 svals lag   0.1416503E+00   0.1416773E+00  inc_norm   0.4987676E-03
+2024-11-19 15:49:02.672: LR_Utils % DLRA check:     1200     0.12000000 svals lag   0.1395059E+00   0.1395228E+00  inc_norm   0.3896117E-03
+2024-11-19 15:49:02.751: LR_Utils % DLRA check:     1300     0.13000000 svals lag   0.1381523E+00   0.1381630E+00  inc_norm   0.3001416E-03
+2024-11-19 15:49:02.829: LR_Utils % DLRA check:     1400     0.14000000 svals lag   0.1372870E+00   0.1372939E+00  inc_norm   0.2263726E-03
+2024-11-19 15:49:02.907: LR_Utils % DLRA check:     1500     0.15000000 svals lag   0.1367268E+00   0.1367313E+00  inc_norm   0.1654295E-03
+2024-11-19 15:49:02.986: LR_Utils % DLRA check:     1600     0.16000000 svals lag   0.1363596E+00   0.1363625E+00  inc_norm   0.1175698E-03
+2024-11-19 15:49:03.064: LR_Utils % DLRA check:     1700     0.17000000 svals lag   0.1361157E+00   0.1361177E+00  inc_norm   0.8513725E-04
+2024-11-19 15:49:03.064: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:49:03.064: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:49:03.064: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:49:03.064: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:49:03.064: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:49:03.064: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:49:03.064: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:49:03.064: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:49:03.064: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:49:03.064: LR_Utils % DLRA:              rk : 7
+2024-11-19 15:49:03.064: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:49:03.064: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:49:03.064: LR_Utils % DLRA:   Output every   0.0100 time units (100 steps)
+2024-11-19 15:49:03.064: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:49:03.064: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:49:03.110: LR_Utils % DLRA check:      100     0.01000000 svals lag   0.1675375E+01   0.1689377E+01  inc_norm   0.8698405E-02
+2024-11-19 15:49:03.152: LR_Utils % DLRA check:      200     0.02000000 svals lag   0.8299441E+00   0.8349106E+00  inc_norm   0.6119101E-02
+2024-11-19 15:49:03.193: LR_Utils % DLRA check:      300     0.03000000 svals lag   0.4940314E+00   0.4962656E+00  inc_norm   0.4638254E-02
+2024-11-19 15:49:03.237: LR_Utils % DLRA check:      400     0.04000000 svals lag   0.3333815E+00   0.3345169E+00  inc_norm   0.3563430E-02
+2024-11-19 15:49:03.282: LR_Utils % DLRA check:      500     0.05000000 svals lag   0.2490934E+00   0.2497086E+00  inc_norm   0.2581712E-02
+2024-11-19 15:49:03.323: LR_Utils % DLRA check:      600     0.06000000 svals lag   0.2025531E+00   0.2028994E+00  inc_norm   0.1719899E-02
+2024-11-19 15:49:03.364: LR_Utils % DLRA check:      700     0.07000000 svals lag   0.1760061E+00   0.1762064E+00  inc_norm   0.1205338E-02
+2024-11-19 15:49:03.405: LR_Utils % DLRA check:      800     0.08000000 svals lag   0.1605033E+00   0.1606216E+00  inc_norm   0.9618191E-03
+2024-11-19 15:49:03.445: LR_Utils % DLRA check:      900     0.09000000 svals lag   0.1512765E+00   0.1513475E+00  inc_norm   0.7839147E-03
+2024-11-19 15:49:03.485: LR_Utils % DLRA check:     1000     0.10000000 svals lag   0.1456932E+00   0.1457366E+00  inc_norm   0.6287540E-03
+2024-11-19 15:49:03.526: LR_Utils % DLRA check:     1100     0.11000000 svals lag   0.1422636E+00   0.1422904E+00  inc_norm   0.4969150E-03
+2024-11-19 15:49:03.566: LR_Utils % DLRA check:     1200     0.12000000 svals lag   0.1401274E+00   0.1401442E+00  inc_norm   0.3879864E-03
+2024-11-19 15:49:03.606: LR_Utils % DLRA check:     1300     0.13000000 svals lag   0.1387791E+00   0.1387898E+00  inc_norm   0.2987336E-03
+2024-11-19 15:49:03.647: LR_Utils % DLRA check:     1400     0.14000000 svals lag   0.1379171E+00   0.1379240E+00  inc_norm   0.2251456E-03
+2024-11-19 15:49:03.688: LR_Utils % DLRA check:     1500     0.15000000 svals lag   0.1373591E+00   0.1373636E+00  inc_norm   0.1643774E-03
+2024-11-19 15:49:03.728: LR_Utils % DLRA check:     1600     0.16000000 svals lag   0.1369933E+00   0.1369963E+00  inc_norm   0.1167706E-03
+2024-11-19 15:49:03.768: LR_Utils % DLRA check:     1700     0.17000000 svals lag   0.1367504E+00   0.1367523E+00  inc_norm   0.8465648E-04
+2024-11-19 15:49:03.808: LR_Utils % DLRA check:     1800     0.18000000 svals lag   0.1365869E+00   0.1365883E+00  inc_norm   0.6562672E-04
+2024-11-19 15:49:03.849: LR_Utils % DLRA check:     1900     0.19000000 svals lag   0.1364755E+00   0.1364764E+00  inc_norm   0.5321013E-04
+2024-11-19 15:49:03.889: LR_Utils % DLRA check:     2000     0.20000000 svals lag   0.1363985E+00   0.1363992E+00  inc_norm   0.4346916E-04
+2024-11-19 15:49:03.929: LR_Utils % DLRA check:     2100     0.21000000 svals lag   0.1363447E+00   0.1363451E+00  inc_norm   0.3526070E-04
+2024-11-19 15:49:03.970: LR_Utils % DLRA check:     2200     0.22000000 svals lag   0.1363065E+00   0.1363068E+00  inc_norm   0.2834670E-04
+2024-11-19 15:49:04.010: LR_Utils % DLRA check:     2300     0.23000000 svals lag   0.1362791E+00   0.1362793E+00  inc_norm   0.2261567E-04
+2024-11-19 15:49:04.050: LR_Utils % DLRA check:     2400     0.24000000 svals lag   0.1362592E+00   0.1362594E+00  inc_norm   0.1793482E-04
+2024-11-19 15:49:04.090: LR_Utils % DLRA check:     2500     0.25000000 svals lag   0.1362447E+00   0.1362448E+00  inc_norm   0.1415408E-04
+2024-11-19 15:49:04.131: LR_Utils % DLRA check:     2600     0.26000000 svals lag   0.1362339E+00   0.1362340E+00  inc_norm   0.1112566E-04
+2024-11-19 15:49:04.171: LR_Utils % DLRA check:     2700     0.27000000 svals lag   0.1362258E+00   0.1362259E+00  inc_norm   0.8715727E-05
+2024-11-19 15:49:04.212: LR_Utils % DLRA check:     2800     0.28000000 svals lag   0.1362198E+00   0.1362198E+00  inc_norm   0.6808666E-05
+2024-11-19 15:49:04.252: LR_Utils % DLRA check:     2900     0.29000000 svals lag   0.1362152E+00   0.1362152E+00  inc_norm   0.5307111E-05
+2024-11-19 15:49:04.292: LR_Utils % DLRA check:     3000     0.30000000 svals lag   0.1362117E+00   0.1362117E+00  inc_norm   0.4130183E-05
+2024-11-19 15:49:04.332: LR_Utils % DLRA check:     3100     0.31000000 svals lag   0.1362091E+00   0.1362091E+00  inc_norm   0.3211275E-05
+2024-11-19 15:49:04.374: LR_Utils % DLRA check:     3200     0.32000000 svals lag   0.1362070E+00   0.1362070E+00  inc_norm   0.2495990E-05
+2024-11-19 15:49:04.416: LR_Utils % DLRA check:     3300     0.33000000 svals lag   0.1362054E+00   0.1362054E+00  inc_norm   0.1940337E-05
+2024-11-19 15:49:04.458: LR_Utils % DLRA check:     3400     0.34000000 svals lag   0.1362042E+00   0.1362042E+00  inc_norm   0.1509147E-05
+2024-11-19 15:49:04.500: LR_Utils % DLRA check:     3500     0.35000000 svals lag   0.1362033E+00   0.1362033E+00  inc_norm   0.1174617E-05
+2024-11-19 15:49:04.542: LR_Utils % DLRA check:     3600     0.36000000 svals lag   0.1362025E+00   0.1362025E+00  inc_norm   0.9149771E-06
+2024-11-19 15:49:04.542: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:49:04.542: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:49:04.542: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:49:04.542: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:49:04.542: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:49:04.542: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:49:04.542: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:49:04.542: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:49:04.542: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:49:04.542: LR_Utils % DLRA:              rk : 7
+2024-11-19 15:49:04.542: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:49:04.542: LR_Utils % DLRA:             tol :  0.10000000E-05
+2024-11-19 15:49:04.542: LR_Utils % DLRA:   Output every   0.0100 time units (100 steps)
+2024-11-19 15:49:04.542: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:49:04.542: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:49:04.625: LR_Utils % DLRA check:      100     0.01000000 svals lag   0.1675333E+01   0.1689335E+01  inc_norm   0.8698801E-02
+2024-11-19 15:49:04.708: LR_Utils % DLRA check:      200     0.02000000 svals lag   0.8298418E+00   0.8348091E+00  inc_norm   0.6121608E-02
+2024-11-19 15:49:04.790: LR_Utils % DLRA check:      300     0.03000000 svals lag   0.4938487E+00   0.4960838E+00  inc_norm   0.4640575E-02
+2024-11-19 15:49:04.873: LR_Utils % DLRA check:      400     0.04000000 svals lag   0.3331078E+00   0.3342442E+00  inc_norm   0.3568325E-02
+2024-11-19 15:49:04.955: LR_Utils % DLRA check:      500     0.05000000 svals lag   0.2487296E+00   0.2493455E+00  inc_norm   0.2589635E-02
+2024-11-19 15:49:05.036: LR_Utils % DLRA check:      600     0.06000000 svals lag   0.2021101E+00   0.2024572E+00  inc_norm   0.1727961E-02
+2024-11-19 15:49:05.115: LR_Utils % DLRA check:      700     0.07000000 svals lag   0.1755011E+00   0.1757019E+00  inc_norm   0.1208957E-02
+2024-11-19 15:49:05.194: LR_Utils % DLRA check:      800     0.08000000 svals lag   0.1599535E+00   0.1600721E+00  inc_norm   0.9637726E-03
+2024-11-19 15:49:05.272: LR_Utils % DLRA check:      900     0.09000000 svals lag   0.1506961E+00   0.1507674E+00  inc_norm   0.7859169E-03
+2024-11-19 15:49:05.351: LR_Utils % DLRA check:     1000     0.10000000 svals lag   0.1450928E+00   0.1451363E+00  inc_norm   0.6307688E-03
+2024-11-19 15:49:05.430: LR_Utils % DLRA check:     1100     0.11000000 svals lag   0.1416503E+00   0.1416773E+00  inc_norm   0.4987676E-03
+2024-11-19 15:49:05.509: LR_Utils % DLRA check:     1200     0.12000000 svals lag   0.1395059E+00   0.1395228E+00  inc_norm   0.3896117E-03
+2024-11-19 15:49:05.587: LR_Utils % DLRA check:     1300     0.13000000 svals lag   0.1381523E+00   0.1381630E+00  inc_norm   0.3001416E-03
+2024-11-19 15:49:05.666: LR_Utils % DLRA check:     1400     0.14000000 svals lag   0.1372870E+00   0.1372939E+00  inc_norm   0.2263726E-03
+2024-11-19 15:49:05.741: LR_Utils % DLRA check:     1500     0.15000000 svals lag   0.1367268E+00   0.1367313E+00  inc_norm   0.1654295E-03
+2024-11-19 15:49:05.816: LR_Utils % DLRA check:     1600     0.16000000 svals lag   0.1363596E+00   0.1363625E+00  inc_norm   0.1175698E-03
+2024-11-19 15:49:05.891: LR_Utils % DLRA check:     1700     0.17000000 svals lag   0.1361157E+00   0.1361177E+00  inc_norm   0.8513725E-04
+2024-11-19 15:49:05.966: LR_Utils % DLRA check:     1800     0.18000000 svals lag   0.1359516E+00   0.1359529E+00  inc_norm   0.6588998E-04
+2024-11-19 15:49:06.041: LR_Utils % DLRA check:     1900     0.19000000 svals lag   0.1358398E+00   0.1358407E+00  inc_norm   0.5338742E-04
+2024-11-19 15:49:06.115: LR_Utils % DLRA check:     2000     0.20000000 svals lag   0.1357625E+00   0.1357632E+00  inc_norm   0.4361419E-04
+2024-11-19 15:49:06.191: LR_Utils % DLRA check:     2100     0.21000000 svals lag   0.1357084E+00   0.1357089E+00  inc_norm   0.3538516E-04
+2024-11-19 15:49:06.267: LR_Utils % DLRA check:     2200     0.22000000 svals lag   0.1356701E+00   0.1356705E+00  inc_norm   0.2845242E-04
+2024-11-19 15:49:06.342: LR_Utils % DLRA check:     2300     0.23000000 svals lag   0.1356426E+00   0.1356429E+00  inc_norm   0.2270383E-04
+2024-11-19 15:49:06.417: LR_Utils % DLRA check:     2400     0.24000000 svals lag   0.1356227E+00   0.1356229E+00  inc_norm   0.1800723E-04
+2024-11-19 15:49:06.493: LR_Utils % DLRA check:     2500     0.25000000 svals lag   0.1356081E+00   0.1356082E+00  inc_norm   0.1421295E-04
+2024-11-19 15:49:06.568: LR_Utils % DLRA check:     2600     0.26000000 svals lag   0.1355973E+00   0.1355974E+00  inc_norm   0.1117317E-04
+2024-11-19 15:49:06.643: LR_Utils % DLRA check:     2700     0.27000000 svals lag   0.1355892E+00   0.1355893E+00  inc_norm   0.8753883E-05
+2024-11-19 15:49:06.719: LR_Utils % DLRA check:     2800     0.28000000 svals lag   0.1355831E+00   0.1355832E+00  inc_norm   0.6839191E-05
+2024-11-19 15:49:06.795: LR_Utils % DLRA check:     2900     0.29000000 svals lag   0.1355785E+00   0.1355786E+00  inc_norm   0.5331451E-05
+2024-11-19 15:49:06.870: LR_Utils % DLRA check:     3000     0.30000000 svals lag   0.1355750E+00   0.1355751E+00  inc_norm   0.4149531E-05
+2024-11-19 15:49:06.945: LR_Utils % DLRA check:     3100     0.31000000 svals lag   0.1355723E+00   0.1355724E+00  inc_norm   0.3226611E-05
+2024-11-19 15:49:07.021: LR_Utils % DLRA check:     3200     0.32000000 svals lag   0.1355703E+00   0.1355703E+00  inc_norm   0.2508110E-05
+2024-11-19 15:49:07.096: LR_Utils % DLRA check:     3300     0.33000000 svals lag   0.1355687E+00   0.1355687E+00  inc_norm   0.1949893E-05
+2024-11-19 15:49:07.172: LR_Utils % DLRA check:     3400     0.34000000 svals lag   0.1355675E+00   0.1355675E+00  inc_norm   0.1516667E-05
+2024-11-19 15:49:07.247: LR_Utils % DLRA check:     3500     0.35000000 svals lag   0.1355665E+00   0.1355666E+00  inc_norm   0.1180525E-05
+2024-11-19 15:49:07.323: LR_Utils % DLRA check:     3600     0.36000000 svals lag   0.1355658E+00   0.1355658E+00  inc_norm   0.9196142E-06
+2024-11-19 15:49:07.323: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:49:07.323: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:49:07.323: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:49:07.323: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:49:07.323: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:49:07.323: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:49:07.323: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:49:07.323: LR_Utils % DLRA:         t-order : 1
+2024-11-19 15:49:07.323: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:49:07.323: LR_Utils % DLRA:              rk : 7
+2024-11-19 15:49:07.323: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:49:07.323: LR_Utils % DLRA:             tol :  0.10000000E-07
+2024-11-19 15:49:07.323: LR_Utils % DLRA:   Output every   0.0100 time units (100 steps)
+2024-11-19 15:49:07.323: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:49:07.323: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:49:07.370: LR_Utils % DLRA check:      100     0.01000000 svals lag   0.1675375E+01   0.1689377E+01  inc_norm   0.8698405E-02
+2024-11-19 15:49:07.409: LR_Utils % DLRA check:      200     0.02000000 svals lag   0.8299441E+00   0.8349106E+00  inc_norm   0.6119101E-02
+2024-11-19 15:49:07.449: LR_Utils % DLRA check:      300     0.03000000 svals lag   0.4940314E+00   0.4962656E+00  inc_norm   0.4638254E-02
+2024-11-19 15:49:07.493: LR_Utils % DLRA check:      400     0.04000000 svals lag   0.3333815E+00   0.3345169E+00  inc_norm   0.3563430E-02
+2024-11-19 15:49:07.539: LR_Utils % DLRA check:      500     0.05000000 svals lag   0.2490934E+00   0.2497086E+00  inc_norm   0.2581712E-02
+2024-11-19 15:49:07.582: LR_Utils % DLRA check:      600     0.06000000 svals lag   0.2025531E+00   0.2028994E+00  inc_norm   0.1719899E-02
+2024-11-19 15:49:07.624: LR_Utils % DLRA check:      700     0.07000000 svals lag   0.1760061E+00   0.1762064E+00  inc_norm   0.1205338E-02
+2024-11-19 15:49:07.666: LR_Utils % DLRA check:      800     0.08000000 svals lag   0.1605033E+00   0.1606216E+00  inc_norm   0.9618191E-03
+2024-11-19 15:49:07.709: LR_Utils % DLRA check:      900     0.09000000 svals lag   0.1512765E+00   0.1513475E+00  inc_norm   0.7839147E-03
+2024-11-19 15:49:07.751: LR_Utils % DLRA check:     1000     0.10000000 svals lag   0.1456932E+00   0.1457366E+00  inc_norm   0.6287540E-03
+2024-11-19 15:49:07.793: LR_Utils % DLRA check:     1100     0.11000000 svals lag   0.1422636E+00   0.1422904E+00  inc_norm   0.4969150E-03
+2024-11-19 15:49:07.836: LR_Utils % DLRA check:     1200     0.12000000 svals lag   0.1401274E+00   0.1401442E+00  inc_norm   0.3879864E-03
+2024-11-19 15:49:07.878: LR_Utils % DLRA check:     1300     0.13000000 svals lag   0.1387791E+00   0.1387898E+00  inc_norm   0.2987336E-03
+2024-11-19 15:49:07.921: LR_Utils % DLRA check:     1400     0.14000000 svals lag   0.1379171E+00   0.1379240E+00  inc_norm   0.2251456E-03
+2024-11-19 15:49:07.963: LR_Utils % DLRA check:     1500     0.15000000 svals lag   0.1373591E+00   0.1373636E+00  inc_norm   0.1643774E-03
+2024-11-19 15:49:08.006: LR_Utils % DLRA check:     1600     0.16000000 svals lag   0.1369933E+00   0.1369963E+00  inc_norm   0.1167706E-03
+2024-11-19 15:49:08.046: LR_Utils % DLRA check:     1700     0.17000000 svals lag   0.1367504E+00   0.1367523E+00  inc_norm   0.8465648E-04
+2024-11-19 15:49:08.087: LR_Utils % DLRA check:     1800     0.18000000 svals lag   0.1365869E+00   0.1365883E+00  inc_norm   0.6562672E-04
+2024-11-19 15:49:08.127: LR_Utils % DLRA check:     1900     0.19000000 svals lag   0.1364755E+00   0.1364764E+00  inc_norm   0.5321013E-04
+2024-11-19 15:49:08.168: LR_Utils % DLRA check:     2000     0.20000000 svals lag   0.1363985E+00   0.1363992E+00  inc_norm   0.4346916E-04
+2024-11-19 15:49:08.208: LR_Utils % DLRA check:     2100     0.21000000 svals lag   0.1363447E+00   0.1363451E+00  inc_norm   0.3526070E-04
+2024-11-19 15:49:08.249: LR_Utils % DLRA check:     2200     0.22000000 svals lag   0.1363065E+00   0.1363068E+00  inc_norm   0.2834670E-04
+2024-11-19 15:49:08.290: LR_Utils % DLRA check:     2300     0.23000000 svals lag   0.1362791E+00   0.1362793E+00  inc_norm   0.2261567E-04
+2024-11-19 15:49:08.330: LR_Utils % DLRA check:     2400     0.24000000 svals lag   0.1362592E+00   0.1362594E+00  inc_norm   0.1793482E-04
+2024-11-19 15:49:08.372: LR_Utils % DLRA check:     2500     0.25000000 svals lag   0.1362447E+00   0.1362448E+00  inc_norm   0.1415408E-04
+2024-11-19 15:49:08.413: LR_Utils % DLRA check:     2600     0.26000000 svals lag   0.1362339E+00   0.1362340E+00  inc_norm   0.1112566E-04
+2024-11-19 15:49:08.453: LR_Utils % DLRA check:     2700     0.27000000 svals lag   0.1362258E+00   0.1362259E+00  inc_norm   0.8715727E-05
+2024-11-19 15:49:08.495: LR_Utils % DLRA check:     2800     0.28000000 svals lag   0.1362198E+00   0.1362198E+00  inc_norm   0.6808666E-05
+2024-11-19 15:49:08.536: LR_Utils % DLRA check:     2900     0.29000000 svals lag   0.1362152E+00   0.1362152E+00  inc_norm   0.5307111E-05
+2024-11-19 15:49:08.577: LR_Utils % DLRA check:     3000     0.30000000 svals lag   0.1362117E+00   0.1362117E+00  inc_norm   0.4130183E-05
+2024-11-19 15:49:08.617: LR_Utils % DLRA check:     3100     0.31000000 svals lag   0.1362091E+00   0.1362091E+00  inc_norm   0.3211275E-05
+2024-11-19 15:49:08.658: LR_Utils % DLRA check:     3200     0.32000000 svals lag   0.1362070E+00   0.1362070E+00  inc_norm   0.2495990E-05
+2024-11-19 15:49:08.698: LR_Utils % DLRA check:     3300     0.33000000 svals lag   0.1362054E+00   0.1362054E+00  inc_norm   0.1940337E-05
+2024-11-19 15:49:08.739: LR_Utils % DLRA check:     3400     0.34000000 svals lag   0.1362042E+00   0.1362042E+00  inc_norm   0.1509147E-05
+2024-11-19 15:49:08.779: LR_Utils % DLRA check:     3500     0.35000000 svals lag   0.1362033E+00   0.1362033E+00  inc_norm   0.1174617E-05
+2024-11-19 15:49:08.820: LR_Utils % DLRA check:     3600     0.36000000 svals lag   0.1362025E+00   0.1362025E+00  inc_norm   0.9149771E-06
+2024-11-19 15:49:08.861: LR_Utils % DLRA check:     3700     0.37000000 svals lag   0.1362020E+00   0.1362020E+00  inc_norm   0.7133052E-06
+2024-11-19 15:49:08.901: LR_Utils % DLRA check:     3800     0.38000000 svals lag   0.1362015E+00   0.1362015E+00  inc_norm   0.5565057E-06
+2024-11-19 15:49:08.942: LR_Utils % DLRA check:     3900     0.39000000 svals lag   0.1362012E+00   0.1362012E+00  inc_norm   0.4344680E-06
+2024-11-19 15:49:08.983: LR_Utils % DLRA check:     4000     0.40000000 svals lag   0.1362009E+00   0.1362009E+00  inc_norm   0.3393909E-06
+2024-11-19 15:49:09.031: LR_Utils % DLRA check:     4100     0.41000000 svals lag   0.1362007E+00   0.1362007E+00  inc_norm   0.2652510E-06
+2024-11-19 15:49:09.072: LR_Utils % DLRA check:     4200     0.42000000 svals lag   0.1362005E+00   0.1362005E+00  inc_norm   0.2073916E-06
+2024-11-19 15:49:09.113: LR_Utils % DLRA check:     4300     0.43000000 svals lag   0.1362004E+00   0.1362004E+00  inc_norm   0.1622073E-06
+2024-11-19 15:49:09.154: LR_Utils % DLRA check:     4400     0.44000000 svals lag   0.1362003E+00   0.1362003E+00  inc_norm   0.1269014E-06
+2024-11-19 15:49:09.195: LR_Utils % DLRA check:     4500     0.45000000 svals lag   0.1362002E+00   0.1362002E+00  inc_norm   0.9930163E-07
+2024-11-19 15:49:09.235: LR_Utils % DLRA check:     4600     0.46000000 svals lag   0.1362002E+00   0.1362002E+00  inc_norm   0.7771786E-07
+2024-11-19 15:49:09.276: LR_Utils % DLRA check:     4700     0.47000000 svals lag   0.1362001E+00   0.1362001E+00  inc_norm   0.6083372E-07
+2024-11-19 15:49:09.316: LR_Utils % DLRA check:     4800     0.48000000 svals lag   0.1362001E+00   0.1362001E+00  inc_norm   0.4762274E-07
+2024-11-19 15:49:09.357: LR_Utils % DLRA check:     4900     0.49000000 svals lag   0.1362001E+00   0.1362001E+00  inc_norm   0.3728386E-07
+2024-11-19 15:49:09.397: LR_Utils % DLRA check:     5000     0.50000000 svals lag   0.1362000E+00   0.1362000E+00  inc_norm   0.2919147E-07
+2024-11-19 15:49:09.439: LR_Utils % DLRA check:     5100     0.51000000 svals lag   0.1362000E+00   0.1362000E+00  inc_norm   0.2285669E-07
+2024-11-19 15:49:09.480: LR_Utils % DLRA check:     5200     0.52000000 svals lag   0.1362000E+00   0.1362000E+00  inc_norm   0.1789732E-07
+2024-11-19 15:49:09.525: LR_Utils % DLRA check:     5300     0.53000000 svals lag   0.1362000E+00   0.1362000E+00  inc_norm   0.1401446E-07
+2024-11-19 15:49:09.569: LR_Utils % DLRA check:     5400     0.54000000 svals lag   0.1362000E+00   0.1362000E+00  inc_norm   0.1097426E-07
+2024-11-19 15:49:09.610: LR_Utils % DLRA check:     5500     0.55000000 svals lag   0.1362000E+00   0.1362000E+00  inc_norm   0.8593734E-08
+2024-11-19 15:49:09.610: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver
+2024-11-19 15:49:09.610: LR_LyapSolvers % DLRA_main: Initializing Lyapunov solver
+2024-11-19 15:49:09.610: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:49:09.610: LR_Utils % DLRA:              t0 :      0.00000000
+2024-11-19 15:49:09.610: LR_Utils % DLRA:              tf :      1.00000000
+2024-11-19 15:49:09.610: LR_Utils % DLRA:              dt :      0.00010000
+2024-11-19 15:49:09.610: LR_Utils % DLRA:          nsteps : 10000
+2024-11-19 15:49:09.610: LR_Utils % DLRA:         t-order : 2
+2024-11-19 15:49:09.610: LR_Utils % DLRA:   adaptive rank : F
+2024-11-19 15:49:09.610: LR_Utils % DLRA:              rk : 7
+2024-11-19 15:49:09.610: LR_Utils % DLRA:     convergence : relative increment of the solution 2-norm
+2024-11-19 15:49:09.610: LR_Utils % DLRA:             tol :  0.10000000E-07
+2024-11-19 15:49:09.610: LR_Utils % DLRA:   Output every   0.0100 time units (100 steps)
+2024-11-19 15:49:09.610: LR_Utils % DLRA: ###### solver settings ######
+2024-11-19 15:49:09.610: LR_LyapSolvers % DLRA_main: Starting DLRA integration
+2024-11-19 15:49:09.690: LR_Utils % DLRA check:      100     0.01000000 svals lag   0.1675333E+01   0.1689335E+01  inc_norm   0.8698801E-02
+2024-11-19 15:49:09.769: LR_Utils % DLRA check:      200     0.02000000 svals lag   0.8298418E+00   0.8348091E+00  inc_norm   0.6121608E-02
+2024-11-19 15:49:09.848: LR_Utils % DLRA check:      300     0.03000000 svals lag   0.4938487E+00   0.4960838E+00  inc_norm   0.4640575E-02
+2024-11-19 15:49:09.927: LR_Utils % DLRA check:      400     0.04000000 svals lag   0.3331078E+00   0.3342442E+00  inc_norm   0.3568325E-02
+2024-11-19 15:49:10.006: LR_Utils % DLRA check:      500     0.05000000 svals lag   0.2487296E+00   0.2493455E+00  inc_norm   0.2589635E-02
+2024-11-19 15:49:10.086: LR_Utils % DLRA check:      600     0.06000000 svals lag   0.2021101E+00   0.2024572E+00  inc_norm   0.1727961E-02
+2024-11-19 15:49:10.164: LR_Utils % DLRA check:      700     0.07000000 svals lag   0.1755011E+00   0.1757019E+00  inc_norm   0.1208957E-02
+2024-11-19 15:49:10.244: LR_Utils % DLRA check:      800     0.08000000 svals lag   0.1599535E+00   0.1600721E+00  inc_norm   0.9637726E-03
+2024-11-19 15:49:10.322: LR_Utils % DLRA check:      900     0.09000000 svals lag   0.1506961E+00   0.1507674E+00  inc_norm   0.7859169E-03
+2024-11-19 15:49:10.403: LR_Utils % DLRA check:     1000     0.10000000 svals lag   0.1450928E+00   0.1451363E+00  inc_norm   0.6307688E-03
+2024-11-19 15:49:10.486: LR_Utils % DLRA check:     1100     0.11000000 svals lag   0.1416503E+00   0.1416773E+00  inc_norm   0.4987676E-03
+2024-11-19 15:49:10.569: LR_Utils % DLRA check:     1200     0.12000000 svals lag   0.1395059E+00   0.1395228E+00  inc_norm   0.3896117E-03
+2024-11-19 15:49:10.652: LR_Utils % DLRA check:     1300     0.13000000 svals lag   0.1381523E+00   0.1381630E+00  inc_norm   0.3001416E-03
+2024-11-19 15:49:10.735: LR_Utils % DLRA check:     1400     0.14000000 svals lag   0.1372870E+00   0.1372939E+00  inc_norm   0.2263726E-03
+2024-11-19 15:49:10.819: LR_Utils % DLRA check:     1500     0.15000000 svals lag   0.1367268E+00   0.1367313E+00  inc_norm   0.1654295E-03
+2024-11-19 15:49:10.902: LR_Utils % DLRA check:     1600     0.16000000 svals lag   0.1363596E+00   0.1363625E+00  inc_norm   0.1175698E-03
+2024-11-19 15:49:10.985: LR_Utils % DLRA check:     1700     0.17000000 svals lag   0.1361157E+00   0.1361177E+00  inc_norm   0.8513725E-04
+2024-11-19 15:49:11.066: LR_Utils % DLRA check:     1800     0.18000000 svals lag   0.1359516E+00   0.1359529E+00  inc_norm   0.6588998E-04
+2024-11-19 15:49:11.146: LR_Utils % DLRA check:     1900     0.19000000 svals lag   0.1358398E+00   0.1358407E+00  inc_norm   0.5338742E-04
+2024-11-19 15:49:11.225: LR_Utils % DLRA check:     2000     0.20000000 svals lag   0.1357625E+00   0.1357632E+00  inc_norm   0.4361419E-04
+2024-11-19 15:49:11.304: LR_Utils % DLRA check:     2100     0.21000000 svals lag   0.1357084E+00   0.1357089E+00  inc_norm   0.3538516E-04
+2024-11-19 15:49:11.383: LR_Utils % DLRA check:     2200     0.22000000 svals lag   0.1356701E+00   0.1356705E+00  inc_norm   0.2845242E-04
+2024-11-19 15:49:11.463: LR_Utils % DLRA check:     2300     0.23000000 svals lag   0.1356426E+00   0.1356429E+00  inc_norm   0.2270383E-04
+2024-11-19 15:49:11.542: LR_Utils % DLRA check:     2400     0.24000000 svals lag   0.1356227E+00   0.1356229E+00  inc_norm   0.1800723E-04
+2024-11-19 15:49:11.621: LR_Utils % DLRA check:     2500     0.25000000 svals lag   0.1356081E+00   0.1356082E+00  inc_norm   0.1421295E-04
+2024-11-19 15:49:11.701: LR_Utils % DLRA check:     2600     0.26000000 svals lag   0.1355973E+00   0.1355974E+00  inc_norm   0.1117317E-04
+2024-11-19 15:49:11.780: LR_Utils % DLRA check:     2700     0.27000000 svals lag   0.1355892E+00   0.1355893E+00  inc_norm   0.8753883E-05
+2024-11-19 15:49:11.859: LR_Utils % DLRA check:     2800     0.28000000 svals lag   0.1355831E+00   0.1355832E+00  inc_norm   0.6839191E-05
+2024-11-19 15:49:11.937: LR_Utils % DLRA check:     2900     0.29000000 svals lag   0.1355785E+00   0.1355786E+00  inc_norm   0.5331451E-05
+2024-11-19 15:49:12.016: LR_Utils % DLRA check:     3000     0.30000000 svals lag   0.1355750E+00   0.1355751E+00  inc_norm   0.4149531E-05
+2024-11-19 15:49:12.095: LR_Utils % DLRA check:     3100     0.31000000 svals lag   0.1355723E+00   0.1355724E+00  inc_norm   0.3226611E-05
+2024-11-19 15:49:12.173: LR_Utils % DLRA check:     3200     0.32000000 svals lag   0.1355703E+00   0.1355703E+00  inc_norm   0.2508110E-05
+2024-11-19 15:49:12.253: LR_Utils % DLRA check:     3300     0.33000000 svals lag   0.1355687E+00   0.1355687E+00  inc_norm   0.1949893E-05
+2024-11-19 15:49:12.332: LR_Utils % DLRA check:     3400     0.34000000 svals lag   0.1355675E+00   0.1355675E+00  inc_norm   0.1516667E-05
+2024-11-19 15:49:12.411: LR_Utils % DLRA check:     3500     0.35000000 svals lag   0.1355665E+00   0.1355666E+00  inc_norm   0.1180525E-05
+2024-11-19 15:49:12.489: LR_Utils % DLRA check:     3600     0.36000000 svals lag   0.1355658E+00   0.1355658E+00  inc_norm   0.9196142E-06
+2024-11-19 15:49:12.569: LR_Utils % DLRA check:     3700     0.37000000 svals lag   0.1355652E+00   0.1355653E+00  inc_norm   0.7169417E-06
+2024-11-19 15:49:12.648: LR_Utils % DLRA check:     3800     0.38000000 svals lag   0.1355648E+00   0.1355648E+00  inc_norm   0.5593559E-06
+2024-11-19 15:49:12.727: LR_Utils % DLRA check:     3900     0.39000000 svals lag   0.1355645E+00   0.1355645E+00  inc_norm   0.4367013E-06
+2024-11-19 15:49:12.806: LR_Utils % DLRA check:     4000     0.40000000 svals lag   0.1355642E+00   0.1355642E+00  inc_norm   0.3411404E-06
+2024-11-19 15:49:12.886: LR_Utils % DLRA check:     4100     0.41000000 svals lag   0.1355640E+00   0.1355640E+00  inc_norm   0.2666212E-06
+2024-11-19 15:49:12.965: LR_Utils % DLRA check:     4200     0.42000000 svals lag   0.1355638E+00   0.1355638E+00  inc_norm   0.2084648E-06
+2024-11-19 15:49:13.044: LR_Utils % DLRA check:     4300     0.43000000 svals lag   0.1355637E+00   0.1355637E+00  inc_norm   0.1630478E-06
+2024-11-19 15:49:13.123: LR_Utils % DLRA check:     4400     0.44000000 svals lag   0.1355636E+00   0.1355636E+00  inc_norm   0.1275597E-06
+2024-11-19 15:49:13.201: LR_Utils % DLRA check:     4500     0.45000000 svals lag   0.1355635E+00   0.1355635E+00  inc_norm   0.9981713E-07
+2024-11-19 15:49:13.280: LR_Utils % DLRA check:     4600     0.46000000 svals lag   0.1355634E+00   0.1355634E+00  inc_norm   0.7812158E-07
+2024-11-19 15:49:13.361: LR_Utils % DLRA check:     4700     0.47000000 svals lag   0.1355634E+00   0.1355634E+00  inc_norm   0.6114988E-07
+2024-11-19 15:49:13.443: LR_Utils % DLRA check:     4800     0.48000000 svals lag   0.1355634E+00   0.1355634E+00  inc_norm   0.4787034E-07
+2024-11-19 15:49:13.525: LR_Utils % DLRA check:     4900     0.49000000 svals lag   0.1355633E+00   0.1355633E+00  inc_norm   0.3747777E-07
+2024-11-19 15:49:13.608: LR_Utils % DLRA check:     5000     0.50000000 svals lag   0.1355633E+00   0.1355633E+00  inc_norm   0.2934332E-07
+2024-11-19 15:49:13.690: LR_Utils % DLRA check:     5100     0.51000000 svals lag   0.1355633E+00   0.1355633E+00  inc_norm   0.2297561E-07
+2024-11-19 15:49:13.773: LR_Utils % DLRA check:     5200     0.52000000 svals lag   0.1355633E+00   0.1355633E+00  inc_norm   0.1799046E-07
+2024-11-19 15:49:13.856: LR_Utils % DLRA check:     5300     0.53000000 svals lag   0.1355633E+00   0.1355633E+00  inc_norm   0.1408740E-07
+2024-11-19 15:49:13.939: LR_Utils % DLRA check:     5400     0.54000000 svals lag   0.1355633E+00   0.1355633E+00  inc_norm   0.1103138E-07
+2024-11-19 15:49:14.019: LR_Utils % DLRA check:     5500     0.55000000 svals lag   0.1355633E+00   0.1355633E+00  inc_norm   0.8638468E-08
+2024-11-19 15:49:14.019: LR_LyapSolvers % DLRA_main: Exiting Lyapunov solver

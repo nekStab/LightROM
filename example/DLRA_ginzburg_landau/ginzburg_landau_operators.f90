@@ -5,7 +5,6 @@ module Ginzburg_Landau_Operators
    use rklib_module
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov, only : wp => dp
    use LightKrylov_utils, only : assert_shape
    ! LightROM
    use LightROM_AbstractLTIsystems ! abstract_lti_system
@@ -14,7 +13,7 @@ module Ginzburg_Landau_Operators
    implicit none
 
    private :: this_module
-   character(len=128), parameter :: this_module = 'Ginzburg_Landau_Operators'
+   character(len=*), parameter :: this_module = 'Ginzburg_Landau_Operators'
    public  :: exptA, direct_GL, adjoint_GL
 
    !-----------------------------------------------
@@ -42,8 +41,8 @@ module Ginzburg_Landau_Operators
    !-----     EXPONENTIAL PROPAGATOR     -----
    !------------------------------------------
 
-   type, extends(abstract_linop_rdp), public :: exponential_prop
-      real(wp) :: tau ! Integration time.
+   type, extends(abstract_expta_linop_rdp), public :: exponential_prop
+      !real(dp) :: tau ! Integration time.
    contains
       private
       procedure, pass(self), public :: matvec => direct_solver
@@ -67,14 +66,14 @@ contains
    subroutine direct_GL(vec_in, vec_out)
 
       !> State vector.
-      real(wp), dimension(:), intent(in)  :: vec_in
+      real(dp), dimension(:), intent(in)  :: vec_in
       !> Time-derivative.
-      real(wp), dimension(:), intent(out) :: vec_out
+      real(dp), dimension(:), intent(out) :: vec_out
 
       !> Internal variables.
       integer                 :: i
-      real(wp), dimension(nx) :: u, v, du, dv
-      real(wp)                :: d2u, d2v, cu, cv
+      real(dp), dimension(nx) :: u, v, du, dv
+      real(dp)                :: d2u, d2v, cu, cv
 
       u = vec_in(1:nx)     
       v = vec_in(nx+1:2*nx)
@@ -128,7 +127,6 @@ contains
       vec_out(1:nx)      = du
       vec_out(nx+1:2*nx) = dv
 
-      return
    end subroutine direct_GL
 
    !-----------------------------------------------------------
@@ -137,15 +135,15 @@ contains
 
    subroutine adjoint_GL(vec_in, vec_out)
       !> State vector.
-      real(wp), dimension(:), intent(in)  :: vec_in
+      real(dp), dimension(:), intent(in)  :: vec_in
       !> Time-derivative.
-      real(wp), dimension(:), intent(out) :: vec_out
+      real(dp), dimension(:), intent(out) :: vec_out
 
       ! Internal variables.
       integer :: i
-      real(wp), dimension(nx) :: u, du
-      real(wp), dimension(nx) :: v, dv
-      real(wp)                :: d2u, d2v, cu, cv
+      real(dp), dimension(nx) :: u, du
+      real(dp), dimension(nx) :: v, dv
+      real(dp)                :: d2u, d2v, cu, cv
 
       ! Sets the internal variables.
       u = vec_in(1:nx)     
@@ -202,7 +200,6 @@ contains
       vec_out(1:nx)      = du
       vec_out(nx+1:2*nx) = dv
 
-      return
    end subroutine adjoint_GL
 
    !--------------------------------------
@@ -213,32 +210,30 @@ contains
       ! Time-integrator.
       class(rk_class),               intent(inout) :: me
       ! Current time.
-      real(wp),                      intent(in)    :: t
+      real(dp),                      intent(in)    :: t
       ! State vector.
-      real(wp),        dimension(:), intent(in)    :: x
+      real(dp),        dimension(:), intent(in)    :: x
       ! Time-derivative.
-      real(wp),        dimension(:), intent(out)   :: f
+      real(dp),        dimension(:), intent(out)   :: f
 
-      f = 0.0_wp
+      f = 0.0_dp
       call direct_GL(x, f)
 
-      return
    end subroutine rhs
 
    subroutine adjoint_rhs(me, t, x, f)
       ! Time-integrator.
       class(rk_class),               intent(inout) :: me
       ! Current time.
-      real(wp),                      intent(in)    :: t
+      real(dp),                      intent(in)    :: t
       ! State vector.
-      real(wp),        dimension(:), intent(in)    :: x
+      real(dp),        dimension(:), intent(in)    :: x
       ! Time-derivative.
-      real(wp),        dimension(:), intent(out)   :: f
+      real(dp),        dimension(:), intent(out)   :: f
 
-      f = 0.0_wp
+      f = 0.0_dp
       call adjoint_GL(x, f)
 
-      return
    end subroutine adjoint_rhs
 
    !-------------------------------------------------------------
@@ -252,14 +247,19 @@ contains
       class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
       class(abstract_vector_rdp), intent(out) :: vec_out
+      ! internal
+      character(len=*), parameter :: this_procedure = 'direct_matvec_GL'
       select type(vec_in)
       type is (state_vector)
          select type(vec_out)
          type is (state_vector)
             call direct_GL(vec_in%state, vec_out%state)
+         class default
+            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
          end select
+      class default
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
       end select
-      return
    end subroutine direct_matvec_GL
 
    subroutine adjoint_matvec_GL(self, vec_in, vec_out)
@@ -269,14 +269,18 @@ contains
       class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
       class(abstract_vector_rdp), intent(out) :: vec_out
+      character(len=*), parameter :: this_procedure = 'adjoint_matvec_GL'
       select type(vec_in)
       type is (state_vector)
          select type(vec_out)
          type is (state_vector)
             call adjoint_GL(vec_in%state, vec_out%state)
+         class default
+            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
          end select
+      class default
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
       end select
-      return
    end subroutine adjoint_matvec_GL
 
    !------------------------------------------------------------------------
@@ -292,8 +296,9 @@ contains
       class(abstract_vector_rdp),  intent(out) :: vec_out
 
       ! Time-integrator.
+      character(len=*), parameter :: this_procedure = 'direct_solver'
       type(rks54_class) :: prop
-      real(wp)          :: dt = 1.0_wp
+      real(dp)          :: dt = 1.0_dp
 
       select type(vec_in)
       type is(state_vector)
@@ -303,11 +308,14 @@ contains
             ! Initialize propagator.
             call prop%initialize(n=2*nx, f=rhs)
             ! Integrate forward in time.
-            call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+            call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
 
+         class default
+            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
          end select
+      class default
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
       end select
-      return
    end subroutine direct_solver
 
    subroutine adjoint_solver(self, vec_in, vec_out)
@@ -319,20 +327,26 @@ contains
       class(abstract_vector_rdp),  intent(out) :: vec_out
 
       ! Time-integrator.
+      character(len=*), parameter :: this_procedure = 'adjoint_solver'
       type(rks54_class) :: prop
-      real(wp)          :: dt = 1.0_wp
+      real(dp)          :: dt = 1.0_dp
 
       select type(vec_in)
       type is(state_vector)
          select type(vec_out)
          type is(state_vector)
+
             ! Initialize propagator.
             call prop%initialize(n=2*nx, f=adjoint_rhs)
             ! Integrate forward in time.
-            call prop%integrate(0.0_wp, vec_in%state, dt, self%tau, vec_out%state)
+            call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
+
+         class default
+            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
          end select
+      class default
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
       end select
-      return
    end subroutine adjoint_solver
 
    !--------------------------------------
@@ -348,13 +362,15 @@ contains
       !! Linear operator
       class(abstract_vector_rdp),  intent(in)    :: vec_in
       !! Input vector.
-      real(wp),                    intent(in)    :: tau
+      real(dp),                    intent(in)    :: tau
       !! Integration horizon
       integer,                     intent(out)   :: info
       !! Information flag
       logical, optional,           intent(in)    :: trans
       logical                                    :: transpose
       !! Direct or Adjoint?
+      ! internal
+      character(len=*), parameter :: this_procedure = 'exptA'
 
       ! optional argument
       transpose = optval(trans, .false.)
@@ -373,10 +389,15 @@ contains
                else
                   call A%matvec(vec_in, vec_out)
                end if 
+            class default
+               call type_error('A', 'exponential_prop', 'INOUT', this_module, this_procedure)
             end select
+         class default
+            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
          end select
+      class default
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
       end select
-
    end subroutine exptA
 
    !--------------------------------------------------------
@@ -389,37 +410,25 @@ contains
       class(abstract_linop_rdp),   intent(in)    :: prop
       class(abstract_vector_rdp),  intent(in)    :: B_in(:)
       class(abstract_vector_rdp),  intent(in)    :: CT_in(:)
-      real(wp),          optional, intent(in)    :: D(:,:)
+      real(dp),          optional, intent(in)    :: D(:,:)
 
+      character(len=*), parameter :: this_procedure = 'initialize_lti_system'
       ! Operator
-      select type (A)
-      type is (GL_operator)
-         allocate(self%A, source=A)
-      end select
+      allocate(self%A, source=A)
       ! Exp prop
-      select type (prop)
-      type is (exponential_prop)
-         allocate(self%prop, source=prop)
-      end select
+      allocate(self%prop, source=prop)
       ! Input
-      select type (B_in)
-      type is (state_vector)
-         allocate(self%B(rk_b), source=B_in(:rk_b))
-      end select
+      allocate(self%B(rk_b), source=B_in(:rk_b))
       ! Output
-      select type (CT_in)
-         type is (state_vector)
-         allocate(self%CT(rk_c), source=CT_in(:rk_c))
-      end select
+      allocate(self%CT(rk_c), source=CT_in(:rk_c))
       ! Throughput
       allocate(self%D(rk_c,rk_b))
       if (present(D)) then
-         call assert_shape(D, [ rk_c, rk_b ], 'D', this_module, 'initialize_lti_system')
+         call assert_shape(D, [ rk_c, rk_b ], 'D', this_module, this_procedure)
          self%D = D
       else
-         self%D = 0.0_wp
+         self%D = 0.0_dp
       end if
-      return
    end subroutine initialize_lti_system
 
 end module Ginzburg_Landau_Operators

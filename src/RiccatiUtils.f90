@@ -3,16 +3,14 @@ module LightROM_RiccatiUtils
    use stdlib_logger, only: logger => global_logger
    ! LightKrylov
    use LightKrylov
-   use LightKrylov, only: wp => dp
+   use LightKrylov, only: dp
    use LightKrylov_AbstractVectors
 
    use LightROM_AbstractLTIsystems
    use LightKrylov_Utils, only : assert_shape
+   
    implicit none
-
-   ! module name
-   private :: this_module
-   character(len=*), parameter :: this_module = 'LR_RiccUtils'
+   character(len=*), parameter, private :: this_module = 'LR_RiccUtils'
 
    public :: apply_outerprod_w
    public :: apply_premult_outerprod_w
@@ -44,13 +42,13 @@ contains
       class(abstract_vector_rdp), intent(out)  :: z
       class(abstract_vector_rdp), intent(in)   :: u
       class(abstract_vector_rdp), intent(in)   :: B(:)
-      real(wp),                   intent(in)   :: W(:,:)
+      real(dp),                   intent(in)   :: W(:,:)
       ! internals
-      real(wp)                                 :: wrk(size(B))
+      real(dp)                                 :: wrk(size(B))
 
       call assert_shape(W, [ size(B), size(B) ], 'W', 'Riccati_Utils', 'apply_outerprod_w_vector_rdp')
 
-      call innerprod(wrk, B, u)
+      wrk = innerprod(B, u)
       block
          class(abstract_vector_rdp), allocatable :: xwrk
          call linear_combination(xwrk, B, matmul(W, wrk))
@@ -65,14 +63,14 @@ contains
       class(abstract_vector_rdp), intent(out)  :: Z(:)
       class(abstract_vector_rdp), intent(in)   :: U(:)
       class(abstract_vector_rdp), intent(in)   :: B(:)
-      real(wp),                   intent(in)   :: W(:,:)
+      real(dp),                   intent(in)   :: W(:,:)
       ! internals
-      real(wp)                                 :: wrk(size(B),size(U))
+      real(dp)                                 :: wrk(size(B),size(U))
 
       call assert_shape(W, [ size(B), size(B) ], 'W', 'Riccati_Utils', 'apply_outerprod_w_basis_rdp')
 
       call zero_basis(Z)
-      call innerprod(wrk, B, U)
+      wrk = innerprod(B, U)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, B, matmul(W, wrk))
@@ -84,20 +82,20 @@ contains
 
    subroutine apply_premult_outerprod_w_vector_rdp(m, uL, uR, B, W)
       !! Computes the matrix product \( \mathbf{M} = \mathbf{U}_L^T \mathbf{B} \mathbf{W} \mathbf{B}^T \mathbf{U}_R \) 
-      real(wp),                   intent(out)  :: m
+      real(dp),                   intent(out)  :: m
       class(abstract_vector_rdp), intent(in)   :: uL
       class(abstract_vector_rdp), intent(in)   :: uR
       class(abstract_vector_rdp), intent(in)   :: B(:)
-      real(wp),                   intent(in)   :: W(:,:)
+      real(dp),                   intent(in)   :: W(:,:)
       ! internals
-      real(wp)                                 :: BTuR(size(B))
-      real(wp)                                 :: uLTB(size(B))
+      real(dp)                                 :: BTuR(size(B))
+      real(dp)                                 :: uLTB(size(B))
       
       call assert_shape(W, [ size(B), size(B) ], 'W', 'Riccati_Utils', 'apply_premult_outerprod_w_vector_rdp')
 
-      BTuR = 0.0_wp; uLTB = 0.0_wp; m = 0.0_wp
-      call innerprod(BTuR, B, uR)
-      call innerprod(uLTB, B, uL)
+      BTuR = 0.0_dp; uLTB = 0.0_dp; m = 0.0_dp
+      BTuR = innerprod(B, uR)
+      uLTB = innerprod(B, uL)
       
       m = dot_product( uLTB, matmul( W, BTuR ) )
    
@@ -106,21 +104,21 @@ contains
 
    subroutine apply_premult_outerprod_w_basis_rdp(M, UL, UR, B, W)
       !! Computes the matrix product \( \mathbf{M} = \mathbf{U}_L^T \mathbf{B} \mathbf{W} \mathbf{B}^T \mathbf{U}_R \) 
-      real(wp),                   intent(out)  :: M(:,:)
+      real(dp),                   intent(out)  :: M(:,:)
       class(abstract_vector_rdp), intent(in)   :: UL(:)
       class(abstract_vector_rdp), intent(in)   :: UR(:)
       class(abstract_vector_rdp), intent(in)   :: B(:)
-      real(wp),                   intent(in)   :: W(:,:)
+      real(dp),                   intent(in)   :: W(:,:)
       ! internals
-      real(wp)                                 :: BTUR(size(B),size(UR))
-      real(wp)                                 :: ULTB(size(UL),size(B))
+      real(dp)                                 :: BTUR(size(B),size(UR))
+      real(dp)                                 :: ULTB(size(UL),size(B))
 
       call assert_shape(W, [ size(B),  size(B)  ], 'W', 'Ricatti_Utils', 'apply_premult_outerprod_w_basis_rdp')
       call assert_shape(M, [ size(UL), size(UR) ], 'M', 'Ricatti_Utils', 'apply_premult_outerprod_w_basis_rdp')
       
-      BTUR = 0.0_wp; ULTB = 0.0_wp; M = 0.0_wp
-      call innerprod(BTUR, B, UR)
-      call innerprod(ULTB, UL, B)
+      BTUR = 0.0_dp; ULTB = 0.0_dp; M = 0.0_dp
+      BTUR = innerprod(B, UR)
+      ULTB = innerprod(UL, B)
       
       M = matmul( ULTB, matmul( W, BTUR ) )
    
@@ -133,10 +131,10 @@ contains
       class(abstract_sym_low_rank_state_rdp), intent(in)   :: X
       class(abstract_vector_rdp),             intent(in)   :: K(:)
       class(abstract_vector_rdp),             intent(in)   :: B(:)
-      real(wp),                               intent(in)   :: W(:,:)
+      real(dp),                               intent(in)   :: W(:,:)
 
       ! internals
-      real(wp)                                             :: wrk(X%rk,X%rk)
+      real(dp)                                             :: wrk(X%rk,X%rk)
 
       call assert_shape(W, [ size(B), size(B) ], 'W', 'Riccati_Utils', 'precompute_NL_K_rdp')
       
@@ -152,14 +150,14 @@ contains
 
    subroutine precompute_NL_S_rdp(N, X, U, B, W)
       !! Computes the matrix product \( \mathbf{N} = \mathbf{S} \mathbf{U}_L^T \mathbf{B} \mathbf{W} \mathbf{B}^T \mathbf{S} \) 
-      real(wp),                               intent(out)  :: N(:,:)
+      real(dp),                               intent(out)  :: N(:,:)
       class(abstract_sym_low_rank_state_rdp), intent(in)   :: X
       class(abstract_vector_rdp),             intent(in)   :: U(:)
       class(abstract_vector_rdp),             intent(in)   :: B(:)
-      real(wp),                               intent(in)   :: W(:,:)
+      real(dp),                               intent(in)   :: W(:,:)
 
       ! internals
-      real(wp)                                             :: wrk(X%rk,X%rk)
+      real(dp)                                             :: wrk(X%rk,X%rk)
 
       call assert_shape(W, [ size(B), size(B) ], 'W', 'Riccati_Utils', 'precompute_NL_S_rdp')
 

@@ -1,12 +1,11 @@
 module LightROM_AbstractLTIsystems
+   use stdlib_optval, only : optval
    ! Use the abstract linear operator types defined in LightKrylov.
-   use LightKrylov, only : abstract_linop_rdp, abstract_vector_rdp, wp => dp
+   use LightKrylov, only : abstract_linop_rdp, abstract_vector_rdp, dp
    implicit none
    include "dtypes.h"
 
-   private
-
-   public :: abstract_outpost_rdp
+   character(len=*), parameter, private :: this_module = 'LR_AbsLTIsys'
 
    !-------------------------------------------------------
    !-----     ABSTRACT LTI SYSTEM TYPE DEFINITION     -----
@@ -27,7 +26,7 @@ module LightROM_AbstractLTIsystems
       ! State-to-output matrix.
       class(abstract_vector_rdp), allocatable :: CT(:)
       ! Feedthrough matrix.
-      real(wp),                   allocatable :: D(:, :)
+      real(dp),                   allocatable :: D(:, :)
    contains
    end type abstract_lti_system_rdp
 
@@ -40,11 +39,9 @@ module LightROM_AbstractLTIsystems
       ! State-to-output matrix.
       class(abstract_vector_rdp), allocatable :: CT(:)
       ! Feedthrough matrix.
-      real(wp),                   allocatable :: D(:, :)
+      real(dp),                   allocatable :: D(:, :)
       ! Sampling period.
-      real(wp)                                :: dt = 1.0_wp
-   contains
-     private
+      real(dp)                                :: dt = 1.0_dp
    end type abstract_dlti_system_rdp
 
    !--------------------------------------------------------------------
@@ -63,35 +60,50 @@ module LightROM_AbstractLTIsystems
       ! Low-Rank basis.
       class(abstract_vector_rdp),  allocatable :: U(:)
       ! Coefficients
-      real(wp),                    allocatable :: S(:, :)
+      real(dp),                    allocatable :: S(:, :)
       ! Current approximation rank
       integer                                  :: rk = 1
       ! Simulation time
-      real(wp)                                 :: time = 0.0_wp
-      ! Simulation step
+      real(dp)                                 :: time = 0.0_dp
+      ! Total cumulative simulation time
+      real(dp)                                 :: tot_time = 0.0_dp
+      ! Simulation step counter
       integer                                  :: step = 0
+      ! Total cumulative simulation step counter
+      integer                                  :: tot_step = 0
       ! Converged?
       logical                                  :: is_converged = .false.
       ! Has rank been initialized? (for rank-adaptive DLRA)
       logical                                  :: rank_is_initialised = .false.
-      ! Casename
-      character(len=128)                       :: casename = ''
-      ! Pointer to the outposting routine
-      procedure(abstract_outpost_rdp), pointer :: outpost => null() ! user defined function
-      ! Outposting counter
-      integer                                  :: iout = 0
    contains
+      procedure, pass(self), public :: reset => abstract_sym_low_rank_state_reset
+      procedure, pass(self), public :: increment_counters => abstract_sym_low_rank_state_increment_counters
    end type abstract_sym_low_rank_state_rdp
-
-   abstract interface
-      subroutine abstract_outpost_rdp(self, info)
-         import abstract_sym_low_rank_state_rdp
-         implicit none
-         class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
-         integer,                                intent(out)   :: info
-      end subroutine abstract_outpost_rdp
-   end interface
 
 contains
 
+   subroutine abstract_sym_low_rank_state_reset(self, full)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
+      logical, optional, intent(in) :: full
+      ! internal
+      logical :: full_
+      full_ = optval(full, .false.)
+      self%time = 0.0_dp
+      self%step = 0
+      self%is_converged = .false.
+      self%rank_is_initialised = .false.
+      if (full_) then
+         self%tot_time = 0.0_dp
+         self%tot_step = 0
+      end if
+   end subroutine abstract_sym_low_rank_state_reset
+
+   subroutine abstract_sym_low_rank_state_increment_counters(self, tau)
+      class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
+      real(dp), intent(in) :: tau
+      self%time = self%time + tau
+      self%step = self%step + 1
+      self%tot_time = self%tot_time + tau
+      self%tot_step = self%tot_step + 1
+   end subroutine abstract_sym_low_rank_state_increment_counters
 end module LightROM_AbstractLTIsystems

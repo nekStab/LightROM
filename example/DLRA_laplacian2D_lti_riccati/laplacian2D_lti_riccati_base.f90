@@ -4,7 +4,6 @@ module Laplacian2D_LTI_Riccati_Base
    use stdlib_optval, only : optval
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov, only : wp => dp
    use LightKrylov_Logger
    use LightKrylov_Utils, only : assert_shape
    use LightKrylov_BaseKrylov, only : orthogonalize_against_basis, orthonormalize_basis
@@ -14,7 +13,7 @@ module Laplacian2D_LTI_Riccati_Base
    implicit none
 
    private :: this_module
-   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Riccati_Base'
+   character(len=*), parameter :: this_module = 'Laplacian2D_LTI_Riccati_Base'
    ! problem parameters
    public  :: N, nx, dx, dx2, L, rk_b, rk_c
    ! problem definition
@@ -27,11 +26,11 @@ module Laplacian2D_LTI_Riccati_Base
    !------------------------------
 
    ! --> Mesh related parameters.
-   real(wp), parameter :: L  = 1.0_wp  !> Domain length
+   real(dp), parameter :: L  = 1.0_dp  !> Domain length
    integer,  parameter :: nx = 4       !> Number of grid points per direction
    integer,  parameter :: N  = nx**2   !> total number of grid points
-   real(wp), parameter :: dx = L/nx    !> Grid size.
-   real(wp), parameter :: dx2= dx**2   !> Grid size.
+   real(dp), parameter :: dx = L/nx    !> Grid size.
+   real(dp), parameter :: dx2= dx**2   !> Grid size.
    integer,  parameter :: rk_b = 1     !> rank of the RHS
    integer,  parameter :: rk_c = 1     !> rank of Q = CTC
 
@@ -51,7 +50,7 @@ module Laplacian2D_LTI_Riccati_Base
    !-------------------------------------------
 
    type, extends(abstract_vector_rdp), public :: state_vector
-      real(wp) :: state(N) = 0.0_wp
+      real(dp) :: state(N) = 0.0_dp
       contains
       private
       procedure, pass(self), public :: zero => vector_zero
@@ -67,7 +66,7 @@ module Laplacian2D_LTI_Riccati_Base
    !-------------------------------------------
 
    type, extends(abstract_vector_rdp), public :: state_matrix
-      real(wp) :: state(N**2) = 0.0_wp
+      real(dp) :: state(N**2) = 0.0_dp
    contains
       private
       procedure, pass(self), public :: zero => matrix_zero
@@ -80,14 +79,14 @@ module Laplacian2D_LTI_Riccati_Base
 
    type(state_vector)       :: B(rk_b)
    type(state_vector)       :: CT(rk_c)
-   real(wp)                 :: Qc(rk_c,rk_c)
-   real(wp)                 :: Rinv(rk_b,rk_b)
+   real(dp)                 :: Qc(rk_c,rk_c)
+   real(dp)                 :: Rinv(rk_b,rk_b)
 
-   real(wp)                 :: Bdata(N,rk_b)
-   real(wp)                 :: CTdata(N,rk_c)
-   real(wp)                 :: CTQcC(N**2)
-   real(wp)                 :: CTQcCdata(N,N)
-   real(wp)                 :: BRinvBTdata(N,N)
+   real(dp)                 :: Bdata(N,rk_b)
+   real(dp)                 :: CTdata(N,rk_c)
+   real(dp)                 :: CTQcC(N**2)
+   real(dp)                 :: CTQcCdata(N,N)
+   real(dp)                 :: BRinvBTdata(N,N)
 
 contains
 
@@ -95,42 +94,41 @@ contains
 
    subroutine vector_zero(self)
       class(state_vector), intent(inout) :: self
-      self%state = 0.0_wp
-      return
+      self%state = 0.0_dp
    end subroutine vector_zero
 
-   real(wp) function vector_dot(self, vec) result(alpha)
+   real(dp) function vector_dot(self, vec) result(alpha)
       class(state_vector),        intent(in) :: self
       class(abstract_vector_rdp), intent(in) :: vec
       select type(vec)
       type is (state_vector)
          alpha = dot_product(self%state, vec%state)
+      class default
+         call stop_error('vec must be a state_vector', this_module, 'vector_dot')
       end select
-      return
    end function vector_dot
 
    integer function vector_get_size(self) result(ntot)
      class(state_vector), intent(in) :: self
      ntot = nx
-     return
    end function vector_get_size
 
    subroutine vector_scal(self, alpha)
       class(state_vector), intent(inout) :: self
-      real(wp),            intent(in)    :: alpha
+      real(dp),            intent(in)    :: alpha
       self%state = self%state * alpha
-      return
    end subroutine vector_scal
 
-   subroutine vector_axpby(self, alpha, vec, beta)
+   subroutine vector_axpby(alpha, vec, beta, self)
       class(state_vector),        intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: vec
-      real(wp),                   intent(in)    :: alpha, beta
+      real(dp),                   intent(in)    :: alpha, beta
       select type(vec)
       type is (state_vector)
-         self%state = alpha*self%state + beta*vec%state
+         self%state = beta*self%state + alpha*vec%state
+      class default
+         call stop_error('vec must be a state_vector', this_module, 'vector_axpby')
       end select
-      return
    end subroutine vector_axpby
 
    subroutine vector_rand(self, ifnorm)
@@ -138,56 +136,54 @@ contains
       logical, optional,   intent(in)    :: ifnorm
       ! internals
       logical :: normalize
-      real(wp) :: alpha
+      real(dp) :: alpha
       normalize = optval(ifnorm,.true.)
       call random_number(self%state)
       if (normalize) then
          alpha = self%norm()
          call self%scal(1.0/alpha)
       endif
-      return
    end subroutine vector_rand
 
    !-----     TYPE-BOUND PROCEDURE FOR MATRICES     -----
 
    subroutine matrix_zero(self)
       class(state_matrix), intent(inout) :: self
-      self%state = 0.0_wp
-      return
+      self%state = 0.0_dp
    end subroutine matrix_zero
 
-   real(wp) function matrix_dot(self, vec) result(alpha)
+   real(dp) function matrix_dot(self, vec) result(alpha)
       class(state_matrix),        intent(in) :: self
       class(abstract_vector_rdp), intent(in) :: vec
       select type(vec)
       type is(state_matrix)
-          alpha = dot_product(self%state, vec%state)
+         alpha = dot_product(self%state, vec%state)
+      class default
+         call stop_error('vec must be a state_matrix', this_module, 'matrix_dot')
       end select
-      return
    end function matrix_dot
 
    integer function matrix_get_size(self) result(N)
      class(state_matrix), intent(in) :: self
      N = N
-     return
    end function matrix_get_size
 
    subroutine matrix_scal(self, alpha)
       class(state_matrix), intent(inout) :: self
-      real(wp),            intent(in)    :: alpha
+      real(dp),            intent(in)    :: alpha
       self%state = self%state * alpha
-      return
    end subroutine matrix_scal  
 
-   subroutine matrix_axpby(self, alpha, vec, beta)
+   subroutine matrix_axpby(alpha, vec, beta, self)
       class(state_matrix),        intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: vec
-      real(wp),                   intent(in)    :: alpha, beta
+      real(dp),                   intent(in)    :: alpha, beta
       select type(vec)
       type is(state_matrix)
-          self%state = alpha*self%state + beta*vec%state
+         self%state = beta*self%state + alpha*vec%state
+      class default
+         call stop_error('vec must be a state_matrix', this_module, 'matrix_axpby')
       end select
-      return
    end subroutine matrix_axpby
 
    subroutine matrix_rand(self, ifnorm)
@@ -195,38 +191,35 @@ contains
       logical, optional,   intent(in)    :: ifnorm
       ! internals
       logical :: normalize
-      real(wp) :: alpha
-      real(wp), dimension(N**2) :: mean, std
+      real(dp) :: alpha
+      real(dp), dimension(N**2) :: mean, std
       normalize = optval(ifnorm, .true.)
-      mean = 0.0_wp
-      std  = 1.0_wp
+      mean = 0.0_dp
+      std  = 1.0_dp
       self%state = normal(mean,std)
       if (normalize) then
          alpha = self%norm()
          call self%scal(1.0/alpha)
       endif
-      return
    end subroutine matrix_rand  
 
    !-----------------------------------------------------------------------
    !-----     TYPE BOUND PROCEDURE FOR SYM LOW RANK REPRESENTATION    -----
    !-----------------------------------------------------------------------
 
-   subroutine initialize_LR_state(self, U, S, rk, rkmax, if_rank_adaptive, casename, outpost)
+   subroutine initialize_LR_state(self, U, S, rk, rkmax, if_rank_adaptive)
       class(LR_state),            intent(inout) :: self
       class(abstract_vector_rdp), intent(in)    :: U(:)
-      real(wp),                   intent(in)    :: S(:,:)
+      real(dp),                   intent(in)    :: S(:,:)
       integer,                    intent(in)    :: rk
       integer, optional,          intent(in)    :: rkmax
       logical, optional,          intent(in)    :: if_rank_adaptive
       logical                                   :: ifrk
-      character(len=128), optional, intent(in)  :: casename
-      procedure(abstract_outpost_rdp), optional :: outpost
 
       ! internals
+      character(len=*), parameter :: this_procedure = 'initialize_LR_state'
       class(abstract_vector_rdp), allocatable   :: Utmp(:)
-      real(wp), allocatable :: R(:, :)
-      integer :: i, m, rka, info
+      integer :: i, m, rka, info, n_rem, m_init
       character(len=128) :: msg
 
       ifrk = optval(if_rank_adaptive, .false.)
@@ -234,25 +227,23 @@ contains
       select type (U)
       type is (state_vector)
          ! set time and optional args
-         self%time = 0.0_wp
-         if (present(outpost)) self%outpost => outpost
-         self%casename = optval(casename, '')
+         call self%reset(full=.true.)
          
          m = size(U)
-         call assert_shape(S, [m,m], 'S', this_module, 'initialize_LR_state')
+         call assert_shape(S, [m,m], 'S', this_module, this_procedure)
          ! optional size argument
          if (present(rkmax)) then
             if (rkmax < rk) then
-               call stop_error('rkmax < rk!', this_module, 'initialize_LR_state')
+               call stop_error('rkmax < rk!', this_module, this_procedure)
             end if
             self%rk = rk
             rka = rkmax
             if (ifrk) then
                if (rkmax==rk) then
-                  call stop_error('rkmax must be larger than rk for rank-adaptive DLRA!', this_module, 'initialize_LR_state')
+                  call stop_error('rkmax must be larger than rk for rank-adaptive DLRA!', this_module, this_procedure)
                end if
                write(msg,'(A,I0,A)') 'Rank-adaptivity enabled. Computation will begin with X%rk = ', self%rk+1, '.'
-               call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
+               call log_information(msg, this_module, 'initialize_LR_state')
             end if
          else
             self%rk = rk
@@ -265,38 +256,36 @@ contains
 
          ! allocate & initialize
          allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
-         allocate(self%S(rka,rka)); self%S = 0.0_wp
+         allocate(self%S(rka,rka)); self%S = 0.0_dp
          write(msg,'(3(A,I0),A)') 'size(X%U) = [ ', rka,' ], X%rk = ', self%rk, ', size(U0) = [ ', m,' ]'
-         call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
+         call log_information(msg, this_module, this_procedure)
          ! copy inputs
          if (self%rk > m) then   ! copy the full IC into self%U
             call copy(self%U(:m), U)
             self%S(:m,:m) = S
-            write(msg,'(4X,A,I0,A)') 'Transfer the first ', m, ' columns of U0 to X%U.'
-            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
+            write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
+            call log_information(msg, this_module, this_procedure)
          else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
             call copy(self%U(:self%rk), U(:self%rk))
             self%S(:self%rk,:self%rk) = S(:self%rk,:self%rk)
-            write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
-            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
-         end if
+            write(msg,'(4X,A,I0,A)') 'Transfer the first ', self%rk, ' columns of U0 to X%U.'
+            call log_information(msg, this_module, this_procedure)
+         end if        
+
          ! top up basis (to rka for rank-adaptivity) with orthonormal columns if needed
-         if (rka > m) then
-            write(msg,'(4X,A,I0,A)') 'Fill remaining ', rka-m, ' columns with orthonormal noise orthonormal to U0.'
-            call logger%log_information(msg, module=this_module, procedure='initialize_LR_state')
-            allocate(Utmp(rka-m), source=U(1))
-            do i = 1, rka-m
-               call Utmp(i)%rand()
-            end do
-            allocate(R(rka-m,rka-m)); R = 0.0_wp
-            call orthogonalize_against_basis(Utmp, self%U, info)
-            call check_info(info, 'orthogonalize_against_basis', module=this_module, procedure='initialize_LR_state')
-            call qr(Utmp, R, info)
-            call check_info(info, 'qr', module=this_module, procedure='initialize_LR_state')
-            call copy(self%U(m+1:), Utmp)
+         m_init = min(self%rk, m)
+         n_rem = rka - m_init
+         if (m > 0) then
+            write(msg,'(4X,A,I0,A)') 'Fill remaining ', n_rem, ' columns with orthonormal noise orthonormal to X%U.'
+            call log_information(msg, this_module, this_procedure)
+            allocate(Utmp(n_rem), source=U(1))
+            call initialize_random_orthonormal_basis(Utmp)
+            call orthogonalize_against_basis(Utmp, self%U(:m_init), info)
+            call copy(self%U(m_init+1:), Utmp)
          end if
+      class default
+         call type_error('U', 'state_vector', 'IN', this_module, this_procedure)
       end select
-      return
    end subroutine initialize_LR_state
 
 end module Laplacian2D_LTI_Riccati_Base

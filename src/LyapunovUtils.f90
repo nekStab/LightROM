@@ -2,7 +2,7 @@ module LightROM_LyapunovUtils
    use stdlib_optval, only : optval
    ! LightKrylov
    use LightKrylov
-   use LightKrylov, only: wp => dp
+   use LightKrylov, only: dp
    use LightKrylov_Constants
    use LightKrylov_Logger
    use LightKrylov_AbstractVectors
@@ -11,10 +11,7 @@ module LightROM_LyapunovUtils
    use LightROM_Utils
    
    implicit none
-
-   ! module name
-   private :: this_module
-   character(len=*), parameter :: this_module = 'LR_LyapUtils'
+   character(len=*), parameter, private :: this_module = 'LR_LyapUtils'
 
    ! Matrix operations for abstract vector types
    public :: apply_outerprod
@@ -41,15 +38,13 @@ contains
       class(abstract_vector_rdp), intent(in)  :: A(:)
       class(abstract_vector_rdp), intent(in)  :: b
       ! Intermediate basis
-      real(wp) :: wrk(size(A))
-      wrk = zero_rdp
-      call innerprod(wrk, A, b)
+      real(dp) :: wrk(size(A))
+      wrk = innerprod(A, b)
       block
          class(abstract_vector_rdp), allocatable :: xwrk
          call linear_combination(xwrk, A, wrk)
          call c%zero(); call c%add(xwrk)
       end block
-      return
    end subroutine apply_outerprod_vector_rdp
 
    subroutine apply_outerprod_basis_rdp(C,A,B)
@@ -67,15 +62,13 @@ contains
       class(abstract_vector_rdp), intent(in)  :: A(:)
       class(abstract_vector_rdp), intent(in)  :: B(:)
       ! Intermediate basis
-      real(wp) :: wrk(size(A),size(B))
-      wrk = zero_rdp
-      call innerprod(wrk, A, B)
+      real(dp) :: wrk(size(A),size(B))
+      wrk = innerprod(A, B)
       block
          class(abstract_vector_rdp), allocatable :: Xwrk(:)
          call linear_combination(Xwrk, A, wrk)
-         call copy(C, Xwrk)
+         call copy(c, Xwrk)
       end block
-      return
    end subroutine apply_outerprod_basis_rdp
 
 end module LightROM_LyapunovUtils

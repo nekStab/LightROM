@@ -4,7 +4,6 @@ module Laplacian2D_LTI_Riccati_Operators
    use stdlib_linalg, only : eye
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov, only : wp => dp
    use LightKrylov_Utils ! svd
    ! LightROM
    use LightROM_AbstractLTIsystems ! abstract_lti_system
@@ -16,7 +15,7 @@ module Laplacian2D_LTI_Riccati_Operators
    ! operator
    public  :: build_operator, laplacian, laplacian_mat, exptA
 
-   character(len=128), parameter :: this_module = 'Laplacian2D_LTI_Riccati_Operators'
+   character(len=*), parameter :: this_module = 'Laplacian2D_LTI_Riccati_Operators'
 
    !-----------------------------------------------
    !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
@@ -50,14 +49,18 @@ contains
       class(abstract_vector_rdp), intent(in)  :: vec_in
       !> Output vector.
       class(abstract_vector_rdp), intent(out) :: vec_out
+      character(len=*), parameter :: this_procedure = 'direct_matvec_laplace'
       select type(vec_in)
       type is (state_vector)
          select type(vec_out)
          type is (state_vector)
             call laplacian(vec_out%state, vec_in%state)
+            class default
+            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
          end select
+      class default
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
       end select
-      return
    end subroutine direct_matvec_laplace
 
    !---------------------------
@@ -66,30 +69,29 @@ contains
 
    subroutine build_operator(A)
       !! Build the two-dimensional Laplace operator explicitly
-      real(wp), intent(out) :: A(N,N)
+      real(dp), intent(out) :: A(N,N)
       integer i, j, k
 
-      A = -4.0_wp/dx2*eye(N)
+      A = -4.0_dp/dx2*eye(N)
       do i = 1, nx
          do j = 1, nx - 1
             k = (i-1)*nx + j
-            A(k + 1, k) = 1.0_wp/dx2
-            A(k, k + 1) = 1.0_wp/dx2
+            A(k + 1, k) = 1.0_dp/dx2
+            A(k, k + 1) = 1.0_dp/dx2
          end do 
       end do
       do i = 1, N-nx
-         A(i, i + nx) = 1.0_wp/dx2
-         A(i + nx, i) = 1.0_wp/dx2
+         A(i, i + nx) = 1.0_dp/dx2
+         A(i + nx, i) = 1.0_dp/dx2
       end do
-      return
    end subroutine build_operator
 
    subroutine laplacian(vec_out, vec_in)
       
       !> State vector.
-      real(wp), dimension(:), intent(in)  :: vec_in
+      real(dp), dimension(:), intent(in)  :: vec_in
       !> Time-derivative.
-      real(wp), dimension(:), intent(out) :: vec_out
+      real(dp), dimension(:), intent(out) :: vec_out
 
       !> Internal variables.
       integer             :: i, j, in
@@ -120,30 +122,29 @@ contains
       end do
       in = N
       vec_out(in)       = ( vec_in(in - nx) + vec_in(in - 1) - 4*vec_in(in)                                   ) / dx2
-         
-      return
+      
    end subroutine laplacian
 
    subroutine laplacian_mat(flat_mat_out, flat_mat_in, transpose)
    
       !> State vector.
-      real(wp), dimension(:), intent(in)  :: flat_mat_in
+      real(dp), dimension(:), intent(in)  :: flat_mat_in
       !> Time-derivative.
-      real(wp), dimension(:), intent(out) :: flat_mat_out
+      real(dp), dimension(:), intent(out) :: flat_mat_out
       !> Transpose
       logical, optional :: transpose
       logical           :: trans
       
       !> Internal variables.
       integer :: j
-      real(wp), dimension(N,N) :: mat, dmat
+      real(dp), dimension(N,N) :: mat, dmat
       
       !> Deal with optional argument
       trans = optval(transpose,.false.)
       
       !> Sets the internal variables.
       mat  = reshape(flat_mat_in(1:N**2),(/N, N/))
-      dmat = 0.0_wp
+      dmat = 0.0_dp
       
       if (trans) then
           do j = 1,N
@@ -157,8 +158,7 @@ contains
 
       !> Reshape for output
       flat_mat_out = reshape(dmat, shape(flat_mat_in))
-       
-      return
+
    end subroutine laplacian_mat
 
    !--------------------------------------
@@ -174,13 +174,15 @@ contains
       !! Linear operator
       class(abstract_vector_rdp),  intent(in)    :: vec_in
       !! Input vector.
-      real(wp),                    intent(in)    :: tau
+      real(dp),                    intent(in)    :: tau
       !! Integration horizon
       integer,                     intent(out)   :: info
       !! Information flag
       logical, optional,           intent(in)    :: trans
       logical                                    :: transpose
       !! Direct or Adjoint?
+      ! internal
+      character(len=*), parameter :: this_procedure = 'exptA'
 
       ! optional argument
       transpose = optval(trans, .false.)
@@ -192,11 +194,16 @@ contains
          type is (state_vector)
             select type (A)
             type is (laplace_operator)
-               call k_exptA(vec_out, A, vec_in, tau, info, transpose)
+               call krylov_exptA(vec_out, A, vec_in, tau, info, transpose)
+            class default
+               call type_error('A', 'laplace_operator', 'INOUT', this_module, this_procedure)
             end select
+         class default
+            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
          end select
+      class default
+         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
       end select
-
    end subroutine exptA
 
    !--------------------------------------------------------
@@ -208,32 +215,23 @@ contains
       class(abstract_linop_rdp),   intent(in)    :: A
       class(abstract_vector_rdp),  intent(in)    :: B_in(:)
       class(abstract_vector_rdp),  intent(in)    :: CT_in(:)
-      real(wp),          optional, intent(in)    :: D(:,:)
+      real(dp),          optional, intent(in)    :: D(:,:)
 
+      character(len=*), parameter :: this_procedure = 'initialize_lti_system'
       ! Operator
-      select type (A)
-      type is (laplace_operator)
-         allocate(self%A, source=A)
-      end select
+      allocate(self%A, source=A)
       ! Input
-      select type (B_in)
-      type is (state_vector)
-         allocate(self%B(rk_b), source=B_in(1:rk_b))
-      end select
+      allocate(self%B(rk_b), source=B_in(:rk_b))
       ! Output
-      select type (CT_in)
-         type is (state_vector)
-         allocate(self%CT(rk_c), source=CT_in(1:rk_c))
-      end select
+      allocate(self%CT(rk_c), source=CT_in(1:rk_c))
       ! Throughput
       allocate(self%D(rk_c, rk_b))
       if (present(D)) then
-         call assert_shape(D, [ rk_c, rk_b ], 'D', this_module, 'initialize_lti_system')
+         call assert_shape(D, [ rk_c, rk_b ], 'D', this_module, this_procedure)
          self%D = D
       else
-         self%D = 0.0_wp
+         self%D = 0.0_dp
       end if
-      return
    end subroutine initialize_lti_system
 
 end module Laplacian2D_LTI_Riccati_Operators

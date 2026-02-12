@@ -1,5 +1,6 @@
 program demo
    ! Standard Library.
+   use stdlib_strings, only: padr
    use stdlib_optval, only : optval 
    use stdlib_linalg, only : eye, diag
    use stdlib_math, only : all_close, logspace
@@ -7,8 +8,6 @@ program demo
    use stdlib_logger, only : information_level, warning_level, debug_level, error_level, none_level
    ! LightKrylov for linear algebra.
    use LightKrylov
-   use LightKrylov, only : wp => dp
-   use LightKrylov_Constants
    use LightKrylov_Logger
    use LightKrylov_AbstractVectors
    use LightKrylov_ExpmLib
@@ -16,85 +15,111 @@ program demo
    ! LightROM
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
-   use LightROM_LyapunovSolvers
-   use LightROM_LyapunovUtils
-   ! GInzburg-Landau
+   use LightROM_Timing
+   use LightROM_DLRAIntegrators
+   ! Ginzburg-Landau
    use Ginzburg_Landau_Base
    use Ginzburg_Landau_Operators
+   use Ginzburg_Landau_Control
    use Ginzburg_Landau_Utils
+   use Ginzburg_Landau_Tests_Lyapunov
+   use Ginzburg_Landau_Tests_Riccati
    use Ginzburg_Landau_Tests
    implicit none
 
-   character(len=128), parameter :: this_module = 'Ginzburg_Landau_Main'
-   character(len=128), parameter :: home = 'example/DLRA_ginzburg_landau/local/'
+   character(len=*), parameter :: this_module = 'Ginzburg_Landau_Main'
 
-   character*128      :: onameU, onameS, oname
+   real(dp), parameter :: Tend_long  = 50.0
+   real(dp), parameter :: Tend_short = 0.01
+   character(len=128), parameter :: home_base = 'example/DLRA_ginzburg_landau/local/'
+   ! reference solutiions using SVD
+   character(len=128), parameter :: fname_SVD_base = trim(home_base)//'Xref_SVD_'
    ! rk_B & rk_C are set in ginzburg_landau_base.f90
 
    integer  :: nrk, ntau, rk,  torder
-   real(wp) :: tau, Tend, T_RK
+   real(dp) :: tau, T_POD, Tend
    ! vector of dt values
-   real(wp), allocatable :: dtv(:)
-   ! vector of tolerances
-   real(wp), allocatable :: tolv(:)
+   real(dp), allocatable :: dtv(:), tolv(:), Tendv(:)
    ! vector of rank values
-   integer, allocatable :: rkv(:)
-   ! vector of temporal order
-   integer, allocatable :: TOv(:)
+   integer, allocatable :: rkv(:), TOv(:)
 
    ! Exponential propagator (RKlib).
    type(GL_operator),            allocatable :: A
    type(exponential_prop),       allocatable :: prop
 
+   ! Exponential propagator (with control)
+   type(rks54_class_with_control), allocatable :: rkintegrator
+   type(exponential_prop_with_control), allocatable :: prop_control
+
+   ! LQG
+   type(rks54_class_LQG), allocatable :: rk_LQG
+   type(exponential_prop_LQG), allocatable :: prop_control_LQG
+
    ! LTI system
    type(lti_system)                          :: LTI
    type(dlra_opts)                           :: opts
+   
+   type(LR_state),               allocatable :: X
+   type(LR_state),               allocatable :: Xdir
+   type(LR_state),               allocatable :: Xadj
 
    ! Initial condition
    type(state_vector),           allocatable :: U0(:)
-   real(wp),                     allocatable :: S0(:,:)
+   real(dp),                     allocatable :: S0(:,:)
+   type(state_error_vector),     allocatable :: vector_mold(:)
    
    ! OUTPUT
-   real(wp)                                  :: X_out(N,N)
+   real(dp)                                  :: X_out(N,N)
 
    ! Reference solutions (BS & RK)
-   real(wp)                                  :: Xref_BS(N,N)
-   real(wp)                                  :: Xref_RK(N,N)
+   real(dp)                                  :: Xref(N,N)
+   real(dp)                                  :: Xref_RK(N,N)
 
    ! IO
-   real(wp),                    allocatable :: U_load(:,:)
+   real(dp),                     allocatable :: meta(:)
+   
+   ! POD
+   type(state_vector),           allocatable :: X0(:)
 
    ! Information flag.
    integer                                   :: info
 
    ! Misc
-   integer                                   :: i, j, k, irep, nstep, iref, is, ie
-   ! SVD & printing
-   real(wp), dimension(:),       allocatable :: svals
-   integer, parameter                        :: irow = 8
+   integer                                   :: i, j, k, is, ie, it, irep
+   integer                                   :: rk_X0
+   character(len=2)                          :: refid
+   character(len=4)                          :: eq
+   character(len=32)                         :: tolstr, taustr, Tstr
+   character(len=256)                        :: fbase, fname, tmr_name, note
+   real(dp),                     allocatable :: svals(:)
+   real(dp)                                  :: tol
    integer                                   :: nprint
+   logical                                   :: exist_file
+   character(len=128)                        :: home
 
    !--------------------------------
    ! Define which examples to run:
    !
-   logical, parameter :: adjoint = .true.
+   logical, parameter :: if_lyapunov = .true.
    !
-   ! Adjoint = .true.:      Solve the adjoint Lyapunov equation:  0 = A.T X + X A + C.T @ C @ W
+   ! if_lyapunov = .true.:  Solve the Lyapunov equation:   0 = A @ X + X @ A.T + Q
+   !
+   ! if_lyapunov = .false.: Solve the Riccati equation:    0 = A @ X + X @ A.T + X @ B @ @ R^{-1} @ B.T @ W @ X + Q
+   !
+   logical, parameter :: if_adj = .false.
+   ! Only considered if if_lyapunov = .true.
+   !
+   ! Adjoint = .true.:      Solve the adjoint Lyapunov equation:  0 = A.T @ X + X @ A + C.T @ C @ W
    !     The solution to this equation is called the observability Gramian Y.
    !
-   ! Adjoint = .false.:     Solve the direct Lyapunov equation:   0 = A X + X A.T + B @ B.T @ W
+   ! Adjoint = .false.:     Solve the direct Lyapunov equation:   0 = A @ X + X @ A.T + B @ B.T @ W
    !     The solution to this equation is called the controllability Gramian X.
    !
-   logical, parameter :: run_fixed_rank_short_integration_time_test   = .true.
+   logical, parameter :: main_run = .true.
    !
-   ! Integrate the same initial condition for a short time with Runge-Kutta and DLRA.
+   ! Run the computation instead of the test
    !
-   ! The solution will be far from steady state (the residual will be large) for both methods.
-   ! This test shows the convergence of the method as a function of the step size, the rank
-   ! and the temporal order of DLRA.
-   ! Owing to the short integration time, this test is by far the fastest to run.
-   !
-   logical, parameter :: run_fixed_rank_long_integration_time_test    = .true.
+   logical, parameter :: run_fixed_rank_test = .true.
    !
    ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA.
    !
@@ -102,7 +127,7 @@ program demo
    ! Similarly, the test shows the effect of step size, rank and temporal order on the solution
    ! using DLRA.
    !
-   logical, parameter :: run_rank_adaptive_long_integration_time_test = .true.
+   logical, parameter :: run_rank_adaptive_test = .true.
    !
    ! Integrate the same initial condition to steady state with Runge-Kutta and DLRA using an 
    ! adaptive rank.
@@ -111,209 +136,176 @@ program demo
    ! such that the error on the singular values does not exceed a chosen tolerance. This rank
    ! depends on the tolerance but also the chosen time-step.
    !
+   logical, parameter :: run_eigenvalue_test = .true.
+   logical, parameter :: run_LQG_test = .true.
+   !
+   ! Check the control efficacy using the eigenvalues of the controlled system matrix
+   !
    !--------------------------------
+   Tend = merge(Tend_long, Tend_short, main_run)
+   eq   = merge('lyap', 'ricc', if_lyapunov)
+   if (main_run) then
+      write(home,'(A,A,I3.3,A,A,A)') trim(home_base), 'Tend', int(Tend), '_', eq, '/'
+   else
+      home = home_base
+   end if
 
-   call logger_setup()
-   call logger%configure(level=error_level, time_stamp=.true.)
+   ! Setup logging
+   call logger_setup(logfile=trim(home)//'lightkrylov.log', log_level=error_level, log_stdout=.false., log_timestamp=.true.)
 
-   print *, '#########################################################################'
-   print *, '#                                                                       #'
-   print *, '#               DYNAMIC LOW-RANK APPROXIMATION  -  DLRA                 #'
-   print *, '#                                                                       #'
-   print *, '#########################################################################'
-   print *, ''
-   print *, ' LYAPUNOV EQUATION FOR THE NON-PARALLEL LINEAR GINZBURG-LANDAU EQUATION:'
-   print *, ''
-   print *, '                 A = mu(x) * I + nu * D_x + gamma * D2_x'
-   print *, ''
-   print *, '                   with mu(x) = mu_0 * x + mu_2 * x^2'
-   print *, ''
-   print *, '                    Algebraic Lyapunov equation:'
-   print *, '                    0 = A @ X + X @ A.T + B @ B.T @ W'
-   print *, ''               
-   print *, '                  Differential Lyapunov equation:'
-   print *, '                 \dot{X} = A @ X + X @ A.T + B @ B.T @ W'
-   print *, ''
-   print '(13X,A,I4,"x",I4)', 'Complex problem size:         ', nx, nx
-   print '(13X,A,I4,"x",I4)', 'Equivalent real problem size: ', N, N
-   print *, ''
-   print *, '            Initial condition: rank(X0) =', rk_X0
-   print *, '            Inhomogeneity:     rank(B)  =', rk_B
-   print *, ''
-   print *, '#########################################################################'
-   print *, ''
+   ! Initialize timers for LightKrylov and LightROM
+   call initialize_timers()
+   call global_lightROM_timer%add_timer('DLRA Ginzburg-Landau example', start=.true.)
+   
+   ! Enumerate timers to check proper initialization
+   call enumerate_timers()
 
-   ! Initialize mesh and system parameters A, B, CT
-   print '(4X,A)', 'Initialize parameters'
-   call initialize_parameters()
-
+   call print_test_info(if_lyapunov, if_adj, main_run, run_fixed_rank_test, run_rank_adaptive_test, run_eigenvalue_test, run_LQG_test)
+   call print_test_header(if_lyapunov, if_adj, eq, refid, rk_X0, Xref)
+   
    ! Initialize propagator
    print '(4X,A)', 'Initialize exponential propagator'
-   prop = exponential_prop(1.0_wp)
-
+   prop = exponential_prop(1.0_dp)
+   
    ! Initialize LTI system
    A = GL_operator()
+   ! Initialize mesh and system parameters A, B, CT
    print '(4X,A)', 'Initialize LTI system (A, prop, B, CT, _)'
    LTI = lti_system()
    call LTI%initialize_lti_system(A, prop, B, CT)
-
-   print *, ''
-   if (adjoint) then
-      svals = svdvals(CTCW)
-      print '(1X,A,*(F16.12,X))', 'SVD(1:3) CTCW:   ', svals(1:3)
-   else
-      svals = svdvals(BBTW)
-      print '(1X,A,*(F16.12,X))', 'SVD(1:3) BBTW:   ', svals(1:3)
-   end if
-
-   print *, ''
-   print *, 'Check residual computation with Bartels-Stuart solution:'
-   if (adjoint) then
-      oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Observability_Yref_BS_W.npy'
-   else
-      oname = './example/DLRA_ginzburg_landau/CGL_Lyapunov_Controllability_Xref_BS_W.npy'
-   end if
-   call load_npy(oname, U_load)
-   Xref_BS = U_load
-   
-   print *, ''
-   print '(A,F16.12)', '  |  X_BS  |/N = ', norm2(Xref_BS)/N
-   print '(A,F16.12)', '  | res_BS |/N = ', norm2(CALE(Xref_BS, adjoint))/N
-   print *, ''
-   ! compute svd
-   svals = svdvals(Xref_BS)
-   print *, 'SVD X_BS:'
-   do i = 1, ceiling(60.0/irow)
-      is = (i-1)*irow+1; ie = i*irow
-      print '(2X,I2,"-",I2,*(1X,F16.12))', is, ie, ( svals(j), j = is, ie )
-   end do
-   print *, ''
-   
+      
    ! Define initial condition
    allocate(U0(rk_X0), source=B(1)); call zero_basis(U0)
-   allocate(S0(rk_X0,rk_X0)); S0 = 0.0_wp
-   print *, 'Define initial condition'
+   allocate(S0(rk_X0,rk_X0)); S0 = 0.0_dp
+   print '(4X,A)', 'Define initial condition'
    call generate_random_initial_condition(U0, S0, rk_X0)
    call reconstruct_solution(X_out, U0, S0)
    print *, ''
    print '(A,F16.12)', '  |  X_0  |/N = ', norm2(X_out)/N
-   print '(A,F16.12)', '  | res_0 |/N = ', norm2(CALE(X_out, adjoint))/N
+   print '(A,F16.12)', '  | res_0 |/N = ', norm2(CALE(X_out, if_adj))/N
    print *, ''
-   ! compute svd
-   svals = svdvals(X_out)
-   do i = 1, ceiling(rk_X0*1.0_wp/irow)
-      is = (i-1)*irow+1; ie = i*irow
-      print '(2X,I2,"-",I2,*(1X,F16.12))', is, ie, ( svals(j), j = is, ie )
-   end do
+   call print_svdvals(X_out, ' X0 ', 60)
    
-   print *, ''
-   print *, '#########################################################################'
-   print *, '#                                                                       #'
-   print *, '#    Ia.  Solution using Runge-Kutta over a short time horizon          #'
-   print *, '#                                                                       #'
-   print *, '#########################################################################'
-   print *, ''
-
-   if (run_fixed_rank_short_integration_time_test) then
-      ! Run RK integrator for the Lyapunov equation
-      T_RK  = 0.01_wp
-      nstep = 10
-      iref  = 5
-
-      call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
+   if (main_run) then
+      Tend = Tend_long
+      rkv  = [ 10, 14, 18 ]
+      dtv  = logspace(-3.0_dp, 0.0_dp, 4, 10)
+      dtv  = dtv(size(dtv):1:-1) ! reverse vector
+      tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
+      if (if_lyapunov) then
+         TOv = [ 1, 2 ]
+      else
+         TOv = [ 1 ]
+      end if
    else
-      print *, 'Skip.'
-      print *, ''
+      Tend = Tend_short
+      dtv  = logspace(-4.0_dp, -2.0_dp, 3, 10)
+      dtv  = dtv(size(dtv):1:-1) ! reverse vector
+      tolv = [ 1e-2_dp ]
+      if (if_lyapunov) then
+         rkv = [ 8, 12, 16 ]
+         TOv = [ 1, 2 ]
+      else
+         rkv = [ 6, 10, 14 ]
+         TOv = [ 1 ]
+      end if
+   end if
+   nprint = 60
+  
+   !
+   !        RK long time horizon
+   !
+   call integrate_RK(eq, LTI, Xref, Xref_RK, U0, S0, Tend, if_adj, home_base, main_run)
+   
+   !
+   !        rank-adaptive DLRA long time horizon
+   !
+   if (run_fixed_rank_test) then
+      call integrate_DLRA_fixed(eq, LTI, Xref, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, if_adj, home, main_run)
    end if
    
-   print *, ''
-   print *, '#########################################################################'
-   print *, '#                                                                       #'
-   print *, '#    Ib.  Solution using fixed-rank DLRA                                #'
-   print *, '#                                                                       #'
-   print *, '#########################################################################'
-   print *, ''
-
-   if (run_fixed_rank_short_integration_time_test) then
-      ! DLRA with fixed rank
-      Tend = T_RK/nstep*iref
-      rkv = [ 10, 12, 16 ]
-      dtv = logspace(-5.0_wp, -3.0_wp, 3, 10)
-      dtv = dtv(size(dtv):1:-1) ! reverse vector
-      TOv  = [ 1, 2 ] 
-      nprint = 16
-
-      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home)
-   else
-      print *, 'Skip.'
-      print *, ''
+   !
+   !        rank-adaptive DLRA long time horizon
+   !
+   if (run_rank_adaptive_test) then
+      call integrate_DLRA_adaptive(eq, LTI, Xref, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, if_adj, home, main_run)
    end if
 
-   print *, ''
-   print *, '#########################################################################'
-   print *, '#                                                                       #'
-   print *, '#    IIa.  Solution using Runge-Kutta to (close to) steady state        #'
-   print *, '#                                                                       #'
-   print *, '#########################################################################'
-   print *, ''
+   if (if_lyapunov) then
+      tmr_name = 'BPOD'
+      call global_lightROM_timer%add_timer(tmr_name, start=.true.)
+      Tendv = [ 10.0_dp, 50.0_dp, 100.0_dp ]
+      dtv  = logspace(-1.0_dp, 0.0_dp, 3, 10)
+      dtv  = dtv(size(dtv):1:-1) ! reverse vector
+      print '(1X,A)', 'POD:'
+      do it = 1, size(tolv)
+         T_POD = tolv(it)
+         print '(3X,A,F12.6)', '   Tend:', T_POD
+         do irep = 1, size(dtv)
+            tau = dtv(irep)
+            prop = exponential_prop(tau)
+            if (if_adj) then
+               allocate(X0(rk_C), source=CT)
+            else
+               allocate(X0(rk_B), source=B)
+            end if
+            call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, T_POD, if_adj)
+            nprint = min(8, size(svals))
+            call print_svdvals(svals, 'XTX', nprint)
+            deallocate(X0)
+         end do
+      end do
+      call global_lightROM_timer%stop(tmr_name)
+   end if
+
+   if (run_eigenvalue_test .and. .not. if_lyapunov) then
+      dtv  = logspace(-4.0_dp, 0.0_dp, 5, 10)
+      dtv  = dtv(size(dtv):1:-1) ! reverse vector
+      tolv = [ 1e-2_dp, 1e-6_dp, 1e-10_dp ]
+      torder = 1
    
-   if (run_fixed_rank_long_integration_time_test .or. &
-     & run_rank_adaptive_long_integration_time_test) then
-      ! Run RK integrator for the Lyapunov equation
-      T_RK  = 50.0_wp
-      nstep = 20
-      iref  = 20
-
-      call run_lyap_reference_RK(LTI, Xref_BS, Xref_RK, U0, S0, T_RK, nstep, iref, adjoint)
-   else
-      print *, 'Skip.'
-      print *, ''
+      call check_eigenvalues(eq, prop, LTI, U0, Tend, dtv, torder, tolv, if_adj, fname_SVD_base, home)
    end if
 
-   print *, ''
-   print *, '#########################################################################'
-   print *, '#                                                                       #'
-   print *, '#    IIb.  Solution using fixed-rank DLRA                               #'
-   print *, '#                                                                       #'
-   print *, '#########################################################################'
-   print *, ''
+   if (run_LQG_test .and. .not. if_lyapunov) then
 
-   if (run_fixed_rank_long_integration_time_test) then
-      ! DLRA with fixed rank
-      Tend = T_RK/nstep*iref
-      rkv = [ 10, 20, 40 ]
-      dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
-      dtv = dtv(size(dtv):1:-1) ! reverse vector
-      TOv  = [ 1, 2 ] 
-      nprint = 40
-
-      call run_lyap_DLRA_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, rkv, TOv, nprint, adjoint, home)
-   else
-      print *, 'Skip.'
-      print *, ''
+      Xdir = LR_state()
+      Xadj = LR_state()
+      torder = 1
+      allocate(vector_mold(1))
+      do j = 1, size(tolv)
+         tol = tolv(j)
+         do k = 1, size(dtv)
+            tau = dtv(k)
+            note = 'Pdir'
+            fbase = make_filename(home, 'DLRA_ADAPT', eq, trim(note), rk, torder, tau, Tend, tol)
+            exist_file = exist_X_file(fbase)
+            if (exist_file) then
+               ! load X state
+               call load_X_from_file(Xdir, meta, fbase, U0)
+               note = 'Padj'
+               fbase = make_filename(home, 'DLRA_ADAPT', eq, trim(note), rk, torder, tau, Tend, tol)
+               exist_file = exist_X_file(fbase)
+               if (exist_file) then
+                  call make_labels(Tstr, taustr, tolstr, Tend, tau, tol)
+                  write(tmr_name,'(*(A))')  'LQG:   Tend= ', trim(Tstr), '   tau= ', trim(taustr), '   tol= ', trim(tolstr)
+                  ! load X state
+                  call load_X_from_file(Xadj, meta, fbase, U0)
+                  rk_LQG = rks54_class_LQG()
+                  prop_control_LQG = exponential_prop_LQG(1.0_dp, prop=rk_LQG)
+                  call prop_control_LQG%init(Xdir, Xadj, LTI%B, LTI%CT, Rinv, Vinv, enable_control=.true.)
+                  call eigenvalue_analysis(prop_control_LQG, vector_mold, tmr_name, fname)
+                  ! deallocate and clean
+                  deallocate(rk_LQG); deallocate(prop_control_LQG)
+               end if
+            end if
+         end do
+         write(*,*)
+      end do
    end if
 
-   print *, ''
-   print *, '#########################################################################'
-   print *, '#                                                                       #'
-   print *, '#    IIc.  Solution using rank-adaptive DLRA                            #'
-   print *, '#                                                                       #'
-   print *, '#########################################################################'
-   print *, ''
-
-   if (run_rank_adaptive_long_integration_time_test) then
-      ! DLRA with adaptive rank
-      dtv = logspace(-2.0_wp, 0.0_wp, 3, 10)
-      dtv = dtv(size(dtv):1:-1) ! reverse vector
-      TOv  = [ 1, 2 ]
-      tolv = [ 1e-2_wp, 1e-6_wp, 1e-10_wp ]
-      nprint = 60
-
-      call run_lyap_DLRArk_test(LTI, Xref_BS, Xref_RK, U0, S0, Tend, dtv, TOv, tolv, nprint, adjoint, home)
-   else
-      print *, 'Skip.'
-      print *, ''
-   end if
+   ! Compute and print timer summary
+   call finalize_timers()
 
    !----------------------------------
    !

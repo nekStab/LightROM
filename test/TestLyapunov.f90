@@ -1,8 +1,10 @@
-module TestLyapunov
+module LightROM_TestLyapunov
    ! standard library
    use stdlib_math, only : linspace, all_close
    use stdlib_stats_distribution_normal, only: normal => rvs_normal
    use stdlib_linalg, only : svdvals
+   use stdlib_io_npy, only : save_npy, load_npy
+   use stdlib_strings, only : padr
    ! testing library
    use testdrive  , only : new_unittest, unittest_type, error_type, check
    ! LightKrylov for Linear Algebra
@@ -10,9 +12,9 @@ module TestLyapunov
    use LightKrylov, only : dp, wp => dp
    use LightKrylov_Logger
    use LightKrylov_TestUtils
-   use LightKrylov_Utils, only: eigh
    ! LightROM
    use LightROM_Utils
+   ! Specific types for testing
    use LightROM_TestUtils
    ! Tests
    Use LightROM_LyapunovUtils  
@@ -24,7 +26,7 @@ module TestLyapunov
  
    public :: collect_lyapunov_utils_testsuite
 
-  contains
+contains
  
    !-------------------------------------------
    !-----                                 -----
@@ -37,7 +39,8 @@ module TestLyapunov
  
      testsuite = [&
             new_unittest("project onto common basis", test_project_onto_common_basis_rdp), &
-            new_unittest("CALE residual norm", test_CALE_res_norm_rdp) &
+            new_unittest("Impulse Response POD", test_Proper_Orthogonal_Decomposition_Impulse_rdp), &
+            new_unittest("Data POD", test_Proper_Orthogonal_Decomposition_Data_rdp) &
           ]
  
      return
@@ -106,6 +109,7 @@ module TestLyapunov
       return
    end subroutine test_project_onto_common_basis_rdp
 
+<<<<<<< HEAD
    subroutine test_CALE_res_norm_rdp(error)
       ! Error type to be returned.
       type(error_type), allocatable, intent(out) :: error
@@ -181,3 +185,160 @@ module TestLyapunov
    end subroutine test_CALE_res_norm_rdp
 
 end module TestLyapunov
+=======
+   subroutine test_Proper_Orthogonal_Decomposition_Impulse_rdp(error)
+      implicit none
+      ! Error type to be returned.
+      type(error_type), allocatable, intent(out) :: error
+      type(state_vector), allocatable :: X0(:)
+      type(GL_exponential_prop), allocatable :: prop
+      real(dp), dimension(:), allocatable :: svals, sref
+      real(dp), dimension(:,:), allocatable :: BBT, A, Xref
+
+      ! Define test parameters
+      real(dp), parameter :: tau = 1.0_dp
+      ! Time difference between snapshots
+      real(dp), parameter :: Tend = 100.0_dp
+      ! Total integration time
+      integer :: nprint, i, j, k, ie, is
+      integer :: nrank, nstep, nsnap
+      real(dp) :: res_norm, err
+      character(len=256) :: msg
+
+      integer, parameter :: irow = 8
+      
+      ! Initialize problem
+      call initialize_GL_parameters(X0, A, BBT)
+      !call solve_lyapunov(Xref, A, BBT)
+      call load_npy('test/Xref.npy', Xref)
+      res_norm = norm2(matmul(A, Xref) + matmul(Xref, transpose(A)) + BBT)
+      !print *, ""
+      !print *, 'Residual norm of reference solution: ', res_norm  
+      
+      sref = svdvals(Xref)
+      !nprint = min(8, size(sref))
+      !do i = 1, ceiling(nprint*1.0_wp/irow)
+      !   is = (i-1)*irow+1; ie = i*irow
+      !   print '(A22,1X,I2,"-",I2,*(1X,F12.8))', padr(' SVD(Xref)',22), is, ie, ( sref(j), j = is, ie )
+      !end do
+      !print *, ''
+      
+      ! Initialize propagator
+      prop = GL_exponential_prop(tau)
+
+      ! Compute POD using propagator directly
+      call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, .false., mode=1)
+      nprint = min(8, size(svals))
+      svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
+      !print *, 'POD of impulse response, time integration mode 1: Absolute errors in the leading singular values:'
+      !do i = 1, ceiling(nprint*1.0_wp/irow)
+      !   is = (i-1)*irow+1; ie = min(i*irow, nprint)
+      !   print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+      !end do
+
+      err = maxval(svals(:2))
+      call get_err_str(msg, "max err: ", err)
+      call check(error, err < rtol_dp)
+      call check_test(error, 'test_POD_Imp_1_rdp', info='Leading singular values', eq='s_1/2 = sPOD_1/2', context=msg)
+
+      call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, .false., mode=2)
+      nprint = min(8, size(svals))
+      svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
+      !print *, 'POD of impulse response, time integration mode 2: Absolute errors in the leading singular values:'
+      !do i = 1, ceiling(nprint*1.0_wp/irow)
+      !   is = (i-1)*irow+1; ie = min(i*irow, nprint)
+      !   print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+      !end do
+
+      err = maxval(svals(:2))
+      call get_err_str(msg, "max err: ", err)
+      call check(error, err < rtol_dp)
+      call check_test(error, 'test_POD_Imp_2_rdp', info='Leading singular values', eq='s_1/2 = sPOD_1/2', context=msg)
+   end subroutine test_Proper_Orthogonal_Decomposition_Impulse_rdp
+
+   subroutine test_Proper_Orthogonal_Decomposition_Data_rdp(error)
+      implicit none
+      ! Error type to be returned.
+      type(error_type), allocatable, intent(out) :: error
+      type(state_vector), allocatable :: X0(:)
+      type(GL_exponential_prop), allocatable :: prop
+      real(dp), dimension(:), allocatable :: svals, sref
+      real(dp), dimension(:,:), allocatable :: BBT, A, Xref
+      class(state_vector), allocatable :: X(:)   ! Snapshot matrix
+
+      ! Define test parameters
+      real(dp), parameter :: tau = 1.0_dp
+      ! Time difference between snapshots
+      real(dp), parameter :: Tend = 100.0_dp
+      ! Total integration time
+      integer :: nprint, i, j, k, ie, is
+      integer :: nrank, nstep, nsnap
+      real(dp) :: res_norm, err
+      character(len=256) :: msg
+
+      integer, parameter :: irow = 8
+      
+      ! Initialize problem
+      call initialize_GL_parameters(X0, A, BBT)
+      !call solve_lyapunov(Xref, A, BBT)
+      call load_npy('test/Xref.npy', Xref)
+      res_norm = norm2(matmul(A, Xref) + matmul(Xref, transpose(A)) + BBT)
+      !print *, ""
+      !print *, 'Residual norm of reference solution: ', res_norm  
+      
+      sref = svdvals(Xref)
+      !nprint = min(8, size(sref))
+      !do i = 1, ceiling(nprint*1.0_wp/irow)
+      !   is = (i-1)*irow+1; ie = i*irow
+      !   print '(A22,1X,I2,"-",I2,*(1X,F12.8))', padr(' SVD(Xref)',22), is, ie, ( sref(j), j = is, ie )
+      !end do
+      !print *, ''
+
+      ! Initialize propagator
+      prop = GL_exponential_prop(tau)
+
+      ! Compute POD using data matrix
+      nrank = size(X0)
+      nstep = floor(Tend/tau)
+      nsnap = nrank*(nstep + 1)
+      ! Compute impulse response using propagator
+      allocate(X(nsnap))
+      k = 1
+      do j = 1, nrank ! one series for each initial condition
+         call copy(X(k), X0(j))
+         do i = 1, nstep ! for the chosen time horizon
+            call prop%matvec(X(k), X(k+1))
+            k = k + 1
+         end do
+      end do
+      call Proper_Orthogonal_Decomposition(svals, X, tau, nseries=2, mode=1)
+      nprint = min(8, size(svals))
+      svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
+      !print *, 'POD of data matrix, time integration mode 1: Absolute errors in the leading singular values:'
+      !do i = 1, ceiling(nprint*1.0_wp/irow)
+      !   is = (i-1)*irow+1; ie = min(i*irow, nprint)
+      !   print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+      !end do
+
+      err = maxval(svals(:2))
+      call get_err_str(msg, "max err: ", err)
+      call check(error, err < rtol_dp)
+      call check_test(error, 'test_POD_Data_1_rdp', info='Leading singular values', eq='s_1/2 = sPOD_1/2', context=msg)
+
+      call Proper_Orthogonal_Decomposition(svals, X, tau, nseries=2, mode=2)
+      nprint = min(8, size(svals))
+      svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
+      !print *, 'POD of data matrix, time integration mode 2: Absolute errors in the leading singular values:'
+      !do i = 1, ceiling(nprint*1.0_wp/irow)
+      !   is = (i-1)*irow+1; ie = min(i*irow, nprint)
+      !   print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+      !end do
+
+      err = maxval(svals(:2))
+      call get_err_str(msg, "max err: ", err)
+      call check(error, err < rtol_dp)
+      call check_test(error, 'test_POD_Data_2_rdp', info='Leading singular values', eq='s_1/2 = sPOD_1/2', context=msg)
+   end subroutine test_Proper_Orthogonal_Decomposition_Data_rdp
+
+end module LightROM_TestLyapunov
+>>>>>>> DLRA
