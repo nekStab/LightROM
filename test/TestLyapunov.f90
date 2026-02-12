@@ -2,7 +2,7 @@ module LightROM_TestLyapunov
    ! standard library
    use stdlib_math, only : linspace, all_close
    use stdlib_stats_distribution_normal, only: normal => rvs_normal
-   use stdlib_linalg, only : svdvals, norm
+   use stdlib_linalg, only : svdvals, mnorm
    use stdlib_io_npy, only : save_npy, load_npy
    use stdlib_strings, only : padr
    ! testing library
@@ -11,13 +11,13 @@ module LightROM_TestLyapunov
    use LightKrylov
    use LightKrylov, only : dp
    use LightKrylov_Logger
-   use LightKrylov_TestUtils
    ! LightROM
    use LightROM_Utils
    ! Specific types for testing
    use LightROM_TestUtils
    ! Tests
    Use LightROM_LyapunovUtils  
+   use TestUtils
    
    implicit none
  
@@ -84,7 +84,7 @@ contains
       call get_data(Vdata, V)
 
       ! Compute Frobenius norm directly.
-      norm_direct = norm(matmul(Udata, matmul(S, transpose(Udata))) - matmul(Vdata, matmul(G, transpose(Vdata))))
+      norm_direct = mnorm(matmul(Udata, matmul(S, transpose(Udata))) - matmul(Vdata, matmul(G, transpose(Vdata))))
       
       ! Project onto common basis.
       allocate(UTV(ku, kv), VpTV(kv, kv))
@@ -96,14 +96,13 @@ contains
       DLR(ku+1:ku+kv ,     :ku   ) =   - matmul(VpTV, matmul(G, transpose(UTV)) )
       DLR(    :ku    , ku+1:ku+kv) =   - matmul(UTV,  matmul(G, transpose(VpTV)))
       DLR(ku+1:ku+kv , ku+1:ku+kv) =   - matmul(VpTV, matmul(G, transpose(VpTV)))
-      norm_LR = norm(DLR)
+      norm_LR = mnorm(DLR)
 
       ! Check correctness.
       err = abs(norm_direct - norm_LR)
       call get_err_str(msg, "max err: ", err)
       call check(error, err < rtol_dp)
-      call check_test(error, 'test_project_onto_common_basis_rdp', &
-                  & info='Equality of difference norm', eq='||X-Y|| = ||X-Y||_LR', context=msg)
+      call check_test(error, 'test_project_onto_common_basis_rdp', 'Equality of difference norm', '||X-Y|| = ||X-Y||_LR', msg)
       
       return
    end subroutine test_project_onto_common_basis_rdp
