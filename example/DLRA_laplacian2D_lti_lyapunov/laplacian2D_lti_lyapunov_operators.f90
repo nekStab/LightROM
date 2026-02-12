@@ -16,6 +16,16 @@ module Laplacian2D_LTI_Lyapunov_Operators
    public  :: laplacian, laplacian_mat
    ! exptA
    public  :: exptA
+
+   !-----------------------------------------------
+   !-----     LIGHTKRYLOV LTI SYSTEM TYPE     -----
+   !-----------------------------------------------
+
+   type, extends(abstract_lti_system_rdp), public :: lti_system
+   contains
+      private
+      procedure, pass(self), public :: initialize_lti_system
+   end type lti_system
    
    !-----------------------------------
    !-----     LAPLACE OPERATOR    -----
@@ -156,7 +166,7 @@ contains
       character(len=*), parameter :: this_procedure = 'exptA'
 
       ! misc
-      real(wp), parameter :: tol  = 100*atol_dp
+      real(dp), parameter :: tol  = 100*atol_dp
       integer,  parameter :: kdim = 200          ! this is needed for the integration with sitep 0.1
       logical,  parameter :: verb = .false.
 

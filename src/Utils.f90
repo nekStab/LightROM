@@ -14,7 +14,6 @@ module LightROM_Utils
    use LightKrylov_Utils, only : abstract_opts, sqrtm
    ! LightROM
    use LightROM_AbstractLTIsystems
-   include "dtypes.h"
    
    implicit none 
    character(len=*), parameter, private :: this_module = 'LR_Utils'
@@ -61,10 +60,6 @@ module LightROM_Utils
 
    interface project_onto_common_basis
       module procedure project_onto_common_basis_rdp
-   end interface
-
-   interface random_low_rank_state
-      module procedure random_low_rank_state_rdp
    end interface
 
    type, extends(abstract_opts), public :: dlra_opts

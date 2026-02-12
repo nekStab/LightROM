@@ -219,7 +219,7 @@ contains
       ifrk = optval(if_rank_adaptive, .false.)
 
       ! reset time
-      self%time = 0.0_wp
+      self%time = 0.0_dp
 
       select type (U)
       type is (state_vector)

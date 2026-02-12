@@ -11,7 +11,7 @@ module Ginzburg_Landau_Utils
    use LightKrylov
    use LightKrylov_Constants, only : zero_rdp, one_rdp
    use LightKrylov_AbstractVectors
-   use LightKrylov_Utils, only : assert_shape, eigh
+   use LightKrylov_Utils, only : assert_shape
    ! LightROM
    use LightROM_AbstractLTIsystems
    use LightROM_Utils
@@ -26,7 +26,6 @@ module Ginzburg_Landau_Utils
    use Ginzburg_Landau_RKlib
 
    implicit none
-
    character(len=*), parameter, private :: this_module = 'Ginzburg_Landau_Utils'
 
    integer, parameter, public :: rk_X0_lyapunov = 10

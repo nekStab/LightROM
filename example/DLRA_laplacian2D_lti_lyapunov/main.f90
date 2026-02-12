@@ -6,11 +6,6 @@ program demo
    use stdlib_logger, only : information_level, warning_level, debug_level, error_level, none_level
    ! LightKrylov for linear algebra
    use LightKrylov
-<<<<<<< HEAD
-   use LightKrylov, only : wp => dp
-   use LightKrylov_Constants
-=======
->>>>>>> DLRA
    use LightKrylov_Logger
    use LightKrylov_ExpmLib
    use LightKrylov_Utils
@@ -242,8 +237,6 @@ program demo
    ! initialize exponential propagator
    Tend = 0.001_dp
    RK_propagator = rklib_lyapunov_mat(Tend)
-   nrep = 1
-   if (if_convRK) nrep = 10
 
    allocate(X_RKlib(N, N, 1))
    call get_state(U_out(:,:rk_X0), U0(:rk_X0), 'Get initial condition')
