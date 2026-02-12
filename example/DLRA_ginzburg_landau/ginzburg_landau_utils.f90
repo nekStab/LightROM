@@ -408,7 +408,8 @@ contains
    !-----      Printing helpers     -----
    !-------------------------------------
 
-   subroutine print_test_info(if_lyapunov, if_adj, main_run, run_fixed_rank_test, run_rank_adaptive_test, run_eigenvalue_test, run_LQG_test)
+   subroutine print_test_info(if_lyapunov, if_adj, main_run, run_fixed_rank_test, &
+                  & run_rank_adaptive_test, run_eigenvalue_test, run_LQG_test)
       implicit none 
       logical, intent(in) :: if_lyapunov
       logical, intent(in) :: if_adj
@@ -868,7 +869,8 @@ contains
                      & etime=etime, etmin=etmin, etmax=etmax, etimp=etimp, &
                      & lcount=lcount, rcount=rcount, gcount=gcount)
          
-         write(unit, '(A5,A45,2X,I12,*(1X,F13.6)))') 'LK % ', padr(trim(names(i)),45), lcount, etime, etmin, etmax, etimp, etime/lcount
+         write(unit, '(A5,A45,2X,I12,*(1X,F13.6)))') 'LK % ', &
+            & padr(trim(names(i)),45), lcount, etime, etmin, etmax, etimp, etime/lcount
       end do
       call global_lightROM_timer%get_called(n_called, names)
       ! get timer info
@@ -877,7 +879,8 @@ contains
                      & etime=etime, etmin=etmin, etmax=etmax, etimp=etimp, &
                      & lcount=lcount, rcount=rcount, gcount=gcount)
          
-         write(unit, '(A5,A45,2X,I12,*(1X,F13.6)))') 'LR % ', padr(trim(names(i)),45), lcount, etime, etmin, etmax, etimp, etime/lcount
+         write(unit, '(A5,A45,2X,I12,*(1X,F13.6)))') 'LR % ', &
+            & padr(trim(names(i)),45), lcount, etime, etmin, etmax, etimp, etime/lcount
       end do
       close(unit)
    end subroutine save_metadata
