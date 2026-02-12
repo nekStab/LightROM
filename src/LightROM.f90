@@ -1,10 +1,8 @@
 module LightROM
    ! LTI system definitions
    use LightROM_AbstractLTIsystems
-   ! General utilities
    use LightROM_Utils
-   ! Solvers for Lyapunov equations
-   use LightROM_LyapunovSolvers
+   use LightROM_DLRAIntegrators
    implicit none
    private
 
@@ -19,7 +17,7 @@ module LightROM
    public :: dlra_opts
 
    ! Solvers
-   public :: projector_splitting_DLRA_lyapunov_integrator
+   public :: lyapunov_integrator
 
 contains
 
