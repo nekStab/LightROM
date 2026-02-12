@@ -220,7 +220,8 @@ contains
       allocate(dsvals(irk)); dsvals = 0.0_dp
       ifmt = max(5,ceiling(log10(real(nsteps))))
       irkfmt = max(3,ceiling(log10(real(size(X%U)))))
-      write(fmt,'(A,5(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,1X,I', irkfmt, '" : ",A,"[",I', irkfmt, ',"-",I', irkfmt, ',"]",*(E12.5))'
+      write(fmt,'(A,5(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,1X,I', irkfmt, &
+                     &'" : ",A,"[",I', irkfmt, ',"-",I', irkfmt, ',"]",*(E12.5))'
       do i = 1, irk
          dsvals(i) = abs(svals(i)-svals_lag(i))/svals(i)
       end do
