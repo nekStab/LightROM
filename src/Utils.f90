@@ -808,7 +808,8 @@ contains
       ! Pretty output
       ifmt = max(5,ceiling(log10(real(nsteps))))
       irkfmt = max(3,ceiling(log10(real(size(X%U)))))
-      write(fmt_sval,'(A,5(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,1X,I', irkfmt, '" : ",A,"[",I', irkfmt, ',"-",I', irkfmt, ',"]",*(E12.5))'
+      write(fmt_sval,'(A,5(I0,A))') '("Step ",I', ifmt, ',"/",I', ifmt, ',": T= ",F10.4,1X,I', irkfmt, &
+               & '" : ",A,"[",I', irkfmt, ',"-",I', irkfmt, ',"]",*(E12.5))'
       
       irk = min(size(svals), size(svals_lag))
       allocate(dsvals(irk)); dsvals = 0.0_dp
