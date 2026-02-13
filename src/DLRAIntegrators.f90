@@ -293,7 +293,7 @@ contains
          !! Information flag
          if (if_rank_adaptive) then
             call rank_adaptive_projector_splitting_DLRA_step_riccati_rdp( &
-                     &  X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, exptA, trans, opts, info)
+                     &  X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, exptA, trans, info, opts)
          else
             call fixed_rank_projector_splitting_DLRA_step_riccati_rdp( &
                      &  X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, info, exptA, trans)

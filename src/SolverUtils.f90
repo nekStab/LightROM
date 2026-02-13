@@ -264,7 +264,7 @@ contains
    end subroutine rank_adaptive_projector_splitting_DLRA_step_lyapunov_rdp
 
    subroutine rank_adaptive_projector_splitting_DLRA_step_riccati_rdp( &
-            &  X, A, B, CT, Qc, Rinv, tau, mode, exptA, trans, opts, info)
+            &  X, A, B, CT, Qc, Rinv, tau, mode, exptA, trans, info, opts)
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
       class(abstract_linop_rdp),              intent(inout) :: A
       class(abstract_vector_rdp),             intent(in)    :: B(:)
