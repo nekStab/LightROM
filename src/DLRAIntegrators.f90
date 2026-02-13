@@ -341,12 +341,8 @@ contains
 
       ! internal
       character(len=128) :: msg
-      integer :: rkmax
 
       call X%reset()
-      ! Allocate memory for SVD & lagged fields
-      rkmax = size(X%U)
-      allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
 
       ! Options
       if (present(options)) then
@@ -394,7 +390,7 @@ contains
 
       ! internal
       character(len=128) :: msg, logfile
-      integer :: istep, irk, counter
+      integer :: istep, irk, counter, rkmax
       logical :: if_lastep
       real(dp), dimension(:), allocatable :: svals, svals_lag
 
@@ -407,6 +403,13 @@ contains
       else
          call stop_error('Unknown equation type: '//trim(equation), this_module, this_procedure)
       end if
+
+      ! Allocate memory for SVD. These arrays live in SolverUtils.f90
+      rkmax = size(X%U)
+      if (allocated(Usvd)) deallocate(Usvd)
+      if (allocated(ssvd)) deallocate(ssvd)
+      if (allocated(VTsvd)) deallocate(VTsvd)
+      allocate(Usvd(rkmax,rkmax), ssvd(rkmax), VTsvd(rkmax,rkmax))
 
       if (time_lightROM()) call lr_timer%start(this_procedure)
       call log_message('Starting DLRA integration', this_module, this_procedure)

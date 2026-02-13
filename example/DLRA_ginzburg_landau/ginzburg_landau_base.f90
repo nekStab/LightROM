@@ -255,7 +255,7 @@ contains
 
    subroutine initialize_LR_state(self, U, S, rk, rkmax, if_rank_adaptive)
       class(LR_state),            intent(inout) :: self
-      class(abstract_vector_rdp), intent(in)    :: U(:)
+      type(state_vector),         intent(in)    :: U(:)
       real(dp),                   intent(in)    :: S(:,:)
       integer,                    intent(in)    :: rk
       integer, optional,          intent(in)    :: rkmax
@@ -265,75 +265,70 @@ contains
       ! internals
       character(len=*), parameter :: this_procedure = 'initialize_LR_state'
       class(abstract_vector_rdp), allocatable   :: Utmp(:)
-      integer :: i, m, rka, info, n_rem, m_init
+      integer :: i, m, rka, n_rem, m_init, info
       character(len=128) :: msg
 
       ifrk = optval(if_rank_adaptive, .false.)
 
-      select type (U)
-      type is (state_vector)
-         ! set time and optional args
-         call self%reset(full=.true.)
+      ! set time
+      call self%reset(full=.true.)
 
-         m = size(U)
-         call assert_shape(S, [m,m], 'S', this_module, this_procedure)
-         ! optional size argument
-         if (present(rkmax)) then
-            if (rkmax < rk) then
-               call stop_error('rkmax < rk!', this_module, this_procedure)
+      m = size(U)
+      call assert_shape(S, [m,m], 'S', this_module, this_procedure)
+      ! optional size argument
+      if (present(rkmax)) then
+         if (rkmax < rk) then
+            call stop_error('rkmax < rk!', this_module, this_procedure)
+         end if
+         self%rk = rk
+         rka = rkmax
+         if (ifrk) then
+            if (rkmax==rk) then
+               call stop_error('rkmax must be larger than rk for rank-adaptive DLRA!', this_module, this_procedure)
             end if
-            self%rk = rk
-            rka = rkmax
-            if (ifrk) then
-               if (rkmax==rk) then
-                  call stop_error('rkmax must be larger than rk for rank-adaptive DLRA!', this_module, this_procedure)
-               end if
-               write(msg,'(A,I0,A)') 'Rank-adaptivity enabled. Computation will begin with X%rk = ', self%rk+1, '.'
-               call log_information(msg, this_module, this_procedure)
-            end if
+            write(msg,'(A,I0,A)') 'Rank-adaptivity enabled. Computation will begin with X%rk = ', self%rk+1, '.'
+            call log_information(msg, this_module, this_procedure)
+         end if
+      else
+         self%rk = rk
+         if (ifrk) then
+            rka = rk + 1
          else
-            self%rk = rk
-            if (ifrk) then
-               rka = rk + 1
-            else
-               rka = rk
-            end if
+            rka = rk
          end if
+      end if
          
-         ! allocate & initialize
-         if (allocated(self%U)) deallocate(self%U)
-         if (allocated(self%S)) deallocate(self%S)
-         allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
-         allocate(self%S(rka,rka)); self%S = 0.0_dp
-         write(msg,'(3(A,I0),A)') 'size(X%U) = [ ', rka,' ], X%rk = ', self%rk, ', size(U0) = [ ', m,' ]'
+      ! allocate & initialize
+      if (allocated(self%U)) deallocate(self%U)
+      if (allocated(self%S)) deallocate(self%S)
+      allocate(self%U(rka), source=U(1)); call zero_basis(self%U)
+      allocate(self%S(rka,rka)); self%S = 0.0_dp
+      write(msg,'(3(A,I0),A)') 'size(X%U) = [ ', rka,' ], X%rk = ', self%rk, ', size(U0) = [ ', m,' ]'
+      call log_information(msg, this_module, this_procedure)
+      ! copy inputs
+      if (self%rk > m) then   ! copy the full IC into self%U
+         call copy(self%U(:m), U)
+         self%S(:m,:m) = S
+         write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
          call log_information(msg, this_module, this_procedure)
-         ! copy inputs
-         if (self%rk > m) then   ! copy the full IC into self%U
-            call copy(self%U(:m), U)
-            self%S(:m,:m) = S
-            write(msg,'(4X,A,I0,A)') 'Transfer all ', m, ' columns of U0 to X%U.'
-            call log_information(msg, this_module, this_procedure)
-         else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
-            call copy(self%U(:self%rk), U(:self%rk))
-            self%S(:self%rk,:self%rk) = S(:self%rk,:self%rk)
-            write(msg,'(4X,A,I0,A)') 'Transfer the first ', self%rk, ' columns of U0 to X%U.'
-            call log_information(msg, this_module, this_procedure)
-         end if        
+      else  ! fill the first self%rk columns of self%U with the first self%rk columns of the IC
+         call copy(self%U(:self%rk), U(:self%rk))
+         self%S(:self%rk,:self%rk) = S(:self%rk,:self%rk)
+         write(msg,'(4X,A,I0,A)') 'Transfer the first ', self%rk, ' columns of U0 to X%U.'
+         call log_information(msg, this_module, this_procedure)
+      end if        
 
-         ! top up basis (to rka for rank-adaptivity) with orthonormal columns if needed
-         m_init = min(self%rk, m)
-         n_rem = rka - m_init
-         if (m > 0) then
-            write(msg,'(4X,A,I0,A)') 'Fill remaining ', n_rem, ' columns with orthonormal noise orthonormal to X%U.'
-            call log_information(msg, this_module, this_procedure)
-            allocate(Utmp(n_rem), source=U(1))
-            call initialize_random_orthonormal_basis(Utmp)
-            call orthogonalize_against_basis(Utmp, self%U(:m_init), info)
-            call copy(self%U(m_init+1:), Utmp)
-         end if
-      class default
-         call type_error('U', 'state_vector', 'IN', this_module, this_procedure)
-      end select
+      ! top up basis (to rka for rank-adaptivity) with orthonormal columns if needed
+      m_init = min(self%rk, m)
+      n_rem = rka - m_init
+      if (m > 0) then
+         write(msg,'(4X,A,I0,A)') 'Fill remaining ', n_rem, ' columns with orthonormal noise orthonormal to X%U.'
+         call log_information(msg, this_module, this_procedure)
+         allocate(Utmp(n_rem), source=U(1))
+         call initialize_random_orthonormal_basis(Utmp)
+         call orthogonalize_against_basis(Utmp, self%U(:m_init), info)
+         call copy(self%U(m_init+1:), Utmp)
+      end if
    end subroutine initialize_LR_state
 
 end module Ginzburg_Landau_Base
