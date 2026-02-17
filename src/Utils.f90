@@ -34,11 +34,13 @@ module LightROM_Utils
    end interface
 
    interface LQR_gain
-      module procedure LQR_gain_rdp
+      module procedure LQR_gain_vector_rdp
+      module procedure LQR_gain_matrix_rdp
    end interface
 
    interface LQE_gain
-      module procedure LQE_gain_rdp
+      module procedure LQE_gain_vector_rdp
+      module procedure LQE_gain_matrix_rdp
    end interface
 
    interface ROM_Petrov_Galerkin_Projection
@@ -236,7 +238,27 @@ contains
          
    end subroutine Balancing_Transformation_rdp
 
-   subroutine LQR_gain_rdp(KT, X, B, Rinv)
+   subroutine LQR_gain_vector_rdp(KT, X, B, Rinv)
+      class(abstract_vector_rdp), allocatable, intent(out) :: KT
+      !! LGR gains
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
+      !! Low rank solution of current solution
+      class(abstract_vector_rdp), intent(in) :: B
+      !! System inputs
+      real(dp), intent(in) :: Rinv
+      !! Inverse control cost
+
+      ! internal variables
+      real(dp), allocatable :: proj(:), wrk(:)
+
+      ! K = R^{-1} @ B.T @ Pbut we compute
+      ! K.T = P @ B @ R^{-1} = U @ S @ U.T @ B @ R^{-1}
+      proj = innerprod(X%U(:X%rk), B)
+      wrk  = matmul(X%S(:X%rk,:X%rk), proj * Rinv)
+      call linear_combination(KT, X%U(:X%rk), wrk)
+   end subroutine LQR_gain_vector_rdp
+
+   subroutine LQR_gain_matrix_rdp(KT, X, B, Rinv)
       class(abstract_vector_rdp), allocatable, intent(out) :: KT(:)
       !! LGR gains
       class(abstract_sym_low_rank_state_rdp), intent(in) :: X
@@ -249,14 +271,35 @@ contains
       ! internal variables
       real(dp), allocatable :: proj(:,:), wrk(:,:)
 
-      ! K = R^{-1} @ B.T @ P
-      proj = innerprod(B, X%U(:X%rk))
-      wrk  = matmul(Rinv, matmul(proj, X%S(:X%rk,:X%rk)))
-      call linear_combination(KT, X%U(:X%rk), transpose(wrk))  ! we compute K.T = (wrk @ U.T).T = U @ wrk.T
+      ! K = R^{-1} @ B.T @ P but we compute
+      ! K.T = P @ B @ R^{-1}
+      proj = innerprod(X%U(:X%rk), B)
+      wrk  = matmul(X%S(:X%rk,:X%rk), matmul(proj, Rinv))
+      call linear_combination(KT, X%U(:X%rk), wrk)  
       
-   end subroutine LQR_gain_rdp
+   end subroutine LQR_gain_matrix_rdp
    
-   subroutine LQE_gain_rdp(L, X, CT, Vinv)
+   subroutine LQE_gain_vector_rdp(L, X, CT, Vinv)
+      class(abstract_vector_rdp), allocatable, intent(out) :: L
+      !! Kalman gains
+      class(abstract_sym_low_rank_state_rdp), intent(in) :: X
+      !! Low rank solution of current solution
+      class(abstract_vector_rdp), intent(in) :: CT
+      !! Sensors
+      real(dp), intent(in) :: Vinv
+      !! Inverse sensor noise variance
+
+      ! internal variables
+      real(dp), allocatable :: proj(:)
+
+      ! L = P @ C.T @ V^{-1}
+      allocate(L, source=CT); call L%scal(Vinv)
+      proj = innerprod(X%U(:X%rk), L)
+      call linear_combination(L, X%U(:X%rk), matmul(X%S(:X%rk,:X%rk), proj))
+      
+   end subroutine LQE_gain_vector_rdp
+   
+   subroutine LQE_gain_matrix_rdp(L, X, CT, Vinv)
       class(abstract_vector_rdp), allocatable, intent(out) :: L(:)
       !! Kalman gains
       class(abstract_sym_low_rank_state_rdp), intent(in) :: X
@@ -274,7 +317,7 @@ contains
       proj = innerprod(X%U(:X%rk), L)
       call linear_combination(L, X%U(:X%rk), matmul(X%S(:X%rk,:X%rk), proj))
       
-   end subroutine LQE_gain_rdp
+   end subroutine LQE_gain_matrix_rdp
 
    subroutine ROM_Petrov_Galerkin_Projection_rdp(Ahat, Bhat, Chat, D, LTI, T, Tinv)
       !! Computes the Reduced-Order Model of the input LTI dynamical system via Petrov-Galerkin projection 
