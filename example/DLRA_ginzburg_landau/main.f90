@@ -100,7 +100,7 @@ program demo
    !--------------------------------
    ! Define which examples to run:
    !
-   logical, parameter :: if_lyapunov = .true.
+   logical, parameter :: if_lyapunov = .false.
    !
    ! if_lyapunov = .true.:  Solve the Lyapunov equation:   0 = A @ X + X @ A.T + Q
    !

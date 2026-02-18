@@ -37,7 +37,7 @@ module LightROM_DLRAIntegrators
 
 contains
 
-   subroutine Lyapunov_integrator_rdp(X, A, B, Tend, tau, info, exptA, iftrans, options)
+   subroutine Lyapunov_integrator_rdp(X, A, B, Tend, tau, info, exptA, if_adj, options)
       !! Main driver for the numerical integrator for the matrix-valued differential Lyapunov equation of the form
       !!
       !!    $$ \dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{B} \mathbf{B}^T $$
@@ -125,8 +125,9 @@ contains
       !! Information flag
       procedure(abstract_exptA_rdp)                          :: exptA
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
-      logical,                       optional, intent(in)    :: iftrans
-      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      logical,                       optional, intent(in)    :: if_adj
+      !! Solve the direct (if_adj = .false.) or adjoint (if_adj=.true.) Lyapunov equation? 
+      !! This choice only affects the integration of the system matrix via the exptA procedure.
       type(dlra_opts),               optional, intent(in)    :: options
       !! Options for solver configuration
       
@@ -135,13 +136,15 @@ contains
       character(len=*), parameter :: equation = 'Lyapunov'
       character(len=128) :: logfile
       type(dlra_opts) :: opts
-      logical :: trans
+      logical :: if_adj_
+      logical :: if_adj_exptA
 
-      trans = optval(iftrans, .false.)
+      if_adj_ = optval(if_adj, .false.)
+      if_adj_exptA = if_adj_
       logfile = logfile_basename_lyapunov
       LyapunovSolver_counter = LyapunovSolver_counter + 1
 
-      call generic_initializer_rdp(X, opts, Tend, tau, rank_initializer, this_procedure, logfile, trans, options)
+      call generic_initializer_rdp(X, opts, Tend, tau, rank_initializer, this_procedure, logfile, options)
 
       call generic_DLRA_integrator_rdp(X, opts, Tend, tau, info, stepper, this_procedure, equation)
 
@@ -149,14 +152,15 @@ contains
 
       subroutine stepper(if_rank_adaptive, info)
          logical, intent(in) :: if_rank_adaptive
+         !! Flag switching between fixed-rank and rank-adaptive modes
          integer, intent(out) :: info
          !! Information flag
          if (if_rank_adaptive) then
             call rank_adaptive_projector_splitting_DLRA_step_lyapunov_rdp( &
-                     &  X, A, B, opts%tau, opts%mode, exptA, trans, info, opts)
+                     &  X, A, B, opts%tau, opts%mode, exptA, if_adj_exptA, info, opts)
          else
             call fixed_rank_projector_splitting_DLRA_step_lyapunov_rdp( &
-                     &  X, A, B, opts%tau, opts%mode, info, exptA, trans)
+                     &  X, A, B, opts%tau, opts%mode, info, exptA, if_adj_exptA)
          end if
       end subroutine
 
@@ -167,23 +171,23 @@ contains
          integer :: rk_init, nsteps
          rk_init = 1
          nsteps = 5
-         call set_initial_rank_lyapunov_rdp(X, A, B, opts%tau, opts%mode, exptA, trans, opts%tol, rk_init, nsteps)
+         call set_initial_rank_lyapunov_rdp(X, A, B, opts%tau, opts%mode, exptA, if_adj_exptA, opts%tol, rk_init, nsteps)
       end subroutine
 
    end subroutine Lyapunov_integrator_rdp
 
-   subroutine Riccati_Integrator_rdp(X, A, B, CT, Qc, Rinv, Tend, tau, info, exptA, iftrans, options)
+   subroutine Riccati_Integrator_rdp(X, A, B, CT, Qc, Rinv, Tend, tau, info, exptA, if_adj, options)
       !! Main driver for the numerical integrator for the matrix-valued differential Riccati equation of the form
       !!
-      !!    $$\dot{\mathbf{X}} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
+      !!    $$\dot{\mathbf{X}} = \mathbf{A}^T \mathbf{X} + \mathbf{X} \mathbf{A} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X}  + \mathbf{C}^T \mathbf{Q} \mathbf{C}$$
       !!
       !! where \( \mathbf{A} \) is a (n x n) Hurwitz matrix, \( \mathbf{X} \) is SPD and 
       !! \( \mathbf{B} \) and \( \mathbf{C}^T \) are low-rank matrices.
       !!
       !! Since \( \mathbf{A} \) is Hurwitz, the equations converges to steady state for  \( t \to \infty \), 
-      !! which corresponds to the associated algebrait Riccati equation of the form
+      !! which corresponds to the associated algebraic Riccati equation of the form
       !!
-      !!    $$\mathbf{0} = \mathbf{A} \mathbf{X} + \mathbf{X} \mathbf{A}^T + \mathbf{C}^T \mathbf{Q} \mathbf{C} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} $$
+      !!    $$\mathbf{0} = \mathbf{A}^T \mathbf{X} + \mathbf{X} \mathbf{A} - \mathbf{X} \mathbf{B} \mathbf{R}^{-1} \mathbf{B}^T \mathbf{X} + \mathbf{C}^T \mathbf{Q} \mathbf{C}$$
       !!
       !! The algorithm is based on four main ideas:
       !!
@@ -266,8 +270,11 @@ contains
       !! Information flag.
       procedure(abstract_exptA_rdp)                          :: exptA
       !! Routine for computation of the exponential propagator (default: Krylov-based exponential operator).
-      logical,                       optional, intent(in)    :: iftrans
-      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
+      logical,                       optional, intent(in)    :: if_adj
+      !! Solve the direct (if_adj = .false.) or adjoint (if_adj = .true.) Riccati equation? (default: .false.)
+      !! This choice only affects the integration of the system matrix via the exptA procedure.
+      !! Note that the *direct* Riccati problem uses the *adjoint* action of \( \mathbf{A} \) and vice versa, 
+      !! which is why the input to the stepper (and thus exptA) is the opposite of the input to the integrator.
       type(dlra_opts),               optional, intent(in)    :: options
 
       ! internal
@@ -275,13 +282,15 @@ contains
       character(len=*), parameter :: equation = 'Riccati'
       character(len=128) :: logfile
       type(dlra_opts) :: opts
-      logical :: trans
+      logical :: if_adj_
+      logical :: if_adj_exptA
 
-      trans = optval(iftrans, .false.)
+      if_adj_ = optval(if_adj, .false.)
+      if_adj_exptA = .not. if_adj_ ! see note above
       logfile = logfile_basename_riccati
       RiccatiSolver_counter = RiccatiSolver_counter + 1
 
-      call generic_initializer_rdp(X, opts, Tend, tau, rank_initializer, this_procedure, logfile, trans, options)
+      call generic_initializer_rdp(X, opts, Tend, tau, rank_initializer, this_procedure, logfile, options)
 
       call generic_DLRA_integrator_rdp(X, opts, Tend, tau, info, stepper, this_procedure, equation)
 
@@ -289,14 +298,15 @@ contains
 
       subroutine stepper(if_rank_adaptive, info)
          logical, intent(in) :: if_rank_adaptive
+         !! Flag switching between fixed-rank and rank-adaptive modes
          integer, intent(out) :: info
          !! Information flag
          if (if_rank_adaptive) then
             call rank_adaptive_projector_splitting_DLRA_step_riccati_rdp( &
-                     &  X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, exptA, trans, opts, info)
+                     &  X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, exptA, if_adj_exptA, opts, info)
          else
             call fixed_rank_projector_splitting_DLRA_step_riccati_rdp( &
-                     &  X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, info, exptA, trans)
+                     &  X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, info, exptA, if_adj_exptA)
          end if
       end subroutine
 
@@ -307,7 +317,7 @@ contains
          integer :: rk_init, nsteps
          rk_init = 1
          nsteps = 5
-         call set_initial_rank_riccati_rdp(X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, exptA, trans, opts%tol, rk_init, nsteps)
+         call set_initial_rank_riccati_rdp(X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, exptA, if_adj_exptA, opts%tol, rk_init, nsteps)
       end subroutine
 
    end subroutine Riccati_Integrator_rdp
@@ -318,7 +328,7 @@ contains
    !!
    !!-------------------------------------------------------------------------------------------------------------
 
-   subroutine generic_initializer_rdp(X, opts, Tend, tau, rank_initializer, this_procedure, logfile, trans, options)
+   subroutine generic_initializer_rdp(X, opts, Tend, tau, rank_initializer, this_procedure, logfile, options)
       class(abstract_sym_low_rank_state_rdp),  intent(inout) :: X
       !! Low-Rank factors of the solution
       type(dlra_opts),                         intent(out)   :: opts
@@ -334,8 +344,6 @@ contains
       !! Specific procedure name (for error attribution)
       character(len=*),                        intent(in)    :: logfile
       !! Basename for logfile
-      logical,                                 intent(in)    :: trans
-      !! Determine whether \(\mathbf{A}\) (default `.false.`) or \( \mathbf{A}^T\) (`.true.`) is used.
       type(dlra_opts),               optional, intent(in)    :: options
       !! Options for solver configuration
 

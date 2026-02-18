@@ -234,7 +234,7 @@ contains
       call GL_mat(ATX, X,             adjoint = .true., transpose = .false.)
       ! build ( A.T @ X.T ).T = X @ A
       call GL_mat( XA, transpose(X),  adjoint = .true., transpose = .true.)
-      ! construct Lyapunov equation
+      ! construct Riccati equation
       f_flat = reshape(ATX + XA + CTQcCW - matmul(X, matmul(BRinvBTW, X)), [ N**2 ])
 
    end subroutine rhs_ricc
@@ -259,7 +259,7 @@ contains
       call GL_mat(AX, X,              adjoint = .false., transpose = .false.)
       ! build ( A @ X.T ).T = X @ A.T
       call GL_mat(XAT, transpose(X),  adjoint = .false., transpose = .true.)
-      ! construct Lyapunov equation
+      ! construct Riccati equation
       f_flat = reshape(AX + XAT + BQeBTW - matmul(X, matmul(CTVinvCW, X)), [ N**2 ])
 
    end subroutine adjoint_rhs_ricc

@@ -110,8 +110,8 @@ contains
       dv  = 0.0_dp
       dvT = 0.0_dp
 
-      call laplacian_mat(dv,  x, .false.)       ! A @ X
-      call laplacian_mat(dvT, x, .true.)        ! ( A @ X.T ).T
+      call laplacian_mat(dv,  x, .false.)       ! A @ X = A.T @ X
+      call laplacian_mat(dvT, x, .true.)        ! ( A @ X.T ).T = ( A.T @ X.T ).T
 
       xm = reshape(x, shape(xm))
       f(1:N**2) = dv + dvT + CTQcC - reshape(matmul(xm, matmul(BRinvBTdata,xm)), [N**2])

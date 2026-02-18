@@ -225,10 +225,10 @@ contains
                   call system_clock(count=clock_start)     ! Start Timer
                   if (adjoint) then
                      call Lyapunov_integrator(X, LTI%prop, LTI%CT, Tend, tau, info, &
-                                             & exptA=exptA, iftrans=expta_adj, options=opts)
+                                             & exptA=exptA, if_adj=expta_adj, options=opts)
                   else
                      call Lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
-                                             & exptA=exptA, iftrans=expta_adj, options=opts)
+                                             & exptA=exptA, if_adj=expta_adj, options=opts)
                   end if
                   call system_clock(count=clock_stop)      ! Stop Timer
                   call reset_solver(RiccatiSolver_counter, 'Lyapunov', 'Lyapunov_', home, fchomp)
@@ -353,10 +353,10 @@ contains
                   call system_clock(count=clock_start)     ! Start Timer
                   if (adjoint) then
                      call Lyapunov_integrator(X, LTI%prop, LTI%CT, Tend, tau, info, &
-                                             & exptA=exptA, iftrans=.true., options=opts)
+                                             & exptA=exptA, if_adj=.true., options=opts)
                   else
                      call Lyapunov_integrator(X, LTI%prop, LTI%B, Tend, tau, info, &
-                                             & exptA=exptA, iftrans=.false., options=opts)
+                                             & exptA=exptA, if_adj=.false., options=opts)
                   end if
                   call system_clock(count=clock_stop)      ! Stop Timer
                   call reset_solver(RiccatiSolver_counter, 'Lyapunov', 'Lyapunov_', home, fchomp)

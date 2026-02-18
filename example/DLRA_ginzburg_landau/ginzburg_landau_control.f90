@@ -134,7 +134,7 @@ contains
          select type (input)
          type is (state_vector)
             ! copy input matrix, compute LQR/LQE gains and store them
-            allocate(self%input(size(input), N), source=zero_rdp)
+            allocate(self%input(N, size(input)), source=zero_rdp)
             allocate(wrk(N, size(input)), source=zero_rdp)
             if (adjoint) then
                ! self%input = C, input = C.T
@@ -149,7 +149,7 @@ contains
                call get_state(self%input, input, this_procedure)
                ! self%gain = K, gain = K.T
                allocate(self%gain(size(input), N), source=zero_rdp)
-               call LQR_gain(gain, X, input, W) ! will allocate K as a state vector
+               call LQR_gain(gain, X, input, W) ! will allocate gain as a state vector
                call get_state(wrk, gain, this_procedure)
                self%gain = transpose(wrk)
             end if
