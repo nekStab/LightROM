@@ -41,9 +41,9 @@ contains
                   info   = 'singular value relative difference'
             end select
             fname = trim(basename)//trim(suffix)
-            open (1234, file=fname, status='replace', action='write')
-            write (1234, '(A8,A8,2(A15,1X),A4,4X,A)') 'icall', 'istep', 'time', 'lag', 'rk', trim(info)
-            close (1234)
+            open (newunit=unit, file=fname, status='replace', action='write')
+            write (unit, '(A8,A8,2(A15,1X),A4,4X,A)') 'icall', 'istep', 'time', 'lag', 'rk', trim(info)
+            close (unit)
          end do
       end if
       if_overwrite = .false.
@@ -60,7 +60,7 @@ contains
       ! parameters
       character(len=*), parameter :: this_procedure = 'stamp_logfiles'
       ! internal
-      integer :: i
+      integer :: unit, i
       character(len=128) :: fname, suffix
       if (io_rank()) then
          do i = 1, 2
@@ -69,18 +69,18 @@ contains
                   suffix = '_abs.dat'
                   fname = trim(basename)//trim(suffix)
                   ! SVD absolute
-                  open (1234, file=fname, status='old', action='write', position='append')
-                  write (1234, '(I8,1X,I7,2(1X,F15.9),I4)', ADVANCE='NO') icall, X%tot_step, X%tot_time, lag, X%rk
-                  write (1234, '(*(1X,F15.9))') svals
-                  close (1234)
+                  open (newunit=unit, file=fname, status='old', action='write', position='append')
+                  write (unit, '(I8,1X,I7,2(1X,F15.9),I4)', ADVANCE='NO') icall, X%tot_step, X%tot_time, lag, X%rk
+                  write (unit, '(*(1X,F15.9))') svals
+                  close (unit)
                case (2)
                   suffix = '_rel.dat'
                   fname = trim(basename)//trim(suffix)
                   ! dSVD relative
-                  open (1234, file=fname, status='old', action='write', position='append')
-                  write (1234, '(I8,1X,I7,2(1X,F15.9),I4)', ADVANCE='NO') icall, X%tot_step, X%tot_time, lag, X%rk
-                  write (1234, '(*(1X,F15.9))') dsvals
-                  close (1234)
+                  open (newunit=unit, file=fname, status='old', action='write', position='append')
+                  write (unit, '(I8,1X,I7,2(1X,F15.9),I4)', ADVANCE='NO') icall, X%tot_step, X%tot_time, lag, X%rk
+                  write (unit, '(*(1X,F15.9))') dsvals
+                  close (unit)
             end select 
          end do
       end if
@@ -100,7 +100,7 @@ contains
       character(len=128) :: fname, fname_new, ext, msg, pre, suf
       if_overwrite = .true.
       rename_logfiles = optval(if_rename, .true.)
-      if (rename_logfiles) then
+      if (rename_logfiles .and. io_rank()) then
          rename_counter = rename_counter + 1
          do i = 1, 2
             select case (i)
