@@ -28,7 +28,7 @@ contains
       ! parameters
       character(len=*), parameter :: this_procedure = 'write_logfile_headers'
       ! internal
-      integer :: i
+      integer :: i, unit
       character(len=128) :: fname, suffix, info
       if (io_rank() .and. if_overwrite) then
          do i = 1, 2
