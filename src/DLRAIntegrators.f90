@@ -167,11 +167,7 @@ contains
       subroutine rank_initializer(X, opts)
          class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
          type(dlra_opts),                        intent(in)    :: opts
-         ! internal
-         integer :: rk_init, nsteps
-         rk_init = 1
-         nsteps = 5
-         call set_initial_rank_lyapunov_rdp(X, A, B, opts%tau, opts%mode, exptA, if_adj_exptA, opts%tol, rk_init, nsteps)
+         call set_initial_rank_lyapunov_rdp(X, A, B, opts%tau, opts%mode, exptA, if_adj_exptA, opts%tol, opts%rk_init, opts%n_init)
       end subroutine
 
    end subroutine Lyapunov_integrator_rdp
@@ -313,11 +309,7 @@ contains
       subroutine rank_initializer(X, opts)
          class(abstract_sym_low_rank_state_rdp), intent(inout) :: X
          type(dlra_opts),                        intent(in)    :: opts
-         ! internal
-         integer :: rk_init, nsteps
-         rk_init = 1
-         nsteps = 5
-         call set_initial_rank_riccati_rdp(X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, exptA, if_adj_exptA, opts%tol, rk_init, nsteps)
+         call set_initial_rank_riccati_rdp(X, A, B, CT, Qc, Rinv, opts%tau, opts%mode, exptA, if_adj_exptA, opts%tol, opts%rk_init, opts%n_init)
       end subroutine
 
    end subroutine Riccati_Integrator_rdp

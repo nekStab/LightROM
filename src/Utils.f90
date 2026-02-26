@@ -97,6 +97,10 @@ module LightROM_Utils
       !
       logical :: if_rank_adaptive = .true.
       !! Allow rank-adaptivity
+      integer :: rk_init = 1
+      !! Guess for the initial rank
+      integer :: n_init = 5
+      !! Number of steps to determine initial rank
       real(dp) :: tol = 1e-6_dp
       !! Tolerance on the extra singular value to determine rank-adaptation
       integer :: err_est_step = 10
