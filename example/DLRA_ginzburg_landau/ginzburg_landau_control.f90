@@ -158,10 +158,10 @@ contains
             self%initialised = .true.
             self%adjoint = adjoint
          class default
-            call type_error('input', 'state_vector', this_module, this_procedure)
+            call type_error('input', 'state_vector', 'IN', this_module, this_procedure)
          end select
       class default
-         call type_error('X', 'LR_state', this_module, this_procedure)
+         call type_error('X', 'LR_state', 'IN', this_module, this_procedure)
       end select
    end subroutine setup_controller
 
