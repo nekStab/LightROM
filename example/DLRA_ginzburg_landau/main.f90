@@ -80,6 +80,7 @@ program demo
    
    ! POD
    type(state_vector),           allocatable :: X0(:)
+   class(abstract_vector_rdp),   allocatable :: svec(:)
 
    ! Information flag.
    integer                                   :: info
@@ -249,7 +250,8 @@ program demo
             else
                allocate(X0(rk_B), source=B)
             end if
-            call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, T_POD, if_adj)
+            print '(3X,A,F12.6)', '    tau:', tau
+            call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, T_POD, if_adj, 1, svec)
             nprint = min(8, size(svals))
             call print_svdvals(svals, 'XTX', nprint)
             deallocate(X0)
