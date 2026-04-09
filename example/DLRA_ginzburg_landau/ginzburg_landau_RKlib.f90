@@ -234,7 +234,7 @@ contains
       call GL_mat(ATX, X,             adjoint = .true., transpose = .false.)
       ! build ( A.T @ X.T ).T = X @ A
       call GL_mat( XA, transpose(X),  adjoint = .true., transpose = .true.)
-      ! construct Lyapunov equation
+      ! construct Riccati equation
       f_flat = reshape(ATX + XA + CTQcCW - matmul(X, matmul(BRinvBTW, X)), [ N**2 ])
 
    end subroutine rhs_ricc
@@ -259,7 +259,7 @@ contains
       call GL_mat(AX, X,              adjoint = .false., transpose = .false.)
       ! build ( A @ X.T ).T = X @ A.T
       call GL_mat(XAT, transpose(X),  adjoint = .false., transpose = .true.)
-      ! construct Lyapunov equation
+      ! construct Riccati equation
       f_flat = reshape(AX + XAT + BQeBTW - matmul(X, matmul(CTVinvCW, X)), [ N**2 ])
 
    end subroutine adjoint_rhs_ricc
@@ -290,10 +290,10 @@ contains
             ! Integrate forward in time.
             call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
          class default
-            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
+            call type_error('vec_out', 'state_matrix', 'OUT', this_module, this_procedure)
          end select
       class default
-         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
+         call type_error('vec_in', 'state_matrix', 'IN', this_module, this_procedure)
       end select
    end subroutine direct_solver_lyap
 
@@ -319,10 +319,10 @@ contains
             ! Integrate forward in time.
             call prop%integrate(0.0_dp, vec_in%state, dt, self%tau, vec_out%state)
          class default
-            call type_error('vec_out', 'state_vector', 'OUT', this_module, this_procedure)
+            call type_error('vec_out', 'state_matrix', 'OUT', this_module, this_procedure)
          end select
       class default
-         call type_error('vec_in', 'state_vector', 'IN', this_module, this_procedure)
+         call type_error('vec_in', 'state_matrix', 'IN', this_module, this_procedure)
       end select
    end subroutine adjoint_solver_lyap
 

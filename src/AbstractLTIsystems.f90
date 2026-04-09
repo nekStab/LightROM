@@ -81,20 +81,24 @@ module LightROM_AbstractLTIsystems
 
 contains
 
-   subroutine abstract_sym_low_rank_state_reset(self, full)
+   subroutine abstract_sym_low_rank_state_reset(self, full, tot_time, tot_step)
       class(abstract_sym_low_rank_state_rdp), intent(inout) :: self
       logical, optional, intent(in) :: full
+      real(dp), optional, intent(in) :: tot_time
+      integer, optional, intent(in) :: tot_step
       ! internal
       logical :: full_
       full_ = optval(full, .false.)
       self%time = 0.0_dp
       self%step = 0
       self%is_converged = .false.
-      self%rank_is_initialised = .false.
       if (full_) then
+         self%rank_is_initialised = .false.
          self%tot_time = 0.0_dp
          self%tot_step = 0
       end if
+      if (present(tot_time)) self%tot_time = tot_time
+      if (present(tot_step)) self%tot_step = tot_step
    end subroutine abstract_sym_low_rank_state_reset
 
    subroutine abstract_sym_low_rank_state_increment_counters(self, tau)

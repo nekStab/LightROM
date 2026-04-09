@@ -309,7 +309,7 @@ program demo
                call system_clock(count=clock_start)     ! Start Timer
                call Riccati_Integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
                                       & Tend, dt, info, &
-                                      & exptA=exptA, iftrans=.true., options=opts)
+                                      & exptA=exptA, if_adj=.true., options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
 
                ! Reconstruct solution
@@ -441,7 +441,7 @@ program demo
                call system_clock(count=clock_start)     ! Start Timer
                call Riccati_Integrator(X, LTI%A, LTI%B, LTI%CT, Qc, Rinv, &
                         & Tend, dt, info, &
-                        & exptA=exptA, iftrans=.true., options=opts)
+                        & exptA=exptA, if_adj=.true., options=opts)
                call system_clock(count=clock_stop)      ! Stop Timer
 
                ! Reconstruct solution

@@ -196,7 +196,6 @@ contains
       X = LR_state()
       Tstep = one_rdp
       note = merge('Padj', 'Pdir', adjoint)
-      expta_adj = .not. adjoint     ! the adjoint Riccati equation uses the direct expta solver
       opts = dlra_opts(chktime=one_rdp, inc_tol=atol_dp, if_rank_adaptive=.false.)
 
       do i = 1, size(rkv)
@@ -224,10 +223,10 @@ contains
                   call system_clock(count=clock_start)     ! Start Timer
                   if (adjoint) then
                      call Riccati_integrator(X, LTI%prop, LTI%CT, LTI%B, Qc, Rinv, Tend, tau, info, &
-                                           & exptA=exptA, iftrans=expta_adj, options=opts)
+                                           & exptA=exptA, if_adj=adjoint, options=opts)
                   else
                      call Riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
-                                           & exptA=exptA, iftrans=expta_adj, options=opts)
+                                           & exptA=exptA, if_adj=adjoint, options=opts)
                   end if
                   call system_clock(count=clock_stop)      ! Stop Timer
                   call reset_solver(RiccatiSolver_counter, 'Riccati', 'Riccati_', home, fchomp)
@@ -320,7 +319,6 @@ contains
       X = LR_state()
       rk = rk_X0_riccati
       note = merge('Padj', 'Pdir', adjoint)
-      expta_adj = .not. adjoint     ! the adjoint Riccati equation uses the direct expta solver
       opts = dlra_opts(chktime=one_rdp, inc_tol=atol_dp, if_rank_adaptive=.true.)
 
       do i = 1, size(tolv)
@@ -351,10 +349,10 @@ contains
                   call system_clock(count=clock_start)     ! Start Timer
                   if (adjoint) then
                      call Riccati_integrator(X, LTI%prop, LTI%CT, LTI%B, Qc, Rinv, Tend, tau, info, &
-                                            & exptA=exptA, iftrans=expta_adj, options=opts)
+                                            & exptA=exptA, if_adj=adjoint, options=opts)
                   else
                      call Riccati_integrator(X, LTI%prop, LTI%B, LTI%CT, Qc, Rinv, Tend, tau, info, &
-                                            & exptA=exptA, iftrans=expta_adj, options=opts)
+                                            & exptA=exptA, if_adj=adjoint, options=opts)
                   end if
                   call system_clock(count=clock_stop)      ! Stop Timer
                   call reset_solver(RiccatiSolver_counter, 'Riccati', 'Riccati_', home, fchomp)
