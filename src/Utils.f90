@@ -447,6 +447,7 @@ contains
       !! Singular vectors
 
       ! internals
+      character(len=*), parameter :: this_procedure = 'Proper_Orthogonal_Decomposition_Impulse_rdp'
       class(abstract_vector_rdp), allocatable :: X(:)   ! Snapshot matrix
       real(dp), allocatable :: XTX(:,:)  ! Inner product matrix
       real(dp), allocatable :: U(:,:), VT(:,:) ! singular vectors
@@ -462,6 +463,7 @@ contains
       nsnap = nrank*(nstep + 1)
       
       ! Compute impulse response
+      call log_information("Compute impulse response snapshots", this_module, this_procedure)
       allocate(X(nsnap), source=X0(1)) ; call zero_basis(X)
       k = 0
       do j = 1, nrank ! one series for each initial condition
@@ -478,11 +480,13 @@ contains
       end do
 
       ! Rescale response for POD
+      call log_information("Rescaling snapshots", this_module, this_procedure)
       do j = 1, nrank
          call rescale_snapshots(X((j-1)*(nstep+1)+1:j*(nstep+1)), tau, mode)
       end do
       
       ! Compute cross-correlation
+      call log_information("Compute Gram matrix", this_module, this_procedure)
       allocate(XTX(nsnap,nsnap))
       XTX = gram(X)
       if (.not. present(svecs)) then
@@ -531,6 +535,7 @@ contains
       !! Singular vectors
 
       ! internals
+      character(len=*), parameter :: this_procedure = 'Proper_Orthogonal_Decomposition_Data_rdp'
       real(dp), allocatable :: XTX(:,:)  ! Inner product matrix
       real(dp), allocatable :: U(:,:), VT(:,:) ! singular vectors
       integer :: j
@@ -545,13 +550,15 @@ contains
          write(msg,'(2(A,I0,A))') "Input data of size ", nsnap, " cannot be partitioned into ", nrank, " series."
          call stop_error(msg, this_module, 'Proper_Orthogonal_Decomposition_Data_rdp')
       end if
-
+      
       ! Rescale response for POD
+      call log_information("Rescaling snapshots", this_module, this_procedure)
       do j = 1, nrank
          call rescale_snapshots(X((j-1)*(nstep+1)+1:j*(nstep+1)), tau, mode)
       end do
       
       ! Compute cross-correlation
+      call log_information("Campute Gram matrix", this_module, this_procedure)
       allocate(XTX(nsnap,nsnap))
       XTX = gram(X)
       ! Compute POD
