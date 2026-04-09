@@ -463,8 +463,9 @@ contains
       
       ! Compute impulse response
       allocate(X(nsnap), source=X0(1)) ; call zero_basis(X)
-      k = 1
+      k = 0
       do j = 1, nrank ! one series for each initial condition
+         k = k + 1
          call copy(X(k), X0(j))
          do i = 1, nstep ! for the chosen time horizon
             if (transpose) then
@@ -478,7 +479,7 @@ contains
 
       ! Rescale response for POD
       do j = 1, nrank
-         call rescale_snapshots(X((j-1)*nstep+1:j*nstep), tau, mode)
+         call rescale_snapshots(X((j-1)*(nstep+1)+1:j*(nstep+1)), tau, mode)
       end do
       
       ! Compute cross-correlation
@@ -488,6 +489,7 @@ contains
          ! Compute only the POD singular values
          svals = svdvals(XTX)
       else
+         allocate(svals(nsnap), U(nsnap,nsnap), VT(nsnap,nsnap))
          ! Compute POD singular values and vectors
          call svd(XTX, svals, U, VT)
          ! Project data matrix onto principal axes
@@ -546,7 +548,7 @@ contains
 
       ! Rescale response for POD
       do j = 1, nrank
-         call rescale_snapshots(X((j-1)*nstep+1:j*nstep), tau, mode)
+         call rescale_snapshots(X((j-1)*(nstep+1)+1:j*(nstep+1)), tau, mode)
       end do
       
       ! Compute cross-correlation
@@ -557,6 +559,7 @@ contains
          ! Compute only the POD singular values
          svals = svdvals(XTX)
       else
+         allocate(svals(nsnap), U(nsnap,nsnap), VT(nsnap,nsnap))
          ! Compute POD singular values and vectors
          call svd(XTX, svals, U, VT)
          ! Project data matrix onto principal axes
