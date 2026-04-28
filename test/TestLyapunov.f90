@@ -112,6 +112,7 @@ contains
       ! Error type to be returned.
       type(error_type), allocatable, intent(out) :: error
       type(state_vector), allocatable :: X0(:)
+      class(abstract_vector_rdp), allocatable :: svecs(:)
       type(GL_exponential_prop), allocatable :: prop
       real(dp), dimension(:), allocatable :: svals, sref
       real(dp), dimension(:,:), allocatable :: BBT, A, Xref
@@ -148,7 +149,7 @@ contains
       prop = GL_exponential_prop(tau)
 
       ! Compute POD using propagator directly
-      call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, .false., mode=1)
+      call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, .false., mode=1, svecs=svecs)
       nprint = min(8, size(svals))
       svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
       !print *, 'POD of impulse response, time integration mode 1: Absolute errors in the leading singular values:'
@@ -162,7 +163,7 @@ contains
       call check(error, err < rtol_dp)
       call check_test(error, 'test_POD_Imp_1_rdp', 'Leading singular values', 's_1/2 = sPOD_1/2', msg)
 
-      call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, .false., mode=2)
+      call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, .false., mode=2, svecs=svecs)
       nprint = min(8, size(svals))
       svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
       !print *, 'POD of impulse response, time integration mode 2: Absolute errors in the leading singular values:'
@@ -186,6 +187,7 @@ contains
       real(dp), dimension(:), allocatable :: svals, sref
       real(dp), dimension(:,:), allocatable :: BBT, A, Xref
       class(state_vector), allocatable :: X(:)   ! Snapshot matrix
+      class(abstract_vector_rdp), allocatable :: svecs(:)
 
       ! Define test parameters
       real(dp), parameter :: tau = 1.0_dp
@@ -232,7 +234,7 @@ contains
             k = k + 1
          end do
       end do
-      call Proper_Orthogonal_Decomposition(svals, X, tau, nseries=2, mode=1)
+      call Proper_Orthogonal_Decomposition(svals, X, tau, nseries=2, mode=1, svecs=svecs)
       nprint = min(8, size(svals))
       svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
       !print *, 'POD of data matrix, time integration mode 1: Absolute errors in the leading singular values:'
@@ -246,7 +248,7 @@ contains
       call check(error, err < rtol_dp)
       call check_test(error, 'test_POD_Data_1_rdp', 'Leading singular values', 's_1/2 = sPOD_1/2', msg)
 
-      call Proper_Orthogonal_Decomposition(svals, X, tau, nseries=2, mode=2)
+      call Proper_Orthogonal_Decomposition(svals, X, tau, nseries=2, mode=2, svecs=svecs)
       nprint = min(8, size(svals))
       svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
       !print *, 'POD of data matrix, time integration mode 2: Absolute errors in the leading singular values:'

@@ -1,7 +1,8 @@
 module LightROM_Utils
    ! stdlib
    use stdlib_strings, only: padl
-   use stdlib_linalg, only : eye, diag, svd, svdvals, is_symmetric
+   use stdlib_sorting, only: sort_index
+   use stdlib_linalg, only : eye, diag, svd, svdvals, is_symmetric, eigvals, eigh
    use stdlib_optval, only : optval
    use stdlib_stats_distribution_normal, only: normal => rvs_normal
    use stdlib_logger, only : logger => global_logger
@@ -9,6 +10,7 @@ module LightROM_Utils
    use LightKrylov
    use LightKrylov, only : dp
    use LightKrylov_Logger, only: log_message, log_information, log_warning, log_debug, check_info, stop_error
+   use LightKrylov_Constants, only: io_rank
    use LightKrylov_AbstractVectors
    use LightKrylov_BaseKrylov, only : orthogonalize_against_basis
    use LightKrylov_Utils, only : abstract_opts, sqrtm
@@ -450,10 +452,12 @@ contains
       character(len=*), parameter :: this_procedure = 'Proper_Orthogonal_Decomposition_Impulse_rdp'
       class(abstract_vector_rdp), allocatable :: X(:)   ! Snapshot matrix
       real(dp), allocatable :: XTX(:,:)  ! Inner product matrix
-      real(dp), allocatable :: U(:,:), VT(:,:) ! singular vectors
+      real(dp), allocatable :: U(:,:)  ! singular vectors
       integer :: i, j, k
       integer :: nsnap, nstep, nrank
+      integer, allocatable :: idx(:)
       logical :: transpose
+      character(len=128) :: msg
 
       transpose = optval(trans, .false.)
 
@@ -469,7 +473,11 @@ contains
       do j = 1, nrank ! one series for each initial condition
          k = k + 1
          call copy(X(k), X0(j))
+         write(msg,'(A,I4)') "    Set initial condition ", j
+         call log_information(msg, this_module, this_procedure)
          do i = 1, nstep ! for the chosen time horizon
+            write(msg, '(A,I6)') "      Apply matvec ", i
+            call log_information(msg, this_module, this_procedure)
             if (transpose) then
                call prop%rmatvec(X(k), X(k+1))
             else
@@ -493,9 +501,17 @@ contains
          ! Compute only the POD singular values
          svals = svdvals(XTX)
       else
-         allocate(svals(nsnap), U(nsnap,nsnap), VT(nsnap,nsnap))
+         allocate(svals(nsnap), U(nsnap,nsnap))
          ! Compute POD singular values and vectors
-         call svd(XTX, svals, U, VT)
+         call eigh(XTX, svals, U)
+         ! Reorder singular vectors
+         allocate(idx(nsnap))
+         call sort_index(svals, idx, reverse=.true.)
+         U = U(:,idx)
+         ! Normalize singular vectors
+         do i = 1, nsnap
+            U(:,i) = U(:,i)/sqrt(svals(i))
+         end do
          ! Project data matrix onto principal axes
          call linear_combination(svecs, X, U)
       end if
@@ -507,7 +523,7 @@ contains
       !! 
       !! The POD is computed using the singular value decomposition of the weighted inner product of the snapshot matrix
       !! \[
-      !!     (\lambda_i, \xi_i) = \mbox{svd}(X^T W X)
+      !!     (\lambda_i, \xi_i) = \mbox{eig}(X^T W X)
       !! \]
       !! where the snapshot matrix \( X \) is given by
       !! \[
@@ -537,8 +553,9 @@ contains
       ! internals
       character(len=*), parameter :: this_procedure = 'Proper_Orthogonal_Decomposition_Data_rdp'
       real(dp), allocatable :: XTX(:,:)  ! Inner product matrix
-      real(dp), allocatable :: U(:,:), VT(:,:) ! singular vectors
-      integer :: j
+      real(dp), allocatable :: U(:,:)    ! singular vectors
+      integer :: i, j
+      integer, allocatable :: idx(:)
       integer :: nsnap, nstep, nrank
       character(len=128) :: msg
 
@@ -566,9 +583,17 @@ contains
          ! Compute only the POD singular values
          svals = svdvals(XTX)
       else
-         allocate(svals(nsnap), U(nsnap,nsnap), VT(nsnap,nsnap))
+         allocate(svals(nsnap), U(nsnap,nsnap))
          ! Compute POD singular values and vectors
-         call svd(XTX, svals, U, VT)
+         call eigh(XTX, svals, U)
+         ! Re-order singular vectors
+         allocate(idx(nsnap))
+         call sort_index(svals, idx, reverse=.true.)
+         U = U(:,idx)
+         ! Normalize singular vectors
+         do i = 1, nsnap
+            U(:,i) = U(:,i)/sqrt(svals(i))
+         end do
          ! Project data matrix onto principal axes
          call linear_combination(svecs, X, U)
       end if
