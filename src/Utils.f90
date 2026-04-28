@@ -46,11 +46,13 @@ module LightROM_Utils
    end interface
 
    interface ROM_Petrov_Galerkin_Projection
-      module procedure ROM_Petrov_Galerkin_Projection_rdp
+      module procedure LTI_ROM_Petrov_Galerkin_Projection_rdp
+      module procedure ABC_ROM_Petrov_Galerkin_Projection_rdp
    end interface
 
    interface ROM_Galerkin_Projection
-      module procedure ROM_Galerkin_Projection_rdp
+      module procedure LTI_ROM_Galerkin_Projection_rdp
+      module procedure ABC_ROM_Galerkin_Projection_rdp
    end interface
 
    interface Proper_Orthogonal_Decomposition
@@ -325,7 +327,7 @@ contains
       
    end subroutine LQE_gain_matrix_rdp
 
-   subroutine ROM_Petrov_Galerkin_Projection_rdp(Ahat, Bhat, Chat, D, LTI, T, Tinv)
+   subroutine LTI_ROM_Petrov_Galerkin_Projection_rdp(Ahat, Bhat, Chat, LTI, T, Tinv, Dhat)
       !! Computes the Reduced-Order Model of the input LTI dynamical system via Petrov-Galerkin projection 
       !! using the biorthogonal projection bases \( \mathbf{V} \) and \( \mathbf{W} \) with 
       !! \( \mathbf{W}^T \mathbf{V} = \mathbf{I} \).
@@ -345,16 +347,17 @@ contains
       !! Reduced-order input-to-state matrix.
       real(dp),            allocatable, intent(out)    :: Chat(:, :)
       !! Reduced-order state-to-output matrix.
-      real(dp),            allocatable, intent(out)    :: D(:, :)
-      !! Feed-through matrix
       class(abstract_lti_system_rdp),   intent(inout)  :: LTI
       !! Large-scale LTI to project
       class(abstract_vector_rdp),       intent(in)     :: T(:)
       !! Balancing transformation
       class(abstract_vector_rdp),       intent(in)     :: Tinv(:)
       !! Inverse balancing transformation
+      real(dp),  allocatable, optional, intent(out)    :: Dhat(:, :)
+      !! Feed-through matrix
 
       ! internal variables
+      character(len=*), parameter :: this_procedure = 'LTI_ROM_Petrov_Galerkin_Projection_rdp'
       integer                                          :: i, rk, rkc, rkb
       class(abstract_vector_rdp),       allocatable    :: Uwrk(:)
       real(dp),                         allocatable    :: Cwrk(:, :)
@@ -367,7 +370,13 @@ contains
       allocate(Bhat(1:rk, 1:rkb));                  Bhat = 0.0_dp
       allocate(Cwrk(1:rk, 1:rkc));                  Cwrk = 0.0_dp
       allocate(Chat(1:rkc,1:rk ));                  Chat = 0.0_dp
-      allocate(D(1:size(LTI%D,1),1:size(LTI%D,2))); D    = 0.0_dp
+      if (present(Dhat)) then
+         if (.not. allocated(LTI%D)) then
+            call stop_error("Dhat requested but LTI%D not allocated!", this_module, this_procedure)
+         end if
+         allocate(Dhat(size(LTI%D,1), size(LTI%D,2)))
+         Dhat = LTI%D
+      end if
 
       do i = 1, rk
          call LTI%A%matvec(Tinv(i), Uwrk(i))
@@ -376,11 +385,78 @@ contains
       Bhat = innerprod(T, LTI%B)
       Cwrk = innerprod(LTI%CT, Tinv)
       Chat = transpose(Cwrk)
-      D = LTI%D
 
-   end subroutine ROM_Petrov_Galerkin_Projection_rdp
+   end subroutine LTI_ROM_Petrov_Galerkin_Projection_rdp
 
-   subroutine ROM_Galerkin_Projection_rdp(Ahat, Bhat, Chat, D, LTI, T)
+   subroutine ABC_ROM_Petrov_Galerkin_Projection_rdp(Ahat, Bhat, Chat, A, B, CT, T, Tinv, Dhat, D)
+      !! Computes the Reduced-Order Model of the input LTI dynamical system via Petrov-Galerkin projection 
+      !! using the biorthogonal projection bases \( \mathbf{V} \) and \( \mathbf{W} \) with 
+      !! \( \mathbf{W}^T \mathbf{V} = \mathbf{I} \).
+      !! 
+      !! Given an LTI system defined by the matrices \( \mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D}\), 
+      !! the matrices \( \hat{\mathbf{A}}, \hat{\mathbf{B}}, \hat{\mathbf{C}}, \hat{\mathbf{D}}\) of the 
+      !! projected LTI system are given by:
+      !! \[
+      !!     \hat{\mathbf{A}} = \mathbf{W}^T \mathbf{A} \mathbf{V}, \qquad
+      !!     \hat{\mathbf{B}} = \mathbf{W}^T \mathbf{B}, \qquad
+      !!     \hat{\mathbf{C}} = \mathbf{C} \mathbf{V}, \qquad
+      !!     \hat{\mathbf{D}} = \mathbf{D} .
+      !! \]
+      real(dp),            allocatable, intent(out)    :: Ahat(:, :)
+      !! Reduced-order dynamics matrix.
+      real(dp),            allocatable, intent(out)    :: Bhat(:, :)
+      !! Reduced-order input-to-state matrix.
+      real(dp),            allocatable, intent(out)    :: Chat(:, :)
+      !! Reduced-order state-to-output matrix.
+      !! Large-scale LTI to project
+      class(abstract_linop_rdp),        intent(inout)  :: A
+      !! System operator
+      class(abstract_vector_rdp),       intent(in)     :: B(:)
+      !! System inputs
+      class(abstract_vector_rdp),       intent(in)     :: CT(:)
+      !! System outputs
+      class(abstract_vector_rdp),       intent(in)     :: T(:)
+      !! Balancing transformation
+      class(abstract_vector_rdp),       intent(in)     :: Tinv(:)
+      !! Inverse balancing transformation
+      real(dp),  allocatable, optional, intent(out)    :: Dhat(:, :)
+      !! Feed-through matrix
+      real(dp),               optional, intent(in)     :: D(:, :)
+      !! Feed-through matrix
+      
+      ! internal variables
+      character(len=*), parameter :: this_procedure = 'ABC_ROM_Petrov_Galerkin_Projection_rdp'
+      integer                                          :: i, rk, rkc, rkb
+      class(abstract_vector_rdp),       allocatable    :: Uwrk(:)
+      real(dp),                         allocatable    :: Cwrk(:, :)
+
+      rk  = size(T)
+      rkb = size(B)
+      rkc = size(CT)
+      allocate(Uwrk(rk), source=T(1)); call zero_basis(Uwrk)
+      allocate(Ahat(1:rk, 1:rk ));          Ahat = 0.0_dp
+      allocate(Bhat(1:rk, 1:rkb));          Bhat = 0.0_dp
+      allocate(Cwrk(1:rk, 1:rkc));          Cwrk = 0.0_dp
+      allocate(Chat(1:rkc,1:rk ));          Chat = 0.0_dp
+      if (present(Dhat)) then
+         if (.not. present(D)) then
+            call stop_error("Dhat requested but D not provided!", this_module, this_procedure)
+         end if
+         allocate(Dhat(size(D,1), size(D,2)))
+         Dhat = D
+      end if
+
+      do i = 1, rk
+         call A%matvec(Tinv(i), Uwrk(i))
+      end do
+      Ahat = innerprod(T, Uwrk)
+      Bhat = innerprod(T, B)
+      Cwrk = innerprod(CT, Tinv)
+      Chat = transpose(Cwrk)
+
+   end subroutine ABC_ROM_Petrov_Galerkin_Projection_rdp
+
+   subroutine LTI_ROM_Galerkin_Projection_rdp(Ahat, Bhat, Chat, Dhat, LTI, T)
       !! Computes the Reduced-Order Model of the input LTI dynamical system via Galerkin projection using 
       !! the orthogonal projection basis \( \mathbf{V} \) with \( \mathbf{V}^T \mathbf{V} = \mathbf{I} \).
       !! 
@@ -398,16 +474,48 @@ contains
       !! Reduced-order input-to-state matrix.
       real(dp),            allocatable, intent(out)    :: Chat(:, :)
       !! Reduced-order state-to-output matrix.
-      real(dp),            allocatable, intent(out)    :: D(:, :)
-      !! Feed-through matrix
       class(abstract_lti_system_rdp),   intent(inout)  :: LTI
       !! Large-scale LTI to project
       class(abstract_vector_rdp),       intent(inout)  :: T(:)
       !! Balancing transformation
+      real(dp),     allocatable, optional, intent(out) :: Dhat(:, :)
+      !! Feed-through matrix
 
-      call ROM_Petrov_Galerkin_Projection(Ahat, Bhat, Chat, D, LTI, T, T)
+      call ROM_Petrov_Galerkin_Projection(Ahat, Bhat, Chat, LTI, T, T, Dhat)
 
-   end subroutine ROM_Galerkin_Projection_rdp
+   end subroutine LTI_ROM_Galerkin_Projection_rdp
+   
+   subroutine ABC_ROM_Galerkin_Projection_rdp(Ahat, Bhat, Chat, A, B, CT, T, Dhat, D)
+      !! Computes the Reduced-Order Model of the input LTI dynamical system via Galerkin projection using 
+      !! the orthogonal projection basis \( \mathbf{V} \) with \( \mathbf{V}^T \mathbf{V} = \mathbf{I} \).
+      !! 
+      !! Given an LTI system defined by the matrices \( \mathbf{A}, \mathbf{B}, \mathbf{C}, \mathbf{D}\), 
+      !! the matrices \( \hat{\mathbf{A}}, \hat{\mathbf{B}}, \hat{\mathbf{C}}, \hat{\mathbf{D}}\) of the projected LTI system is given by:
+      !! \[
+      !!     \hat{\mathbf{A}} = \mathbf{V}^T \mathbf{A} \mathbf{V}, \qquad
+      !!     \hat{\mathbf{B}} = \mathbf{V}^T \mathbf{B}, \qquad
+      !!     \hat{\mathbf{C}} = \mathbf{C} \mathbf{V}, \qquad
+      !!     \hat{\mathbf{D}} = \mathbf{D} .
+      !! \]
+      real(dp),            allocatable, intent(out)    :: Ahat(:, :)
+      !! Reduced-order dynamics matrix.
+      real(dp),            allocatable, intent(out)    :: Bhat(:, :)
+      !! Reduced-order input-to-state matrix.
+      real(dp),            allocatable, intent(out)    :: Chat(:, :)
+      !! Reduced-order state-to-output matrix.
+      !! Feed-through matrix
+      !! Large-scale LTI components to project
+      class(abstract_linop_rdp),        intent(inout)  :: A
+      class(abstract_vector_rdp),       intent(in)     :: B(:)
+      class(abstract_vector_rdp),       intent(in)     :: CT(:)
+      class(abstract_vector_rdp),       intent(in)     :: T(:)
+      !! Balancing transformation
+      real(dp),               optional, intent(in)     :: D(:, :)
+      real(dp),  allocatable, optional, intent(out)    :: Dhat(:, :)
+
+      call ROM_Petrov_Galerkin_Projection(Ahat, Bhat, Chat, A, B, CT, T, T, Dhat, D)
+
+   end subroutine ABC_ROM_Galerkin_Projection_rdp
 
    subroutine Proper_Orthogonal_Decomposition_Impulse_rdp(svals, prop, X0, tau, Tend, trans, mode, svecs)
       !! Computes the Proper Orthogonal Decomposition (POD) of the impulse response to the input vector based on the
