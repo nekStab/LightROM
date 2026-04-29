@@ -456,7 +456,7 @@ contains
 
    end subroutine ABC_ROM_Petrov_Galerkin_Projection_rdp
 
-   subroutine LTI_ROM_Galerkin_Projection_rdp(Ahat, Bhat, Chat, Dhat, LTI, T)
+   subroutine LTI_ROM_Galerkin_Projection_rdp(Ahat, Bhat, Chat, LTI, T, Dhat)
       !! Computes the Reduced-Order Model of the input LTI dynamical system via Galerkin projection using 
       !! the orthogonal projection basis \( \mathbf{V} \) with \( \mathbf{V}^T \mathbf{V} = \mathbf{I} \).
       !! 
@@ -476,7 +476,7 @@ contains
       !! Reduced-order state-to-output matrix.
       class(abstract_lti_system_rdp),   intent(inout)  :: LTI
       !! Large-scale LTI to project
-      class(abstract_vector_rdp),       intent(inout)  :: T(:)
+      class(abstract_vector_rdp),       intent(in)     :: T(:)
       !! Balancing transformation
       real(dp),     allocatable, optional, intent(out) :: Dhat(:, :)
       !! Feed-through matrix
@@ -510,8 +510,8 @@ contains
       class(abstract_vector_rdp),       intent(in)     :: CT(:)
       class(abstract_vector_rdp),       intent(in)     :: T(:)
       !! Balancing transformation
-      real(dp),               optional, intent(in)     :: D(:, :)
       real(dp),  allocatable, optional, intent(out)    :: Dhat(:, :)
+      real(dp),               optional, intent(in)     :: D(:, :)
 
       call ROM_Petrov_Galerkin_Projection(Ahat, Bhat, Chat, A, B, CT, T, T, Dhat, D)
 
