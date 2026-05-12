@@ -12,7 +12,6 @@ auto-tests = true
 auto-examples = false
 module-naming = false
 external-modules = "mpi_f08"
-link = ["blas", "lapack"]
 
 [install]
 library = true
@@ -24,7 +23,8 @@ source-form = "free"
 
 [dependencies]
 stdlib = "*"
-LightKrylov = { git = "https://github.com/nekStab/LightKrylov.git", branch = "main"}
+blas = "*"
+LightKrylov = { git = "https://github.com/nekStab/LightKrylov.git", branch = "main" }
 
 [dev-dependencies]
 test-drive.git = "https://github.com/nekStab/test-drive"
