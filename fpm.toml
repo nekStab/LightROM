@@ -28,6 +28,7 @@ LightKrylov = { git = "https://github.com/nekStab/LightKrylov.git", branch = "ma
 
 [dev-dependencies]
 test-drive.git = "https://github.com/nekStab/test-drive"
+LightControl   = { git = "https://github.com/loiseaujc/LightControl.git", branch = "main" }
 
 [[example]]
 

@@ -8,7 +8,6 @@ module LightROM_TestLyapunov
    ! testing library
    use testdrive  , only : new_unittest, unittest_type, error_type, check
    ! LightKrylov for Linear Algebra
-   use LightKrylov
    use LightKrylov, only : dp
    use LightKrylov_Logger
    ! LightROM
@@ -18,6 +17,8 @@ module LightROM_TestLyapunov
    ! Tests
    Use LightROM_LyapunovUtils  
    use TestUtils
+   ! LightControl for reference solution
+   use LightControl, only: lyap
    
    implicit none
  
@@ -99,10 +100,10 @@ contains
       norm_LR = mnorm(DLR)
 
       ! Check correctness.
-      err = abs(norm_direct - norm_LR)
+      err = abs(norm_direct - norm_LR) / max(norm_direct, tiny(1.0_dp))
       call get_err_str(msg, "max err: ", err)
       call check(error, err < rtol_dp)
-      call check_test(error, 'test_project_onto_common_basis_rdp', 'Equality of difference norm', '||X-Y|| = ||X-Y||_LR', msg)
+      call check_test(error, 'test_project_onto_common_basis_rdp', 'Projection consistency', '||X-Y|| = ||X-Y||_LR', msg)
       
       return
    end subroutine test_project_onto_common_basis_rdp
@@ -115,7 +116,7 @@ contains
       class(abstract_vector_rdp), allocatable :: svecs(:)
       type(GL_exponential_prop), allocatable :: prop
       real(dp), dimension(:), allocatable :: svals, sref
-      real(dp), dimension(:,:), allocatable :: BBT, A, Xref
+      real(dp), dimension(:,:), allocatable :: Q, A
 
       ! Define test parameters
       real(dp), parameter :: tau = 1.0_dp
@@ -124,53 +125,59 @@ contains
       ! Total integration time
       integer :: nprint, i, j, k, ie, is
       integer :: nrank, nstep, nsnap
-      real(dp) :: res_norm, err
+      real(dp) :: err
       character(len=256) :: msg
 
       integer, parameter :: irow = 8
+      logical, parameter :: verbose = .false.
       
       ! Initialize problem
-      call initialize_GL_parameters(X0, A, BBT)
-      !call solve_lyapunov(Xref, A, BBT)
-      call load_npy('test/Xref.npy', Xref)
-      res_norm = norm2(matmul(A, Xref) + matmul(Xref, transpose(A)) + BBT)
-      !print *, ""
-      !print *, 'Residual norm of reference solution: ', res_norm  
-      
-      sref = svdvals(Xref)
-      !nprint = min(8, size(sref))
-      !do i = 1, ceiling(nprint*1.0_dp/irow)
-      !   is = (i-1)*irow+1; ie = i*irow
-      !   print '(A22,1X,I2,"-",I2,*(1X,F12.8))', padr(' SVD(Xref)',22), is, ie, ( sref(j), j = is, ie )
-      !end do
-      !print *, ''
+      call initialize_GL_parameters(X0, A, Q)      
+      sref = svdvals(lyap(A, Q))
+      if (verbose) then
+         nprint = min(8, size(sref))
+         do i = 1, ceiling(nprint*1.0_dp/irow)
+            is = (i-1)*irow+1; ie = i*irow
+            print '(A22,1X,I2,"-",I2,*(1X,F12.8))', padr(' SVD(Xref)',22), is, ie, ( sref(j), j = is, ie )
+         end do
+         print *, ''
+      end if
       
       ! Initialize propagator
       prop = GL_exponential_prop(tau)
 
       ! Compute POD using propagator directly
       call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, .false., mode=1, svecs=svecs)
+
       nprint = min(8, size(svals))
       svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
-      !print *, 'POD of impulse response, time integration mode 1: Absolute errors in the leading singular values:'
-      !do i = 1, ceiling(nprint*1.0_dp/irow)
-      !   is = (i-1)*irow+1; ie = min(i*irow, nprint)
-      !   print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
-      !end do
+
+      if (verbose) then
+         print *, 'POD of impulse response, time integration mode 1: Absolute errors in the leading singular values:'
+         do i = 1, ceiling(nprint*1.0_dp/irow)
+            is = (i-1)*irow+1; ie = min(i*irow, nprint)
+            print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD err [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+         end do
+      end if
 
       err = maxval(svals(:2))
       call get_err_str(msg, "max err: ", err)
       call check(error, err < rtol_dp)
       call check_test(error, 'test_POD_Imp_1_rdp', 'Leading singular values', 's_1/2 = sPOD_1/2', msg)
 
+      ! Compute POD using propagator directly
       call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, .false., mode=2, svecs=svecs)
+
       nprint = min(8, size(svals))
       svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
-      !print *, 'POD of impulse response, time integration mode 2: Absolute errors in the leading singular values:'
-      !do i = 1, ceiling(nprint*1.0_dp/irow)
-      !   is = (i-1)*irow+1; ie = min(i*irow, nprint)
-      !   print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
-      !end do
+
+      if (verbose) then
+         print *, 'POD of impulse response, time integration mode 2: Absolute errors in the leading singular values:'
+         do i = 1, ceiling(nprint*1.0_dp/irow)
+            is = (i-1)*irow+1; ie = min(i*irow, nprint)
+            print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD err [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+         end do
+      end if
 
       err = maxval(svals(:2))
       call get_err_str(msg, "max err: ", err)
@@ -185,37 +192,35 @@ contains
       type(state_vector), allocatable :: X0(:)
       type(GL_exponential_prop), allocatable :: prop
       real(dp), dimension(:), allocatable :: svals, sref
-      real(dp), dimension(:,:), allocatable :: BBT, A, Xref
+      real(dp), dimension(:,:), allocatable :: Q, A
       class(state_vector), allocatable :: X(:)   ! Snapshot matrix
       class(abstract_vector_rdp), allocatable :: svecs(:)
 
       ! Define test parameters
       real(dp), parameter :: tau = 1.0_dp
       ! Time difference between snapshots
-      real(dp), parameter :: Tend = 100.0_dp
+      real(dp), parameter :: Tend = 150.0_dp
       ! Total integration time
       integer :: nprint, i, j, k, ie, is
       integer :: nrank, nstep, nsnap
-      real(dp) :: res_norm, err
+      real(dp) :: err
       character(len=256) :: msg
 
       integer, parameter :: irow = 8
+      logical, parameter :: verbose = .false.
       
       ! Initialize problem
-      call initialize_GL_parameters(X0, A, BBT)
-      !call solve_lyapunov(Xref, A, BBT)
-      call load_npy('test/Xref.npy', Xref)
-      res_norm = norm2(matmul(A, Xref) + matmul(Xref, transpose(A)) + BBT)
-      !print *, ""
-      !print *, 'Residual norm of reference solution: ', res_norm  
+      call initialize_GL_parameters(X0, A, Q)
+      sref = svdvals(lyap(A, Q))
       
-      sref = svdvals(Xref)
-      !nprint = min(8, size(sref))
-      !do i = 1, ceiling(nprint*1.0_dp/irow)
-      !   is = (i-1)*irow+1; ie = i*irow
-      !   print '(A22,1X,I2,"-",I2,*(1X,F12.8))', padr(' SVD(Xref)',22), is, ie, ( sref(j), j = is, ie )
-      !end do
-      !print *, ''
+      if (verbose) then
+         nprint = min(8, size(sref))
+         do i = 1, ceiling(nprint*1.0_dp/irow)
+            is = (i-1)*irow+1; ie = i*irow
+            print '(A22,1X,I2,"-",I2,*(1X,F12.8))', padr(' SVD(Xref)',22), is, ie, ( sref(j), j = is, ie )
+         end do
+         print *, ''
+      end if
 
       ! Initialize propagator
       prop = GL_exponential_prop(tau)
@@ -226,36 +231,48 @@ contains
       nsnap = nrank*(nstep + 1)
       ! Compute impulse response using propagator
       allocate(X(nsnap))
-      k = 1
+      k = 0
       do j = 1, nrank ! one series for each initial condition
+         k = k + 1
          call copy(X(k), X0(j))
          do i = 1, nstep ! for the chosen time horizon
             call prop%matvec(X(k), X(k+1))
             k = k + 1
          end do
       end do
+
+      ! Compute POD using data matrix
       call Proper_Orthogonal_Decomposition(svals, X, tau, nseries=2, mode=1, svecs=svecs)
+
       nprint = min(8, size(svals))
-      svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
-      !print *, 'POD of data matrix, time integration mode 1: Absolute errors in the leading singular values:'
-      !do i = 1, ceiling(nprint*1.0_dp/irow)
-      !   is = (i-1)*irow+1; ie = min(i*irow, nprint)
-      !   print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
-      !end do
+      svals(:nprint) = abs(svals(:nprint) - sref(:nprint))
+      
+      if (verbose) then
+         print *, 'POD of data matrix, time integration mode 1: Absolute errors in the leading singular values:'
+         do i = 1, ceiling(nprint*1.0_dp/irow)
+            is = (i-1)*irow+1; ie = min(i*irow, nprint)
+            print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD err [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+         end do
+      end if
 
       err = maxval(svals(:2))
       call get_err_str(msg, "max err: ", err)
       call check(error, err < rtol_dp)
       call check_test(error, 'test_POD_Data_1_rdp', 'Leading singular values', 's_1/2 = sPOD_1/2', msg)
 
+      ! Compute POD using data matrix
       call Proper_Orthogonal_Decomposition(svals, X, tau, nseries=2, mode=2, svecs=svecs)
+
       nprint = min(8, size(svals))
-      svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
-      !print *, 'POD of data matrix, time integration mode 2: Absolute errors in the leading singular values:'
-      !do i = 1, ceiling(nprint*1.0_dp/irow)
-      !   is = (i-1)*irow+1; ie = min(i*irow, nprint)
-      !   print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD(XTX) [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
-      !end do
+      svals(:nprint) = abs(svals(:nprint) - sref(:nprint))
+
+      if (verbose) then
+         print *, 'POD of data matrix, time integration mode 2: Absolute errors in the leading singular values:'
+         do i = 1, ceiling(nprint*1.0_dp/irow)
+            is = (i-1)*irow+1; ie = min(i*irow, nprint)
+            print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD err [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+         end do
+      end if
 
       err = maxval(svals(:2))
       call get_err_str(msg, "max err: ", err)
