@@ -86,7 +86,7 @@ program demo
    integer                                   :: info
 
    ! Misc
-   integer                                   :: i, j, k, is, ie, it, irep, mode
+   integer                                   :: i, j, k, is, ie, it, irep
    integer                                   :: rk_X0
    character(len=2)                          :: refid
    character(len=4)                          :: eq
@@ -250,10 +250,8 @@ program demo
             else
                allocate(X0(rk_B), source=B)
             end if
-            mode = 1
-            tol = 1e-6_dp
             print '(3X,A,F12.6)', '    tau:', tau
-            call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, T_POD, if_adj, mode, tol, svec)
+            call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, T_POD, if_adj, svecs=svec)
             nprint = min(8, size(svals))
             call print_svdvals(svals, 'XTX', nprint)
             deallocate(X0)

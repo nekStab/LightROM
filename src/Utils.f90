@@ -64,6 +64,10 @@ module LightROM_Utils
       module procedure rescale_snapshots_rdp
    end interface
 
+   interface compute_impulse_response
+      module procedure compute_impulse_response_rdp
+   end interface
+
    interface project_onto_common_basis
       module procedure project_onto_common_basis_rdp
    end interface
@@ -511,7 +515,7 @@ contains
 
    end subroutine ABC_ROM_Galerkin_Projection_rdp
 
-   subroutine Proper_Orthogonal_Decomposition_Impulse_rdp(svals, prop, X0, tau, Tend, trans, mode, tol, svecs)
+   subroutine Proper_Orthogonal_Decomposition_Impulse_rdp(svals, prop, X0, tau, Tend, trans, tol, rescale, rescale_mode, svecs)
       !! Computes the Proper Orthogonal Decomposition (POD) of the impulse response to the input vector based on the
       !! exponential propagator prop.
       !! 
@@ -525,7 +529,7 @@ contains
       !! \]
       !! and the individual snapshots \( x_i \) are recursively computed as \( x_{i+1} = e^{\tau A} x_i \) using the 
       !! exponential propagator for each initial condition. The integration weights \( W \) are automatically applied 
-      !! in the computation of the inner product.
+      !! in the computation of the inner product if requested.
       !!
       !! NOTE: 
       !!    1. We use the snapshot method which assumes that the number of snapshots is smaller than the number of d
@@ -544,11 +548,13 @@ contains
       real(dp), intent(in) :: Tend
       !! Time horizon for the POD computation
       logical, optional, intent(in) :: trans
-      !! Direct of adjoint mode (default: direct)
-      integer, optional, intent(in) :: mode
-      !! Time integration mode
+      !! Direct of adjoint mode (default: .true. for direct)
       real(dp), optional, intent(in) :: tol
       !! Tolerance for rank truncation based on singular values (relative to the largest singular value)
+      logical, optional, intent(in) :: rescale
+      !! Rescale impulse snapshots to account for temporal integration weights (default: .true.)
+      integer, optional, intent(in) :: rescale_mode
+      !! Time integration mode
       class(abstract_vector_rdp), optional, allocatable, intent(out) :: svecs(:)
       !! Singular vectors
 
@@ -559,45 +565,17 @@ contains
       real(dp), allocatable :: U(:,:)  ! singular vectors
       real(dp) :: tol_
       integer :: i, j, k, rk
-      integer :: nsnap, nstep, nrank
+      integer :: nsnap, nstep, nrank, mode
       integer, allocatable :: idx(:)
-      logical :: transpose
+      logical :: transpose, do_rescale
       character(len=128) :: msg
 
-      transpose = optval(trans, .false.)
-      tol_      = optval(tol, 1e-6_dp)
+      transpose  = optval(trans, .false.)
+      tol_       = optval(tol, 1e-6_dp)
+      do_rescale = optval(rescale, .true.)
+      mode       = optval(rescale_mode, 2)
 
-      ! Data sizes
-      nrank = size(X0)
-      nstep = floor(Tend/tau)
-      nsnap = nrank*(nstep + 1)
-      
-      ! Compute impulse response
-      call log_information("Compute impulse response snapshots", this_module, this_procedure)
-      allocate(X(nsnap), source=X0(1)) ; call zero_basis(X)
-      k = 0
-      do j = 1, nrank ! one series for each initial condition
-         k = k + 1
-         call copy(X(k), X0(j))
-         write(msg,'(A,I4)') "    Set initial condition ", j
-         call log_information(msg, this_module, this_procedure)
-         do i = 1, nstep ! for the chosen time horizon
-            write(msg, '(A,I6)') "      Apply matvec ", i
-            call log_information(msg, this_module, this_procedure)
-            if (transpose) then
-               call prop%rmatvec(X(k), X(k+1))
-            else
-               call prop%matvec(X(k), X(k+1))
-            end if
-            k = k + 1
-         end do
-      end do
-
-      ! Rescale response for POD
-      call log_information("Rescaling snapshots", this_module, this_procedure)
-      do j = 1, nrank
-         call rescale_snapshots(X((j-1)*(nstep+1)+1:j*(nstep+1)), tau, mode)
-      end do
+      call compute_impulse_response(X, X0, prop, Tend, tau, trans=transpose, rescale=do_rescale, rescale_mode=mode)
       
       ! Compute cross-correlation
       call log_information("Compute Gram matrix", this_module, this_procedure)
@@ -607,6 +585,7 @@ contains
          ! Compute only the POD singular values
          svals = svdvals(XTX)
       else
+         nsnap = size(X)
          allocate(svals(nsnap), U(nsnap,nsnap))
          ! Compute POD singular values and vectors
          call eigh(XTX, svals, U)
@@ -627,7 +606,7 @@ contains
       end if
    end subroutine Proper_Orthogonal_Decomposition_Impulse_rdp
 
-   subroutine Proper_Orthogonal_Decomposition_Data_rdp(svals, X, tau, nseries, mode, tol, svecs)
+   subroutine Proper_Orthogonal_Decomposition_Data_rdp(svals, X, tau, nseries, tol, rescale, rescale_mode, svecs)
       !! Computes the Proper Orthogonal Decomposition (POD) of the input vector of data snapshots taken at constant time
       !! intervals tau
       !! 
@@ -654,11 +633,13 @@ contains
       real(dp), intent(in) :: tau 
       !! Integration time between subsequent snapshots
       integer, optional, intent(in) :: nseries
-      !! Number of independent time series in the data
-      integer, optional, intent(in) :: mode
-      !! Time integration mode
+      !! Number of independent time series in the data (default: 1)
       real(dp), optional, intent(in) :: tol
       !! Tolerance for rank truncation based on singular values (relative to the largest singular value)
+      logical, optional, intent(in) :: rescale
+      !! Rescale impulse snapshots to account for temporal integration weights (default: .false.)
+      integer, optional, intent(in) :: rescale_mode
+      !! Time integration mode
       class(abstract_vector_rdp), optional, allocatable, intent(out) :: svecs(:)
       !! Singular vectors
 
@@ -669,13 +650,16 @@ contains
       real(dp) :: tol_
       integer :: i, j, rk
       integer, allocatable :: idx(:)
-      integer :: nsnap, nstep, nrank
+      integer :: nsnap, nstep, nrank, mode
+      logical :: do_rescale
       character(len=128) :: msg
 
-      tol_ = optval(tol, 1e-6_dp)
+      nrank      = optval(nseries, 1)
+      tol_       = optval(tol, 1e-6_dp)
+      do_rescale = optval(rescale, .false.)
+      mode       = optval(rescale_mode, 2)
 
       ! Data sizes
-      nrank = optval(nseries, 1)
       nsnap = size(X)
       nstep = nsnap/nrank - 1
       if (nsnap .ne. (nstep+1)*nrank) then
@@ -684,13 +668,13 @@ contains
       end if
       
       ! Rescale response for POD
-      call log_information("Rescaling snapshots", this_module, this_procedure)
-      do j = 1, nrank
-         call rescale_snapshots(X((j-1)*(nstep+1)+1:j*(nstep+1)), tau, mode)
-      end do
+      if (do_rescale) then
+         do j = 1, nrank
+            call rescale_snapshots(X((j-1)*(nstep+1)+1:j*(nstep+1)), tau, mode)
+         end do
+      end if
       
       ! Compute cross-correlation
-      call log_information("Campute Gram matrix", this_module, this_procedure)
       allocate(XTX(nsnap,nsnap))
       XTX = gram(X)
       ! Compute POD
@@ -717,6 +701,51 @@ contains
          call linear_combination(svecs, X, U)
       end if
    end subroutine Proper_Orthogonal_Decomposition_Data_rdp
+
+   subroutine compute_impulse_response_rdp(X, X0, prop, Tend, tau, trans, rescale, rescale_mode)
+      class(abstract_vector_rdp),   allocatable, intent(out) :: X(:)
+      class(abstract_vector_rdp),   intent(in)     :: X0(:)
+      class(abstract_linop_rdp),    intent(inout)  :: prop
+      real(dp),                     intent(in)     :: Tend
+      real(dp),                     intent(in)     :: tau
+      logical,                      intent(in)     :: trans
+      logical, optional,            intent(in)     :: rescale
+      integer, optional,            intent(in)     :: rescale_mode
+      ! internal
+      character(len=*), parameter :: this_procedure = "compute_impulse_response"
+      integer :: nrank, nstep, nsnap, mode
+      integer :: i, j, k
+      logical :: do_rescale
+      character(len=256) :: msg
+   
+      do_rescale = optval(rescale, .true.)
+      mode       = optval(rescale_mode, 2)
+   
+      nrank = size(X0)
+      nstep = floor(Tend / tau)
+      nsnap = nrank * (nstep + 1)
+   
+      call log_information("Compute impulse response snapshots", this_module, this_procedure)
+      allocate(X(nsnap), source=X0(1))
+      call zero_basis(X)
+   
+      k = 0
+      do j = 1, nrank
+         ! Set initial condition
+         k = k + 1
+         call copy(X(k), X0(j))
+         ! Time stepping
+         do i = 1, nstep   
+            if (trans) then
+               call prop%rmatvec(X(k), X(k+1))
+            else
+               call prop%matvec(X(k), X(k+1))
+            end if
+            k = k + 1
+         end do
+         if (do_rescale) call rescale_snapshots(X((j-1)*(nstep+1)+1:j*(nstep+1)), tau, mode)
+      end do   
+   end subroutine compute_impulse_response_rdp
 
    subroutine rescale_snapshots_rdp(X, tau, mode)
       !! Apply integration weights to the columns of a data matrix for temporal integration. 

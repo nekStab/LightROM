@@ -126,11 +126,15 @@ contains
       ! Total integration time
       integer :: nprint, i, j, k, ie, is
       integer :: nrank, nstep, nsnap, mode
-      real(dp) :: err, tol
+      real(dp) :: err
       character(len=256) :: msg, info
 
-      integer, parameter :: irow = 8
-      logical, parameter :: verbose = .false.
+      integer,  parameter :: irow         = 8
+      logical,  parameter :: trans        = .false.
+      real(dp), parameter :: tol          = 1e-6_dp
+      logical,  parameter :: rescale      = .true.
+      integer,  parameter :: rescale_mode = 2
+      logical,  parameter :: verbose      = .false.
       
       ! Initialize problem
       call initialize_GL_parameters(X0, A, Q)      
@@ -147,12 +151,9 @@ contains
       ! Initialize propagator
       prop = GL_exponential_prop(tau)
 
-      ! SVD tolerance
-      tol = 1e-6_dp
-
       do mode = 1, 2
          ! Compute POD using propagator directly
-         call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, .false., mode=mode, tol=tol, svecs=svecs)
+         call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, trans, tol, rescale, rescale_mode, svecs=svecs)
          nprint = min(8, size(svals))
          svals(:nprint) = abs(svals(:nprint) - sref(:nprint))
        
@@ -180,7 +181,7 @@ contains
       type(GL_exponential_prop), allocatable :: prop
       real(dp), dimension(:), allocatable :: svals, sref
       real(dp), dimension(:,:), allocatable :: Q, A
-      class(state_vector), allocatable :: X(:)   ! Snapshot matrix
+      class(abstract_vector_rdp), allocatable :: X(:)   ! Snapshot matrix
       class(abstract_vector_rdp), allocatable :: svecs(:)
 
       ! Define test parameters
@@ -190,11 +191,15 @@ contains
       ! Total integration time
       integer :: nprint, i, j, k, ie, is
       integer :: nrank, nstep, nsnap, mode
-      real(dp) :: err, tol
+      real(dp) :: err
       character(len=256) :: msg, info
 
-      integer, parameter :: irow = 8
-      logical, parameter :: verbose = .false.
+      integer,  parameter :: irow         = 8
+      integer,  parameter :: nseries      = 2
+      logical,  parameter :: trans        = .false.
+      real(dp), parameter :: tol          = 1e-6_dp
+      integer,  parameter :: rescale_mode = 2
+      logical,  parameter :: verbose      = .false.
       
       ! Initialize problem
       call initialize_GL_parameters(X0, A, Q)
@@ -212,28 +217,11 @@ contains
       ! Initialize propagator
       prop = GL_exponential_prop(tau)
 
-      ! SVD tolerance
-      tol = 1e-6_dp
-
-      ! Compute POD using data matrix
-      nrank = size(X0)
-      nstep = floor(Tend/tau)
-      nsnap = nrank*(nstep + 1)
-      ! Compute impulse response using propagator
-      allocate(X(nsnap))
-      k = 0
-      do j = 1, nrank ! one series for each initial condition
-         k = k + 1
-         call copy(X(k), X0(j))
-         do i = 1, nstep ! for the chosen time horizon
-            call prop%matvec(X(k), X(k+1))
-            k = k + 1
-         end do
-      end do
+      call compute_impulse_response(X, X0, prop, Tend, tau, trans, rescale=.true., rescale_mode=rescale_mode)
 
       do mode = 1, 2
          ! Compute POD using data matrix
-         call Proper_Orthogonal_Decomposition(svals, X, tau, nseries=2, mode=mode, tol=tol, svecs=svecs)
+         call Proper_Orthogonal_Decomposition(svals, X, tau, nseries, tol, rescale=.false., svecs=svecs)
 
          nprint = min(8, size(svals))
          svals(:nprint) = abs(svals(:nprint) - sref(:nprint))
@@ -261,7 +249,8 @@ contains
       type(state_vector), allocatable :: X0(:), Y0(:)
       type(GL_exponential_prop), allocatable :: prop
       real(dp), dimension(:,:), allocatable :: Q, A
-      type(state_vector), allocatable :: X(:), Y(:)   ! Snapshot matrices
+      ! Impule response snapshots
+      class(abstract_vector_rdp), allocatable :: X(:), Y(:)   ! Snapshot matrices
       ! Balanced basis
       class(abstract_vector_rdp), allocatable :: T_balanced(:), Tinv_balanced(:), Ttmp(:)
       real(dp), allocatable :: S(:)
@@ -286,46 +275,12 @@ contains
       ! Initialize forward problem
       call initialize_GL_parameters(X0, A, Q)
       Wc = lyap(A, Q)
-
-      ! Define sizes
-      nrank = size(X0)
-      nstep = floor(Tend/tau)
-      ndir  = nrank*(nstep + 1)
-
-      ! Compute impulse response using propagator
-      allocate(X(ndir))
-      k = 0
-      do j = 1, nrank ! one series for each initial condition
-         k = k + 1
-         call copy(X(k), X0(j))
-         do i = 1, nstep ! for the chosen time horizon
-            call prop%matvec(X(k), X(k+1))
-            k = k + 1
-         end do
-         call rescale_snapshots(X((j-1)*(nstep+1)+1:j*(nstep+1)), tau, 2)
-      end do
+      call compute_impulse_response(X, X0, prop, Tend, tau, trans=.false., rescale=.true., rescale_mode=2)
 
       ! Initialize adjoint problem
       call initialize_GL_parameters(Y0, A, Q, adjoint=.true.)
       Wo = lyap(A, Q)
-
-      ! Define sizes
-      nrank = size(Y0)
-      nstep = floor(Tend/tau)
-      nadj  = nrank*(nstep + 1)
-
-      ! Compute impulse response using propagator
-      allocate(Y(nadj))
-      k = 0
-      do j = 1, nrank ! one series for each initial condition
-         k = k + 1
-         call copy(Y(k), Y0(j))
-         do i = 1, nstep ! for the chosen time horizon
-            call prop%rmatvec(Y(k), Y(k+1))
-            k = k + 1
-         end do
-         call rescale_snapshots(Y((j-1)*(nstep+1)+1:j*(nstep+1)), tau, 2)
-      end do
+      call compute_impulse_response(Y, Y0, prop, Tend, tau, trans=.false., rescale=.true., rescale_mode=2)
 
       call Balancing_Transformation(T_balanced, S, Tinv_balanced, X, Y)
 
