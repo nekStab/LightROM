@@ -187,7 +187,7 @@ contains
       
    end subroutine dlra_opts_initialize
 
-   subroutine Balancing_Transformation_rdp(T, S, Tinv, Xc, Yo)
+   subroutine Balancing_Transformation_rdp(T, S, Tinv, Xc, Yo, tol)
       !! Computes the the biorthogonal balancing transformation \( \mathbf{T}, \mathbf{T}^{-1} \) from the
       !! low-rank representation of the SVD of the controllability and observability Gramians, \( \mathbf{W}_c \) 
       !! and \( \mathbf{W}_o \) respectively, given as:
@@ -204,45 +204,45 @@ contains
       !!            \mathbf{Tinv}^T &= \mathbf{Y}_c \mathbf{S}_c^{1/2} \mathbf{U} \mathbf{S}^{-1/2} 
       !! \end{align} \]
       !! Note: In the current implementation, the numerical rank of the SVD is not considered.
-      class(abstract_vector_rdp),          intent(out)   :: T(:)
+      class(abstract_vector_rdp), allocatable, intent(out)   :: T(:)
       !! Balancing transformation
-      real(dp),                            intent(out)   :: S(:)
+      real(dp),                   allocatable, intent(out)   :: S(:)
       !! Singular values of the BT
-      class(abstract_vector_rdp),          intent(out)   :: Tinv(:)
+      class(abstract_vector_rdp), allocatable, intent(out)   :: Tinv(:)
       !! Inverse balancing transformation
       class(abstract_vector_rdp),          intent(in)    :: Xc(:)
       !! Low-rank representation of the Controllability Gramian
       class(abstract_vector_rdp),          intent(in)    :: Yo(:)
       !! Low-rank representation of the Observability Gramian
+      real(dp), optional,                  intent(in)    :: tol
 
       ! internal variables
-      integer                                :: i, rkc, rko, rk, rkmin
-      real(dp),                  allocatable :: LRCrossGramian(:,:)
-      real(dp),                  allocatable :: Swrk(:,:)
-      real(dp),                  allocatable :: Sigma(:)
-      real(dp),                  allocatable :: V(:,:), W(:,:)
+      character(len=*), parameter :: this_procedure = 'Balancing_Transformation_rdp'
+      character(len=256)          :: msg
+      integer                     :: i, rkmin, rk
+      real(dp)                    :: tol_
+      real(dp),       allocatable :: LRCrossGramian(:,:)
+      real(dp),       allocatable :: Sigma(:), Ssvd(:)
+      real(dp),       allocatable :: V(:,:), WT(:,:)
 
-      rkc   = size(Xc)
-      rko   = size(Yo)
-      rk    = max(rkc, rko)
-      rkmin = min(rkc, rko) 
+      tol_ = optval(tol, 1e-6_dp)
+      rkmin = min(size(Xc), size(Yo)) 
 
-      ! compute inner product with Gramian bases and compte SVUD
-      allocate(LRCrossGramian(rkc,rko)); allocate(V(rko,rko)); allocate(W(rkc,rkc))
-      LRCrossGramian = innerprod(Xc, Yo)
-      call svd(LRCrossGramian, S, V, W)
+      ! compute inner product with Gramian bases and compte SVD
+      allocate(V( size(Yo),rkmin))
+      allocate(WT(size(Xc),rkmin))
+      allocate(Ssvd(rkmin))
+      LRCrossGramian = innerprod(Yo, Xc)
+      call svd(LRCrossGramian, Ssvd, V, WT, full_matrices=.false.)
 
-      allocate(Sigma(rkmin))
-      do i = 1, rkmin
-         Sigma(i) = 1/sqrt(S(i))
+      rk = count(Ssvd > tol_*Ssvd(1))
+      allocate(Sigma(rk))
+      do i = 1, rk
+         Sigma(i) = 1/sqrt(Ssvd(i))
       enddo
-      block
-         class(abstract_vector_rdp), allocatable :: Xwrk(:)
-         call linear_combination(Xwrk, Yo(1:rkmin), matmul(W(1:rkmin,1:rkmin), diag(Sigma)))
-         call copy(T(1:rkmin), Xwrk)
-         call linear_combination(Xwrk, Xc(1:rkmin), matmul(V(1:rkmin,1:rkmin), diag(Sigma)))
-         call copy(Tinv(1:rkmin), Xwrk)
-      end block
+      call linear_combination(T,    Xc, matmul(transpose(WT(:rk,:)), diag(Sigma(:rk))))
+      call linear_combination(Tinv, Yo, matmul(V(:,:rk),             diag(Sigma(:rk))))
+      allocate(S(rk), source=Ssvd(:rk))
          
    end subroutine Balancing_Transformation_rdp
 
@@ -357,10 +357,9 @@ contains
       !! Feed-through matrix
 
       ! internal variables
-      character(len=*), parameter :: this_procedure = 'LTI_ROM_Petrov_Galerkin_Projection_rdp'
-      integer                                          :: i, rk, rkc, rkb
-      class(abstract_vector_rdp),       allocatable    :: Uwrk(:)
-      real(dp),                         allocatable    :: Cwrk(:, :)
+      character(len=*), parameter             :: this_procedure = 'LTI_ROM_Petrov_Galerkin_Projection_rdp'
+      integer                                 :: i, rk, rkc, rkb
+      class(abstract_vector_rdp), allocatable :: Uwrk(:)
 
       rk  = size(T)
       rkb = size(LTI%B)
@@ -368,7 +367,6 @@ contains
       allocate(Uwrk(rk), source=T(1)); call zero_basis(Uwrk)
       allocate(Ahat(1:rk, 1:rk ));                  Ahat = 0.0_dp
       allocate(Bhat(1:rk, 1:rkb));                  Bhat = 0.0_dp
-      allocate(Cwrk(1:rk, 1:rkc));                  Cwrk = 0.0_dp
       allocate(Chat(1:rkc,1:rk ));                  Chat = 0.0_dp
       if (present(Dhat)) then
          if (.not. allocated(LTI%D)) then
@@ -379,12 +377,11 @@ contains
       end if
 
       do i = 1, rk
-         call LTI%A%matvec(Tinv(i), Uwrk(i))
+         call LTI%A%matvec(T(i), Uwrk(i))
       end do
-      Ahat = innerprod(T, Uwrk)
-      Bhat = innerprod(T, LTI%B)
-      Cwrk = innerprod(LTI%CT, Tinv)
-      Chat = transpose(Cwrk)
+      Ahat = innerprod(Tinv, Uwrk)
+      Bhat = innerprod(Tinv, LTI%B)
+      Chat = transpose(innerprod(LTI%CT, T))
 
    end subroutine LTI_ROM_Petrov_Galerkin_Projection_rdp
 
@@ -425,10 +422,9 @@ contains
       !! Feed-through matrix
       
       ! internal variables
-      character(len=*), parameter :: this_procedure = 'ABC_ROM_Petrov_Galerkin_Projection_rdp'
-      integer                                          :: i, rk, rkc, rkb
-      class(abstract_vector_rdp),       allocatable    :: Uwrk(:)
-      real(dp),                         allocatable    :: Cwrk(:, :)
+      character(len=*), parameter             :: this_procedure = 'ABC_ROM_Petrov_Galerkin_Projection_rdp'
+      integer                                 :: i, rk, rkc, rkb
+      class(abstract_vector_rdp), allocatable :: Uwrk(:)
 
       rk  = size(T)
       rkb = size(B)
@@ -436,7 +432,6 @@ contains
       allocate(Uwrk(rk), source=T(1)); call zero_basis(Uwrk)
       allocate(Ahat(1:rk, 1:rk ));          Ahat = 0.0_dp
       allocate(Bhat(1:rk, 1:rkb));          Bhat = 0.0_dp
-      allocate(Cwrk(1:rk, 1:rkc));          Cwrk = 0.0_dp
       allocate(Chat(1:rkc,1:rk ));          Chat = 0.0_dp
       if (present(Dhat)) then
          if (.not. present(D)) then
@@ -447,12 +442,11 @@ contains
       end if
 
       do i = 1, rk
-         call A%matvec(Tinv(i), Uwrk(i))
+         call A%matvec(T(i), Uwrk(i))
       end do
-      Ahat = innerprod(T, Uwrk)
-      Bhat = innerprod(T, B)
-      Cwrk = innerprod(CT, Tinv)
-      Chat = transpose(Cwrk)
+      Ahat = innerprod(Tinv, Uwrk)
+      Bhat = innerprod(Tinv, B)
+      Chat = transpose(innerprod(CT, T))
 
    end subroutine ABC_ROM_Petrov_Galerkin_Projection_rdp
 
@@ -517,7 +511,7 @@ contains
 
    end subroutine ABC_ROM_Galerkin_Projection_rdp
 
-   subroutine Proper_Orthogonal_Decomposition_Impulse_rdp(svals, prop, X0, tau, Tend, trans, mode, svecs)
+   subroutine Proper_Orthogonal_Decomposition_Impulse_rdp(svals, prop, X0, tau, Tend, trans, mode, tol, svecs)
       !! Computes the Proper Orthogonal Decomposition (POD) of the impulse response to the input vector based on the
       !! exponential propagator prop.
       !! 
@@ -553,6 +547,8 @@ contains
       !! Direct of adjoint mode (default: direct)
       integer, optional, intent(in) :: mode
       !! Time integration mode
+      real(dp), optional, intent(in) :: tol
+      !! Tolerance for rank truncation based on singular values (relative to the largest singular value)
       class(abstract_vector_rdp), optional, allocatable, intent(out) :: svecs(:)
       !! Singular vectors
 
@@ -561,13 +557,15 @@ contains
       class(abstract_vector_rdp), allocatable :: X(:)   ! Snapshot matrix
       real(dp), allocatable :: XTX(:,:)  ! Inner product matrix
       real(dp), allocatable :: U(:,:)  ! singular vectors
-      integer :: i, j, k
+      real(dp) :: tol_
+      integer :: i, j, k, rk
       integer :: nsnap, nstep, nrank
       integer, allocatable :: idx(:)
       logical :: transpose
       character(len=128) :: msg
 
       transpose = optval(trans, .false.)
+      tol_      = optval(tol, 1e-6_dp)
 
       ! Data sizes
       nrank = size(X0)
@@ -617,15 +615,19 @@ contains
          call sort_index(svals, idx, reverse=.true.)
          U = U(:,idx)
          ! Normalize singular vectors
-         do i = 1, nsnap
+         rk = count(svals > tol_*svals(1))
+         write(msg,'(A,I0,A,E16.8)') "Using rk = ", rk, " modes for POD based on tol = ", tol_
+         call log_information(msg, this_module, this_procedure)
+         do i = 1, rk
             U(:,i) = U(:,i)/sqrt(svals(i))
          end do
+         U(:,rk+1:) = 0.0_dp
          ! Project data matrix onto principal axes
          call linear_combination(svecs, X, U)
       end if
    end subroutine Proper_Orthogonal_Decomposition_Impulse_rdp
 
-   subroutine Proper_Orthogonal_Decomposition_Data_rdp(svals, X, tau, nseries, mode, svecs)
+   subroutine Proper_Orthogonal_Decomposition_Data_rdp(svals, X, tau, nseries, mode, tol, svecs)
       !! Computes the Proper Orthogonal Decomposition (POD) of the input vector of data snapshots taken at constant time
       !! intervals tau
       !! 
@@ -655,6 +657,8 @@ contains
       !! Number of independent time series in the data
       integer, optional, intent(in) :: mode
       !! Time integration mode
+      real(dp), optional, intent(in) :: tol
+      !! Tolerance for rank truncation based on singular values (relative to the largest singular value)
       class(abstract_vector_rdp), optional, allocatable, intent(out) :: svecs(:)
       !! Singular vectors
 
@@ -662,10 +666,13 @@ contains
       character(len=*), parameter :: this_procedure = 'Proper_Orthogonal_Decomposition_Data_rdp'
       real(dp), allocatable :: XTX(:,:)  ! Inner product matrix
       real(dp), allocatable :: U(:,:)    ! singular vectors
-      integer :: i, j
+      real(dp) :: tol_
+      integer :: i, j, rk
       integer, allocatable :: idx(:)
       integer :: nsnap, nstep, nrank
       character(len=128) :: msg
+
+      tol_ = optval(tol, 1e-6_dp)
 
       ! Data sizes
       nrank = optval(nseries, 1)
@@ -699,9 +706,13 @@ contains
          call sort_index(svals, idx, reverse=.true.)
          U = U(:,idx)
          ! Normalize singular vectors
-         do i = 1, nsnap
+         rk = count(svals > tol_*svals(1))
+         write(msg,'(A,I0,A,E16.8)') "Using rk = ", rk, " modes for POD based on tol = ", tol_
+         call log_information(msg, this_module, this_procedure)
+         do i = 1, rk
             U(:,i) = U(:,i)/sqrt(svals(i))
          end do
+         U(:,rk+1:) = 0.0_dp
          ! Project data matrix onto principal axes
          call linear_combination(svecs, X, U)
       end if
