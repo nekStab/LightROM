@@ -18,7 +18,7 @@ module LightROM_TestLyapunov
    Use LightROM_LyapunovUtils  
    use TestUtils
    ! LightControl for reference solution
-   use LightControl, only: lyap
+   use LightControl, only: lyap, dlyap
    
    implicit none
  
@@ -40,7 +40,8 @@ contains
      testsuite = [&
             new_unittest("project onto common basis", test_project_onto_common_basis_rdp), &
             new_unittest("Impulse Response POD", test_Proper_Orthogonal_Decomposition_Impulse_rdp), &
-            new_unittest("Data POD", test_Proper_Orthogonal_Decomposition_Data_rdp) &
+            new_unittest("Data POD", test_Proper_Orthogonal_Decomposition_Data_rdp), &
+            new_unittest("Balancing Transformation", test_Balancing_Transformation_rdp) &
           ]
  
      return
@@ -121,12 +122,12 @@ contains
       ! Define test parameters
       real(dp), parameter :: tau = 1.0_dp
       ! Time difference between snapshots
-      real(dp), parameter :: Tend = 100.0_dp
+      real(dp), parameter :: Tend = 150.0_dp
       ! Total integration time
       integer :: nprint, i, j, k, ie, is
-      integer :: nrank, nstep, nsnap
-      real(dp) :: err
-      character(len=256) :: msg
+      integer :: nrank, nstep, nsnap, mode
+      real(dp) :: err, tol
+      character(len=256) :: msg, info
 
       integer, parameter :: irow = 8
       logical, parameter :: verbose = .false.
@@ -146,43 +147,29 @@ contains
       ! Initialize propagator
       prop = GL_exponential_prop(tau)
 
-      ! Compute POD using propagator directly
-      call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, .false., mode=1, svecs=svecs)
+      ! SVD tolerance
+      tol = 1e-6_dp
 
-      nprint = min(8, size(svals))
-      svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
-
-      if (verbose) then
-         print *, 'POD of impulse response, time integration mode 1: Absolute errors in the leading singular values:'
-         do i = 1, ceiling(nprint*1.0_dp/irow)
-            is = (i-1)*irow+1; ie = min(i*irow, nprint)
-            print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD err [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-      end if
-
-      err = maxval(svals(:2))
-      call get_err_str(msg, "max err: ", err)
-      call check(error, err < rtol_dp)
-      call check_test(error, 'test_POD_Imp_1_rdp', 'Leading singular values', 's_1/2 = sPOD_1/2', msg)
-
-      ! Compute POD using propagator directly
-      call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, .false., mode=2, svecs=svecs)
-
-      nprint = min(8, size(svals))
-      svals(:nprint) = (svals(:nprint) - sref(:nprint))**2
-
-      if (verbose) then
-         print *, 'POD of impulse response, time integration mode 2: Absolute errors in the leading singular values:'
-         do i = 1, ceiling(nprint*1.0_dp/irow)
-            is = (i-1)*irow+1; ie = min(i*irow, nprint)
-            print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD err [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-      end if
-
-      err = maxval(svals(:2))
-      call get_err_str(msg, "max err: ", err)
-      call check(error, err < rtol_dp)
-      call check_test(error, 'test_POD_Imp_2_rdp', 'Leading singular values', 's_1/2 = sPOD_1/2', msg)
+      do mode = 1, 2
+         ! Compute POD using propagator directly
+         call Proper_Orthogonal_Decomposition(svals, prop, X0, tau, Tend, .false., mode=mode, tol=tol, svecs=svecs)
+         nprint = min(8, size(svals))
+         svals(:nprint) = abs(svals(:nprint) - sref(:nprint))
+       
+         if (verbose) then
+               print '(A,I0,A)', 'POD of impulse response, time integration mode ',mode,': Absolute errors in the leading singular values:'
+               do i = 1, ceiling(nprint*1.0_dp/irow)
+                  is = (i-1)*irow+1; ie = min(i*irow, nprint)
+                  print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD err [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+               end do
+         end if
+       
+         err = maxval(svals(:2))
+         call get_err_str(msg, "max err: ", err)
+         call check(error, err < rtol_dp)
+         write(info,'(A,I0,A)') 'test_POD_Imp_', mode, '_rdp'
+         call check_test(error, info, 'Leading singular values', 's_1/2 = sPOD_1/2', msg)
+      end do
    end subroutine test_Proper_Orthogonal_Decomposition_Impulse_rdp
 
    subroutine test_Proper_Orthogonal_Decomposition_Data_rdp(error)
@@ -202,9 +189,9 @@ contains
       real(dp), parameter :: Tend = 150.0_dp
       ! Total integration time
       integer :: nprint, i, j, k, ie, is
-      integer :: nrank, nstep, nsnap
-      real(dp) :: err
-      character(len=256) :: msg
+      integer :: nrank, nstep, nsnap, mode
+      real(dp) :: err, tol
+      character(len=256) :: msg, info
 
       integer, parameter :: irow = 8
       logical, parameter :: verbose = .false.
@@ -225,6 +212,9 @@ contains
       ! Initialize propagator
       prop = GL_exponential_prop(tau)
 
+      ! SVD tolerance
+      tol = 1e-6_dp
+
       ! Compute POD using data matrix
       nrank = size(X0)
       nstep = floor(Tend/tau)
@@ -241,43 +231,137 @@ contains
          end do
       end do
 
-      ! Compute POD using data matrix
-      call Proper_Orthogonal_Decomposition(svals, X, tau, nseries=2, mode=1, svecs=svecs)
+      do mode = 1, 2
+         ! Compute POD using data matrix
+         call Proper_Orthogonal_Decomposition(svals, X, tau, nseries=2, mode=mode, tol=tol, svecs=svecs)
 
-      nprint = min(8, size(svals))
-      svals(:nprint) = abs(svals(:nprint) - sref(:nprint))
-      
-      if (verbose) then
-         print *, 'POD of data matrix, time integration mode 1: Absolute errors in the leading singular values:'
-         do i = 1, ceiling(nprint*1.0_dp/irow)
-            is = (i-1)*irow+1; ie = min(i*irow, nprint)
-            print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD err [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-      end if
+         nprint = min(8, size(svals))
+         svals(:nprint) = abs(svals(:nprint) - sref(:nprint))
+         
+         if (verbose) then
+            print '(A,I0,A)', 'POD of data matrix, time integration mode ',mode,': Absolute errors in the leading singular values:'
+            do i = 1, ceiling(nprint*1.0_dp/irow)
+               is = (i-1)*irow+1; ie = min(i*irow, nprint)
+               print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD err [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
+            end do
+         end if
 
-      err = maxval(svals(:2))
-      call get_err_str(msg, "max err: ", err)
-      call check(error, err < rtol_dp)
-      call check_test(error, 'test_POD_Data_1_rdp', 'Leading singular values', 's_1/2 = sPOD_1/2', msg)
-
-      ! Compute POD using data matrix
-      call Proper_Orthogonal_Decomposition(svals, X, tau, nseries=2, mode=2, svecs=svecs)
-
-      nprint = min(8, size(svals))
-      svals(:nprint) = abs(svals(:nprint) - sref(:nprint))
-
-      if (verbose) then
-         print *, 'POD of data matrix, time integration mode 2: Absolute errors in the leading singular values:'
-         do i = 1, ceiling(nprint*1.0_dp/irow)
-            is = (i-1)*irow+1; ie = min(i*irow, nprint)
-            print '(1X,A,F6.4,A,I2,A,I2,*(1X,E12.5))', 'SVD err [ dt=', tau,' ]', is, '-', ie, ( svals(j), j = is, ie )
-         end do
-      end if
-
-      err = maxval(svals(:2))
-      call get_err_str(msg, "max err: ", err)
-      call check(error, err < rtol_dp)
-      call check_test(error, 'test_POD_Data_2_rdp', 'Leading singular values', 's_1/2 = sPOD_1/2', msg)
+         err = maxval(svals(:2))
+         call get_err_str(msg, "max err: ", err)
+         call check(error, err < rtol_dp)
+         write(info,'(A,I0,A)') 'test_POD_Data_', mode, '_rdp'
+         call check_test(error, info, 'Leading singular values', 's_1/2 = sPOD_1/2', msg)
+      end do
    end subroutine test_Proper_Orthogonal_Decomposition_Data_rdp
+
+   subroutine test_Balancing_Transformation_rdp(error)
+      implicit none
+      ! Error type to be returned.
+      type(error_type), allocatable, intent(out) :: error
+      type(state_vector), allocatable :: X0(:), Y0(:)
+      type(GL_exponential_prop), allocatable :: prop
+      real(dp), dimension(:,:), allocatable :: Q, A
+      type(state_vector), allocatable :: X(:), Y(:)   ! Snapshot matrices
+      ! Balanced basis
+      class(abstract_vector_rdp), allocatable :: T_balanced(:), Tinv_balanced(:), Ttmp(:)
+      real(dp), allocatable :: S(:)
+      real(dp), dimension(:), allocatable :: Wo(:,:), Wc(:, :)
+      ! Reduced operators
+      real(dp), allocatable :: Ahat(:,:), Bhat(:,:), Chat(:,:), Xhat(:,:), Yhat(:,:)
+      
+      ! Define test parameters
+      real(dp), parameter :: tau = 1.0_dp
+      ! Time difference between snapshots
+      real(dp), parameter :: Tend = 100.0_dp
+      ! Total integration time
+      integer :: i, j, k, rk
+      integer :: nrank, nstep, nsnap
+      integer :: ndir, nadj, nbal
+      real(dp) :: err
+      character(len=256) :: msg
+
+      ! Initialize propagator
+      prop = GL_exponential_prop(tau)
+
+      ! Initialize forward problem
+      call initialize_GL_parameters(X0, A, Q)
+      Wc = lyap(A, Q)
+
+      ! Define sizes
+      nrank = size(X0)
+      nstep = floor(Tend/tau)
+      ndir  = nrank*(nstep + 1)
+
+      ! Compute impulse response using propagator
+      allocate(X(ndir))
+      k = 0
+      do j = 1, nrank ! one series for each initial condition
+         k = k + 1
+         call copy(X(k), X0(j))
+         do i = 1, nstep ! for the chosen time horizon
+            call prop%matvec(X(k), X(k+1))
+            k = k + 1
+         end do
+         call rescale_snapshots(X((j-1)*(nstep+1)+1:j*(nstep+1)), tau, 2)
+      end do
+
+      ! Initialize adjoint problem
+      call initialize_GL_parameters(Y0, A, Q, adjoint=.true.)
+      Wo = lyap(A, Q)
+
+      ! Define sizes
+      nrank = size(Y0)
+      nstep = floor(Tend/tau)
+      nadj  = nrank*(nstep + 1)
+
+      ! Compute impulse response using propagator
+      allocate(Y(nadj))
+      k = 0
+      do j = 1, nrank ! one series for each initial condition
+         k = k + 1
+         call copy(Y(k), Y0(j))
+         do i = 1, nstep ! for the chosen time horizon
+            call prop%rmatvec(Y(k), Y(k+1))
+            k = k + 1
+         end do
+         call rescale_snapshots(Y((j-1)*(nstep+1)+1:j*(nstep+1)), tau, 2)
+      end do
+
+      call Balancing_Transformation(T_balanced, S, Tinv_balanced, X, Y)
+
+      rk = size(S)
+      err = max(norm2(innerprod(Tinv_balanced, T_balanced) - eye(rk)), norm2(innerprod(T_balanced, Tinv_balanced) - eye(rk)))
+      call get_err_str(msg, "max err: ", err)
+      call check(error, err < rtol_dp)
+      call check_test(error, 'test_balancing_transformation', 'Transformation consistency', 'T^{-1} @ T = I', msg)
+
+      !err = norm2(matmul(innerprod(T_balanced, Y), innerprod(Y, T_balanced)) - diag(S))
+      !call get_err_str(msg, "max err: ", err)
+      !call check(error, err < rtol_dp)
+      !call check_test(error, 'test_balancing_transformation', 'Transformation consistency', 'T.T     @ Wo @ T      = Sigma', msg)
+      !
+      !err = norm2(matmul(innerprod(Tinv_balanced, X), innerprod(X, Tinv_balanced)) - diag(S))
+      !call get_err_str(msg, "max err: ", err)
+      !call check(error, err < rtol_dp)
+      !call check_test(error, 'test_balancing_transformation', 'Transformation consistency', 'T.^{-T} @ Wc @ T^{-1} = Sigma', msg)
+
+      call ROM_Petrov_Galerkin_Projection(Ahat, Bhat, Chat, prop, X0, Y0, T_balanced, Tinv_balanced)
+      Xhat = innerprod(Tinv_balanced, X)
+      Yhat = innerprod(T_balanced, Y)
+
+      Wc = matmul(Xhat, transpose(Xhat))
+      Wo = matmul(Yhat, transpose(Yhat))
+
+      err = norm2(Wc - diag(S))
+      call get_err_str(msg, "max err: ", err)
+      call check(error, err < rtol_dp)
+      call check_test(error, 'test_balancing_transformation', 'Transformation consistency', 'Xhat @ Xhat.T = Sigma', msg)
+      err = norm2(Wo - diag(S))
+      call get_err_str(msg, "max err: ", err)
+      call check(error, err < rtol_dp)
+      call check_test(error, 'test_balancing_transformation', 'Transformation consistency', 'Yhat @ Yhat.T = Sigma', msg)
+
+      
+   end subroutine test_Balancing_Transformation_rdp
 
 end module LightROM_TestLyapunov
