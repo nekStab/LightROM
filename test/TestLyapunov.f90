@@ -280,7 +280,7 @@ contains
       ! Initialize adjoint problem
       call initialize_GL_parameters(Y0, A, Q, adjoint=.true.)
       Wo = lyap(A, Q)
-      call compute_impulse_response(Y, Y0, prop, Tend, tau, trans=.false., rescale=.true., rescale_mode=2)
+      call compute_impulse_response(Y, Y0, prop, Tend, tau, trans=.true., rescale=.true., rescale_mode=2)
 
       call Balancing_Transformation(T_balanced, S, Tinv_balanced, X, Y)
 
