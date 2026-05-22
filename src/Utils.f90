@@ -579,7 +579,6 @@ contains
       
       ! Compute cross-correlation
       call log_information("Compute Gram matrix", this_module, this_procedure)
-      allocate(XTX(nsnap,nsnap))
       XTX = gram(X)
       if (.not. present(svecs)) then
          ! Compute only the POD singular values
@@ -675,7 +674,6 @@ contains
       end if
       
       ! Compute cross-correlation
-      allocate(XTX(nsnap,nsnap))
       XTX = gram(X)
       ! Compute POD
       if (.not. present(svecs)) then

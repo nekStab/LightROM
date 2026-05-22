@@ -316,7 +316,6 @@ contains
       call check(error, err < rtol_dp)
       call check_test(error, 'test_balancing_transformation', 'Transformation consistency', 'Yhat @ Yhat.T = Sigma', msg)
 
-      
    end subroutine test_Balancing_Transformation_rdp
 
 end module LightROM_TestLyapunov
